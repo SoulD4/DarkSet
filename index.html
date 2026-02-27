@@ -1,0 +1,1903 @@
+
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>DarkSet — V4.7.5</title>
+  <meta name="theme-color" content="#0b0b0b"/>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-512.png">
+  <script>
+    // Tailwind config must be defined before the CDN script loads
+    window.tailwind = window.tailwind || {};
+    tailwind.config = { theme: { extend: {
+      colors:{ bgDark:"#0b0b0b", cardDark:"#121212", cardSoft:"#181818", textMain:"#f1f1f1", textSub:"#a3a3a3", borderDark:"#2a2a2a", accent:"#e31b23", accent2:"#ff4d4f"}
+    }}};
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* ===== CSS Variables para o tema dark ===== */
+    :root{
+      --color-bg: #0b0b0b;
+      --color-card: #121212;
+      --color-card-soft: #181818;
+      --color-text: #f1f1f1;
+      --color-text-sub: #a3a3a3;
+      --color-border: #2a2a2a;
+      --color-accent: #e31b23;
+      --color-accent2: #ff4d4f;
+      --ds-radius: 18px;
+    }
+
+    /* Fundo e texto base — garantido mesmo sem Tailwind processar */
+    html, body { background-color: var(--color-bg) !important; color: var(--color-text) !important; }
+    #root { background-color: var(--color-bg); min-height: 100vh; }
+
+    /* Sobrescreve classes Tailwind customizadas via CSS puro */
+    .bg-bgDark   { background-color: var(--color-bg) !important; }
+    .bg-cardDark { background-color: var(--color-card) !important; }
+    .bg-cardSoft { background-color: var(--color-card-soft) !important; }
+    .text-textMain { color: var(--color-text) !important; }
+    .text-textSub  { color: var(--color-text-sub) !important; }
+    .border-borderDark { border-color: var(--color-border) !important; }
+    .bg-accent   { background-color: var(--color-accent) !important; }
+    .text-accent { color: var(--color-accent) !important; }
+
+    /* Inputs e selects — tema escuro */
+    input, select, textarea {
+      background-color: rgba(0,0,0,0.3) !important;
+      color: var(--color-text) !important;
+      border-color: var(--color-border) !important;
+    }
+    input::placeholder { color: var(--color-text-sub) !important; }
+
+    /* Ocultar barra de rolagem horizontal mantendo scroll */
+    nav.ds-nav{ overflow-x:auto; -webkit-overflow-scrolling: touch; gap:.5rem; scrollbar-width: none; }
+    nav.ds-nav::-webkit-scrollbar{ display:none; }
+    header.ds-hdr{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
+    @media (max-width: 480px){ nav.ds-nav button{ flex:0 0 auto } }
+    .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:50 }
+
+    header.ds-hdr{ position: sticky; top: 0; z-index: 30; backdrop-filter: blur(8px); background: rgba(11,11,11,.85) !important; border-bottom: 1px solid rgba(255,255,255,.06); padding: .6rem .5rem; border-radius: 0 0 16px 16px;}
+    .ds-card{ border-radius: var(--ds-radius); background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02)); border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02); }
+    .ds-btn{ border-radius: 14px; padding: .65rem 1rem; font-weight: 600; color: var(--color-text); }
+    .ds-btn-primary{ background: linear-gradient(180deg, #e31b23, #b31217); border: 1px solid #8f0f13; color: #fff; }
+    .ds-btn-primary:active{ transform: translateY(1px); }
+    .ds-btn-ghost{ background: rgba(255,255,255,.06); border: 1px solid #2a2a2a; color: var(--color-text); }
+    .ds-shadow{ box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .safe-pb{ padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+    .safe-pt{ padding-top: max(env(safe-area-inset-top), 8px); }
+    @media (max-width: 480px){
+      .grid-cols-mobile-1{ grid-template-columns: 1fr; }
+    }
+
+    /* Cards e bordas gerais */
+    .rounded-2xl, .rounded-xl { color: inherit; }
+    .border { border-color: var(--color-border); }
+
+    /* Modal */
+    .bg-cardDark { background-color: var(--color-card) !important; }
+
+    /* Charts modal */
+    .charts-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999}
+    .charts-modal{width:min(980px,92vw);max-height:90vh;background:#0b0b0c;color:#eaeaea;border:1px solid #202025;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+    .charts-hd{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #202025;background:linear-gradient(180deg,#0f0f11 0,#0b0b0c 100%)}
+    .charts-hd h3{font-size:16px;font-weight:700;margin:0}
+    .charts-help{width:30px;height:30px;border-radius:999px;background:#141418;border:1px solid #2b2b31;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .charts-body{padding:14px 16px;overflow:auto}
+    .charts-row{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width:700px){.charts-row{grid-template-columns:1fr 1fr}}
+    .charts-field{display:flex;flex-direction:column;gap:6px}
+    .charts-field label{font-size:12px;opacity:.85}
+    .charts-select{background:#111114 !important;color:#eaeaea !important;border:1px solid #28282c !important;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+    .charts-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .charts-pill{background:#141418;border:1px solid #2b2b31;color:#eaeaea;border-radius:999px;padding:6px 10px;font-size:13px;cursor:pointer}
+    .charts-pill.active{background:#1f1f25;border-color:#3a3a42}
+    .charts-canvas-wrap{margin-top:14px;background:#0e0e12;border:1px solid #1f2024;border-radius:12px;padding:8px}
+    .charts-empty{padding:12px;border:1px dashed #2c2c31;border-radius:12px;text-align:center;opacity:.8;display:none}
+    .charts-actions{margin-left:auto}
+    .charts-btn{background:#1a1a1f;border:1px solid #2c2c31;color:#eaeaea;border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer}
+  </style>
+</head>
+<body class="bg-bgDark text-textMain min-h-screen overflow-x-hidden">
+<div id="root"></div>
+
+<script type="text/babel">
+const {useState,useEffect,useMemo,useRef} = React;
+
+const LS={plans:"darkset.v3.plans",history:"darkset.v3.history",filters:"darkset.v3.filters",prefs:"darkset.v3.prefs"};
+const load=(k,fb)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):fb}catch(e){return fb}};
+const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const DAYS=["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"];
+
+// ---------- Data (88+ com ajustes de taxonomia) ----------
+let exid=1;
+const E=(name,primary,subgroup,equipment,difficulty="intermediário",unilateral=false)=>({id:exid++,name,primary,subgroup,equipment,difficulty,unilateral,media:{type:"gif",srcGif:null,thumb:null}});
+const U=(name,primary,subgroup,equipment,difficulty="intermediário")=>E(name,primary,subgroup,equipment,difficulty,true);
+const EXS=[
+  // Peito
+  E("Supino reto barra","Peito","Peitoral Medial","Barra"),
+  E("Supino reto halteres","Peito","Peitoral Medial","Halteres"),
+  E("Supino reto Máquina","Peito","Peitoral Medial","Barra"),
+  E("Supino inclinado barra","Peito","Peitoral Superior","Barra"),
+  E("Supino inclinado com halter","Peito","Peitoral Superior","Halteres"),
+  E("Supino inclinado máquina","Peito","Peitoral Superior","Máquina","iniciante"),
+  E("Supino inclinado Articulado","Peito","Peitoral Superior","Máquina","iniciante"),
+  E("Crossover polia alta","Peito","Peitoral Inferior","Cabo/Crossover"),
+  E("Crucifixo reto halteres","Peito","Peitoral Medial","Halteres","iniciante"),
+  E("Crucifixo inclinado halteres","Peito","Peitoral Superior","Halteres","iniciante"),
+  E("Crucifixo Máquina","Peito","Peitoral Medial","Máquina","iniciante"),
+
+  // Ombro
+  E("Desenvolvimento barra","Ombro","Frontal","Barra"),
+  U("Desenvolvimento halter","Ombro","Frontal","Halteres"),
+  E("Desenvolvimento máquina","Ombro","Frontal","Máquina","iniciante"),
+  U("Elevação lateral halter","Ombro","Lateral","Halteres","iniciante"),
+  U("Elevação lateral polia","Ombro","Lateral","Cabo/Crossover","iniciante"),
+  U("Elevação frontal halteres","Ombro","Frontal","Halteres","iniciante"),
+  E("Face Pull (corda)","Ombro","Posterior","Cabo/Crossover","iniciante"),
+  E("Crucifixo inverso máquina","Ombro","Posterior","Máquina","iniciante"),
+  U("Crucifixo inverso polia","Ombro","Posterior","Cabo/Crossover","iniciante"),
+  // Trapézio Superior (sem subgrupo "trapézio" extra)
+  E("Remada Alta Barra","Trapézio","Superior","Barra"),
+
+  // Trapézio isolado
+  E("Encolhimento Barra","Trapézio","Superior","Barra","iniciante"),
+  E("Encolhimento Halteres","Trapézio","Superior","Halteres","iniciante"),
+
+  // Costas
+  E("Barra fixa","Costas","Dorsal (Lats)","Peso corporal","avançado"),
+  E("Remada curvada barra","Costas","Romboides/Trapézio Médio","Barra"),
+  E("Remada Articulada","Costas","Romboides/Trapézio Médio","Máquina"),
+  U("Puxada alta unilateral","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Remada baixa polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Remada baixa aberta polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Puxada alta aberta","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Puxada triângulo","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Pulldown","Costas","Dorsal (Lats)","Cabo/Crossover","iniciante"),
+  U("Remada baixa unilateral","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Remada cavalinho","Costas","Romboides/Trapézio Médio","Barra"),
+  U("Remada serrote","Costas","Romboides", "Halteres","iniciante"),
+  E("Hiperextensão lombar","Lombar","Lombar","Peso corporal","iniciante"),
+
+  // Bíceps
+  E("Rosca direta barra","Bíceps","Bíceps Braquial","Barra"),
+  E("Rosca direta halteres","Bíceps","Bíceps Braquial","Halteres"),
+  U("Rosca alternada halter","Bíceps","Bíceps Braquial","Halteres"),
+  U("Rosca alternada sentada","Bíceps","Bíceps Braquial","Halteres"),
+  E("Rosca martelo halteres","Bíceps","Braquiorradial","Halteres"),
+  E("Rosca martelo corda","Bíceps","Braquiorradial","Cabo/Crossover"),
+  E("Rosca Scott máquina","Bíceps","Bíceps Braquial","Máquina","iniciante"),
+  U("Rosca 45°","Bíceps","Bíceps Braquial","Halteres"),
+
+  // Tríceps
+  E("Tríceps testa barra W","Tríceps","Cabeça Longa","Barra"),
+  E("Tríceps testa halter","Tríceps","Cabeça Longa","Halteres"),
+  U("Tríceps Francês halter","Tríceps","Cabeça Longa","Halteres"),
+  U("Tríceps Francês polia","Tríceps","Cabeça Longa","Cabo/Crossover"),
+  E("Tríceps pulley corda","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
+  E("Mergulho no banco","Tríceps","Paralelas","Peso corporal","iniciante"),
+
+  // Quadríceps (sem subgrupos)
+  E("Agachamento livre","Quadríceps","", "Barra","avançado"),
+  E("Agachamento sumô halteres","Quadríceps","", "Halteres"),
+  U("Agachamento búlgaro","Quadríceps","", "Halteres","avançado"),
+  E("Leg press 45°","Quadríceps","", "Máquina"),
+  U("Leg 180° unilateral","Quadríceps","", "Máquina"),
+  E("Cadeira extensora","Quadríceps","", "Máquina","iniciante"),
+  U("Cadeira extensora unilateral","Quadríceps","", "Máquina","iniciante"),
+  U("Passada avançada halteres","Quadríceps","", "Halteres"),
+
+  // Posterior de Coxa (sem subgrupos)
+  E("Mesa flexora","Posterior de Coxa","", "Máquina","iniciante"),
+  E("Mesa flexora deitada","Posterior de Coxa","", "Máquina","iniciante"),
+  E("Cadeira flexora","Posterior de Coxa","", "Máquina","iniciante"),
+  U("Cadeira flexora unilateral","Posterior de Coxa","", "Máquina"),
+  U("Flexora unilateral em pé","Posterior de Coxa","", "Máquina"),
+  E("Stiff","Posterior de Coxa","", "Barra"),
+  E("Stiff com halteres","Posterior de Coxa","", "Halteres"),
+  E("Levantamento Terra","Posterior de Coxa","", "Barra"),
+
+  // Glúteo (com porções)
+  E("Elevação pélvica com barra","Glúteo","Glúteo Máximo","Barra"),
+  U("Extensão de quadril no cabo","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
+  U("Glúteo Crossover Polia","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
+
+  // Panturrilha
+  E("Panturrilha em pé maquina","Panturrilha","Gastrocnêmio","Máquina","iniciante"),
+  E("Panturrilha sentado máquina","Panturrilha","Sóleo","Máquina","iniciante"),
+  E("Panturrilha em pé barra livre","Panturrilha","Gastrocnêmio","Barra","iniciante"),
+
+  // Abdutores / Adutores (músculos separados)
+  E("Cadeira abdutora","Abdutores","Geral","Máquina","iniciante"),
+  E("Cadeira adutora","Adutores","Geral","Máquina","iniciante"),
+
+  // Abdômen
+  E("Abdômen infra","Abdômen","Infra","Peso corporal","iniciante"),
+  E("Abdômen supra","Abdômen","Supra","Peso corporal","iniciante"),
+  E("Abdômen supra declinado","Abdômen","Supra","Peso corporal","avançado"),
+  E("Abdômen infra na Paralela","Abdômen","Infra","Peso corporal","avançado"),
+  E("Prancha isométrica","Abdômen","Estático","Peso corporal","iniciante"),
+
+  // Antebraço
+  E("Rosca inversa barra","Antebraço","Extensores","Barra","iniciante"),
+  E("Rosca punho barra","Antebraço","Flexores","Barra","iniciante"),
+];
+// --- Demo media for 3 exercises (GIF-only) ---
+(()=>{
+  const byName = (n)=> EXS.find(e=> e.name===n);
+  const setGif=(n, gif)=>{
+    const ex = byName(n); if(!ex) return;
+    ex.media = { type:"gif", srcGif: gif, thumb: null };
+  };
+  setGif("Supino reto barra", "/gifs/supino_reto_barra.gif"); // Peito
+  setGif("Remada curvada barra", "/gifs/remada_curvada_barra.gif"); // Costas
+  setGif("Agachamento livre", "/gifs/agachamento_livre.gif"); // Perna
+})();
+
+// Filters
+const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
+const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.primary===m && e.subgroup).map(e=>e.subgroup))];return acc;},{});
+const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
+const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
+
+function usePlans(){
+  const [plans,setPlans]=useState(()=>load(LS.plans,{activeId:null,list:[]}));
+  useEffect(()=>save(LS.plans,plans),[plans]);
+  return [plans,setPlans];
+}
+function useHistory(){
+  const [history,setHistory]=useState(()=>load(LS.history,{}));
+  useEffect(()=>save(LS.history,history),[history]);
+  return [history,setHistory];
+}
+function usePrefs(){
+  const [prefs,setPrefs]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
+  useEffect(()=>save(LS.prefs,prefs),[prefs]);
+  return [prefs,setPrefs];
+}
+
+const Card=({title,children,footer})=>(
+  <div className="ds-card rounded-2xl p-4 border border-borderDark">
+    {title && <div className="font-semibold text-lg mb-2">{title}</div>}
+    <div>{children}</div>
+    {footer && <div className="mt-3 pt-3 border-t border-borderDark text-sm text-textSub">{footer}</div>}
+  </div>
+);
+const Button=({children,onClick,variant="default",disabled,full=false})=>{
+  const cls={
+    default:"ds-btn ds-btn-ghost",
+    ghost:"ds-btn ds-btn-ghost",
+    danger:"ds-btn ds-btn-ghost border-red-700 bg-red-600/80 text-white",
+    success:"ds-btn ds-btn-ghost border-green-700 bg-green-600/80 text-white",
+    accent:"ds-btn ds-btn-primary"
+  }[variant];
+  return <button className={cls+(disabled?" opacity-60":"")+(full?" w-full justify-center text-center":"")} onClick={onClick} disabled={disabled}>{children}</button>;
+};
+const Switch=({checked,onChange})=>(
+  <label className="inline-flex items-center cursor-pointer">
+    <input type="checkbox" className="sr-only" checked={checked} onChange={e=>onChange(e.target.checked)}/>
+    <div className={"w-10 h-6 rounded-full "+(checked?"bg-accent":"bg-zinc-700")}>
+      <div className={"w-5 h-5 bg-white rounded-full mt-0.5 ml-0.5 transition-transform "+(checked?"translate-x-4":"")}></div>
+    </div>
+  </label>
+);
+const LockIcon=({className=""})=> (
+  <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M7 10V8a5 5 0 1 1 10 0v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2"/>
+    <circle cx="12" cy="15" r="1.5" fill="currentColor"/>
+  </svg>
+);
+
+
+const LogoRow=({name})=> (
+  <div className="flex items-center gap-3">
+    <img src="icons/icon-512.png" width="40" height="40" className="rounded-2xl shadow" style={{filter:'drop-shadow(0 0 6px rgba(227,27,35,.45))'}}/>
+    <div>
+      <div className="text-2xl font-black"><span>Dark</span><span className="text-textSub">Set</span></div>
+      <div className="text-xs text-textSub -mt-1">Seu treino, sua evolução</div>
+    </div>
+  </div>
+);
+
+// Toast
+const Toast=({text})=> <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/10 border border-borderDark px-4 py-2 rounded-xl">{text}</div>;
+
+// Modal
+const Modal=({onClose,children})=>(
+  <div className="modal-bg" onClick={onClose}>
+    <div className="bg-cardDark border border-borderDark rounded-2xl p-4 max-w-md w-[92%]" onClick={e=>e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
+
+// Play Icon
+const PlayIcon=({className=""})=>(
+  <svg className={className} width="28" height="28" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 5v14l11-7-11-7z"/>
+  </svg>
+);
+// Exercise Preview Box (16:9 with play overlay)
+const PreviewBox=({label="Execução do exercício", onClick, disabled})=>{
+  return (
+    <div className={"relative w-full rounded-2xl border border-borderDark overflow-hidden "+(disabled?"opacity-60":"")}>
+      <div className="pt-[56.25%] bg-black/30"></div>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-textSub hover:bg-white/5 transition"
+      >
+        <div className="rounded-full p-2 bg-white/10 border border-borderDark">
+          <PlayIcon/>
+        </div>
+        <div className="text-xs">{label}</div>
+      </button>
+    </div>
+  );
+};
+// Home
+const Home=({goto,plans,history,prefs})=>{
+  const active=plans.list.find(p=>p.id===plans.activeId)||null;
+  const entries=Object.entries(history);
+  const thisWeek=(()=>{const now=new Date();const start=new Date(now);start.setDate(now.getDate()-now.getDay()+1);return entries.filter(([iso])=>new Date(iso)>=start).length;})();
+  const [authUser,setAuthUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('darkset.user'));}catch(_){return null;}});
+  useEffect(()=>{
+    const iv=setInterval(()=>{try{setAuthUser(JSON.parse(localStorage.getItem('darkset.user')));}catch(_){}},800);
+    return ()=>clearInterval(iv);
+  },[]);
+  return (
+    <div className="grid gap-4">
+      <Card>
+        <div className="flex items-center justify-between"><LogoRow/><div className="text-sm text-textSub">Semana: <b>{thisWeek}</b> / {prefs.weeklyGoal} treinos</div></div>
+      </Card>
+      <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+        <Button onClick={()=>goto('plans')} variant="ghost">Fichas</Button>
+        <Button onClick={()=>goto('session')} variant="accent">Modo Treino</Button>
+        <Button onClick={()=>goto('history')} variant="ghost">Histórico</Button>
+      </div>
+      <Card title="Ficha ativa">
+        {active? (<div className="flex items-center justify-between"><div className="font-medium">{active.name}</div><Button onClick={()=>goto('builder',active.id)} variant="ghost">Editar</Button></div>)
+        :(<div className="flex items-center justify-between"><div className="text-textSub">Nenhuma ficha ativa.</div><Button onClick={()=>goto('plans')} variant="ghost">Criar agora</Button></div>)}
+      </Card>
+      <Card title={authUser ? "Conta" : "Acesso"}>
+        {authUser ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {authUser.photoURL && <img src={authUser.photoURL} className="w-9 h-9 rounded-full border border-borderDark" alt="foto"/>}
+              <div className="min-w-0">
+                <div className="font-medium truncate">{authUser.displayName || authUser.email}</div>
+                <div className="text-xs text-textSub truncate">{authUser.email}</div>
+              </div>
+            </div>
+            <Button variant="ghost" onClick={()=>window.DSAuth && DSAuth.signOut()}>Sair</Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-textSub">Entre para sincronizar seus treinos.</div>
+            <Button variant="accent" onClick={()=>window.openAuthModal && openAuthModal('signIn')}>Entrar</Button>
+          </div>
+        )}
+      </Card>
+      <Card title="Perfil rápido">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {prefs.avatarUrl
+              ? <img src={prefs.avatarUrl} className="w-10 h-10 rounded-full border border-borderDark object-cover" alt="avatar"/>
+              : <div className="w-10 h-10 rounded-full border border-borderDark bg-black/30 flex items-center justify-center text-sm font-bold text-textSub">{prefs.name ? prefs.name.slice(0,2).toUpperCase() : 'DS'}</div>
+            }
+            <div className="text-sm text-textSub">{prefs.name || "Sem nome"}</div>
+          </div>
+          <Button onClick={()=>goto('profile')} variant="ghost">Editar perfil</Button>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// Plans
+const Plans=({plans,setPlans,goto,setToast})=>{
+  const [renameId,setRenameId]=useState(null);
+  const [newName,setNewName]=useState("");
+  const [sharePlan,setSharePlan]=useState(null);
+
+  const createPlan=()=>{ if(!newName.trim()) return; const id=Date.now(); const byDay={}; for(const d of DAYS){byDay[d]=[]} setPlans(p=>({...p,list:[...p.list,{id,name:newName.trim(),byDay}],activeId:p.activeId||id})); setNewName(""); };
+  const duplicatePlan=(id)=> setPlans(p=>{const src=p.list.find(x=>x.id===id);const clone=JSON.parse(JSON.stringify(src));clone.id=Date.now();clone.name=src.name+" (cópia)";return {...p,list:[...p.list,clone]};});
+  const removePlan=(id)=> setPlans(p=>({...p,list:p.list.filter(pl=>pl.id!==id),activeId:p.activeId===id?null:p.activeId}));
+  const activate=(id,val)=> setPlans(p=>({...p,activeId:val? id: (p.activeId===id? null:p.activeId)}));
+
+  const openShare=(pl)=> setSharePlan(pl);
+  const closeShare=()=> setSharePlan(null);
+
+  // generate import link
+  const makeImportLink=(pl)=>{
+    const payload = { name: pl.name, byDay: pl.byDay };
+    const raw = encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(payload)).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode('0x'+p))));
+    return `${location.origin}${location.pathname}?import=${raw}`;
+  };
+
+  useEffect(()=>{
+    if(!sharePlan) return;
+    // render QR
+    setTimeout(()=>{
+      const el = document.getElementById("qr-box");
+      if(el){ el.innerHTML=""; new QRCode(el, { text: makeImportLink(sharePlan), width: 196, height: 196 }); }
+    },10);
+  },[sharePlan]);
+
+  return (
+    <div className="grid gap-4">
+      <Card title="Minhas fichas">
+        <div className="space-y-2">
+          {plans.list.length===0 && <div className="text-sm text-textSub">Nenhuma ficha criada.</div>}
+          {plans.list.map(pl=>(
+            <div key={pl.id} className="flex flex-col md:flex-row md:items-center md:justify-between border border-borderDark rounded-xl p-3 gap-2">
+              <div className="flex items-center gap-3">
+                <Switch checked={plans.activeId===pl.id} onChange={(v)=>activate(pl.id,v)}/>
+                {renameId===pl.id? (
+                  <input className="border border-borderDark bg-black/30 rounded px-2 py-1" value={pl.name} onChange={e=> setPlans(p=>({...p,list:p.list.map(x=>x.id===pl.id? {...x,name:e.target.value}:x)}))}/>
+                ) : (<div className="font-medium">{pl.name}</div>)}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
+                {renameId===pl.id? <Button full variant="success" onClick={()=>setRenameId(null)}>Ok</Button> : <Button full variant="ghost" onClick={()=>setRenameId(pl.id)}>Renomear</Button>}
+                <Button full variant="ghost" onClick={()=>duplicatePlan(pl.id)}>Duplicar</Button>
+                <Button full variant="ghost" onClick={()=>openShare(pl)}>Compartilhar</Button>
+                <Button full variant="danger" onClick={()=>{ if(confirm("Excluir esta ficha? O histórico não será apagado.")) { removePlan(pl.id); setToast("Ficha excluída"); } }}>Excluir</Button>
+                <Button full onClick={()=>goto('viewer',pl.id)} variant="ghost">Visualizar</Button>
+                <Button full onClick={()=>goto('builder',pl.id)}>Editar</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card title="Criar nova ficha">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
+          <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 flex-1" placeholder="Ex.: Foco em Peito" value={newName} onChange={e=>setNewName(e.target.value)}/>
+          <Button full variant="accent" onClick={createPlan}>Criar</Button>
+        </div>
+      </Card>
+
+      {sharePlan && (
+        <Modal onClose={closeShare}>
+          <div className="font-semibold text-lg mb-2">Compartilhar: {sharePlan.name}</div>
+          <div id="qr-box" className="mx-auto my-2 w-[196px] h-[196px] border border-borderDark rounded-xl"></div>
+          <div className="text-xs text-textSub mb-2">Escaneie o QR ou copie o link abaixo:</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
+            <input id="share-link" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full text-xs" readOnly value={makeImportLink(sharePlan)}/>
+            <Button full variant="ghost" onClick={()=>{ const el=document.getElementById('share-link'); el.select(); document.execCommand('copy'); setToast("Link copiado"); }}>Copiar</Button>
+          </div>
+          <div className="text-xs text-textSub mt-2">O link contém somente a estrutura da ficha. Histórico e dados pessoais não são enviados.</div>
+          <div className="mt-3 text-right"><Button full variant="ghost" onClick={closeShare}>Fechar</Button></div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// Builder
+const BuilderExRow = ({ex, canAdd, onAdd, openInline, onToggleInline}) => {
+  const [setsCount, setSetsCount] = useState(3);
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-3 border border-borderDark rounded-xl p-3">
+      <div className="w-full sm:w-28">
+        {ex.media?.srcGif ? (
+          <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black">
+            <img src={ex.media.srcGif} alt={ex.name} className="w-full h-auto"/>
+          </div>
+        ) : (
+          <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden">
+            <div className="pt-[56.25%] bg-black/30"></div>
+            <div className="absolute inset-0 flex items-center justify-center text-textSub text-xs">Prévia</div>
+          </div>
+        )}
+      </div>
+      <div className="flex-1 w-full">
+        <div className="font-medium break-words">{ex.name}</div>
+        <div className="text-xs text-textSub">{ex.primary} • {ex.subgroup||"—"} • {ex.equipment} • {ex.difficulty}</div>
+      </div>
+      <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+        <label className="text-xs text-textSub">Séries</label>
+        <input type="number" min="1" max="10" value={setsCount} onChange={e=>setSetsCount(Math.max(1,Math.min(10,Number(e.target.value)||1)))} className="border border-borderDark bg-black/30 rounded-xl w-16 px-2 py-1 text-sm"/>
+        <Button variant="ghost" onClick={()=>{ if(canAdd){ onAdd(ex, setsCount); } }} disabled={!canAdd}>Adicionar</Button>
+      </div>
+    </div>
+  );
+};
+const Builder=({planId,plans,setPlans,setToast})=>{
+  const plan=plans.list.find(p=>p.id===planId)||plans.list[0];
+  const [day,setDay]=useState(DAYS[0]);
+  const [filters,setFilters]=useState(()=>load(LS.filters,{q:"",m:"",s:"",e:"",d:""}));
+  const {q,m,s,e,d} = filters;
+  const [videoEx,setVideoEx] = useState(null); // (não usado neste modo)
+  const [openInline, setOpenInline] = useState({}); // exId => bool
+  const openVideo=(exMeta)=>{
+    if(!exMeta) return;
+    setOpenInline(prev=> ({...prev, [exMeta.id]: !prev[exMeta.id]}));
+  };
+
+
+  useEffect(()=>save(LS.filters,filters),[filters]);
+
+  const list=useMemo(()=> EXS.filter(ex=>{
+    const nameOk=ex.name.toLowerCase().includes(q.toLowerCase());
+    const mOk=!m||ex.primary===m;
+    const sOk=!s||ex.subgroup===s;
+    const eOk=!e||ex.equipment===e;
+    const dOk=!d||ex.difficulty===d;
+    return nameOk && mOk && sOk && eOk && dOk;
+  }),[q,m,s,e,d]);
+
+  const dayItems=plan?.byDay?.[day]||[];
+  const canAdd=(ex)=> !dayItems.some(it=>it.exId===ex.id);
+  const addEx=(ex,setsPlanned)=>{
+    setPlans(p=>{
+      const copy=JSON.parse(JSON.stringify(p));
+      const pl=copy.list.find(x=>x.id===plan.id);
+      const arr=pl.byDay[day];
+      if(arr.some(it=>it.exId===ex.id)) return p;
+      arr.push({exId:ex.id,name:ex.name,setsPlanned:Math.max(1,Number(setsPlanned)||3)});
+      return copy;
+    });
+    setToast("✅ Adicionado");
+  };
+  const removeItem=(i)=> setPlans(p=>{const copy=JSON.parse(JSON.stringify(p));const arr=copy.list.find(x=>x.id===plan.id).byDay[day];arr.splice(i,1);return copy;});
+  const move=(i,dir)=> setPlans(p=>{const copy=JSON.parse(JSON.stringify(p));const arr=copy.list.find(x=>x.id===plan.id).byDay[day];const j=i+dir;if(j<0||j>=arr.length)return p;[arr[i],arr[j]]=[arr[j],arr[i]];return copy;});
+
+  const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
+  const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.primary===m && e.subgroup).map(e=>e.subgroup))];return acc;},{});
+  const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
+  const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
+
+  return (
+    <div className="grid gap-4">
+      <Card title={"Editando: "+(plan?.name||"Ficha")}>
+        <div className="flex gap-2 flex-wrap mb-3">{DAYS.map(dy=>(<button key={dy} onClick={()=>setDay(dy)} className={"px-3 py-1.5 rounded-full border border-borderDark "+(day===dy?"bg-white/10":"")}>{dy}</button>))}</div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-borderDark p-3">
+            <div className="font-medium mb-2">Procurar</div>
+            <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full mb-2" placeholder="Buscar por nome…" value={q} onChange={e=>setFilters({...filters,q:e.target.value})}/>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={m} onChange={e=>{const v=e.target.value; setFilters({...filters,m:v,s:""});}}>
+                <option value="">Músculo</option>{MUSCLES.map(x=><option key={x}>{x}</option>)}
+              </select>
+              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={s} onChange={e=>setFilters({...filters,s:e.target.value})} disabled={!m || (SUBS_BY[m]||[]).length===0}>
+                <option value="">Subgrupo</option>{(m? SUBS_BY[m]:[]).map(x=><option key={x}>{x}</option>)}
+              </select>
+              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={e} onChange={e2=>setFilters({...filters,e:e2.target.value})}>
+                <option value="">Equipamento</option>{EQUIPS.map(x=><option key={x}>{x}</option>)}
+              </select>
+              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={d} onChange={e3=>setFilters({...filters,d:e3.target.value})}>
+                <option value="">Dificuldade</option>{DIFFS.map(x=><option key={x}>{x}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-auto pr-1">
+              {list.map(ex=>(
+                <BuilderExRow
+                  key={ex.id}
+                  ex={ex}
+                  canAdd={canAdd(ex)}
+                  onAdd={addEx}
+                  openInline={openInline[ex.id]}
+                  onToggleInline={()=>openVideo(ex)}
+                />
+              ))}
+              {list.length===0 && <div className="text-sm text-textSub">Nenhum exercício encontrado para os filtros.</div>}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-borderDark p-3">
+            <div className="font-medium mb-2">Exercícios de {day}</div>
+            {dayItems.length===0 ? <div className="text-sm text-textSub">Nenhum exercício adicionado.</div> : (
+              <div className="space-y-2">
+                {dayItems.map((it,i)=>(
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border border-borderDark rounded-xl p-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium break-words">{it.name}</div>
+                      <div className="text-xs text-textSub">Séries: {it.setsPlanned}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                      <Button variant="ghost" onClick={()=>move(i,-1)}>↑</Button>
+                      <Button variant="ghost" onClick={()=>move(i,1)}>↓</Button>
+                      <Button variant="ghost" onClick={()=>removeItem(i)}>Remover</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+      {videoEx && (
+        <Modal onClose={()=>setVideoEx(null)}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="text-sm text-textSub">Execução do exercício</div>
+              <div className="font-semibold">{videoEx.name}</div>
+            </div>
+            <Button variant="ghost" onClick={()=>setVideoEx(null)}>Fechar</Button>
+          </div>
+          {videoEx.media ? (
+            <div className="rounded-xl overflow-hidden border border-borderDark bg-black">
+              <img src={videoEx.media?.srcGif} alt={videoEx.name} className="w-full h-auto" />
+            </div>
+          ) : (
+            <div className="text-sm text-textSub">Prévia ainda não disponível para este exercício.</div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+// Viewer (Visualizador de Ficha) — GIF-only popup
+const Viewer = ({planId, plans, goto}) => {
+  const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
+  const [day, setDay] = React.useState(DAYS[0]);
+  const [videoEx, setVideoEx] = React.useState(null);
+
+  if (!plan) {
+    return <Card title="Visualizar ficha"><div className="text-sm text-textSub">Nenhuma ficha ativa. Crie/ative uma ficha primeiro.</div></Card>;
+  }
+
+  const items = plan.byDay?.[day] || [];
+  const openVideo = (ex) => {
+    const meta = EXS.find(e => e.id === ex.exId) || EXS.find(e => e.name === ex.name);
+    if (meta && meta.media?.srcGif) {
+      setVideoEx(meta);
+    } else {
+      setVideoEx({ name: ex.name, media: null }); // sem preview
+    }
+  };
+
+  return (
+    <div className="grid gap-4">
+      <Card title={"Visualizando: " + (plan?.name || "Ficha")}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex gap-2 flex-wrap">
+            {DAYS.map(dy => (
+              <button key={dy} onClick={() => setDay(dy)} className={"px-3 py-1.5 rounded-full border border-borderDark " + (day === dy ? "bg-white/10" : "")}>{dy}</button>
+            ))}
+          </div>
+          <Button variant="ghost" onClick={() => goto('plans')}>Voltar</Button>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="text-sm text-textSub">Nenhum exercício para {day}.</div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((it, i) => {
+              const meta = EXS.find(e => e.id === it.exId) || EXS.find(e => e.name === it.name);
+              return (
+                <div key={i} className="flex flex-col sm:flex-row items-center gap-3 border border-borderDark rounded-xl p-3">
+                  <div className="flex-1 w-full">
+                    <div className="font-medium break-words">{it.name}</div>
+                    <div className="text-xs text-textSub">Séries planejadas: {it.setsPlanned || 3}</div>
+                  </div>
+                  <div className="w-full sm:w-auto">
+                    <Button variant="ghost" onClick={() => openVideo(it)}>Execução</Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {videoEx && (
+        <Modal onClose={() => setVideoEx(null)}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="text-sm text-textSub">Execução do exercício</div>
+              <div className="font-semibold">{videoEx.name}</div>
+            </div>
+            <Button variant="ghost" onClick={() => setVideoEx(null)}>Fechar</Button>
+          </div>
+          {videoEx.media && videoEx.media.srcGif ? (
+            <div className="rounded-xl overflow-hidden border border-borderDark bg-black">
+              <img src={videoEx.media.srcGif} alt={videoEx.name} className="w-full h-auto" />
+            </div>
+          ) : (
+            <div className="text-sm text-textSub">Prévia ainda não disponível para este exercício.</div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+;// Session
+
+// DarkTimer — V4.4.4 (persistente, sem Wake Lock)
+const DarkTimer = ({prefs}) => {
+  const STORAGE_KEY = "darkset.timer.v1";
+  const [sec,setSec]=useState(Math.max(5, Number(prefs.timerPreset||60)));
+  const [running,setRunning]=useState(false);
+  const endRef = useRef(0);
+
+  useEffect(()=>{ if(!running){ setSec(Math.max(5, Number(prefs.timerPreset||60))); } }, [prefs.timerPreset]);
+
+  useEffect(()=>{
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const st = JSON.parse(raw);
+        if(st.active && st.endTime){
+          const remain = Math.ceil((st.endTime - Date.now())/1000);
+          if(remain > 0){
+            endRef.current = st.endTime;
+            setSec(remain);
+            setRunning(true);
+          }else{
+            setSec(Math.max(5, Number(prefs.timerPreset||60)));
+            setRunning(false);
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        }else if(typeof st.pausedSec === "number"){
+          setSec(Math.max(0, st.pausedSec));
+          setRunning(false);
+        }
+      }
+    }catch(_){}
+  },[]);
+
+  useEffect(()=>{
+    if(!running) return;
+    let loop;
+    const tick = () => {
+      const remainMs = endRef.current - Date.now();
+      const remain = Math.max(0, Math.ceil(remainMs/1000));
+      if(remain <= 0){
+        try{ if(navigator.vibrate) navigator.vibrate([320,140,320,140,420]); }catch(_){}
+        try{
+          const AC=window.AudioContext||window.webkitAudioContext;
+          if(AC){
+            const ctx=new AC();
+            const g=ctx.createGain(); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.35, ctx.currentTime);
+            const mk=(t)=>{ const o=ctx.createOscillator(); o.type="square"; o.frequency.setValueAtTime(700, t); o.connect(g); o.start(t); o.stop(t+0.22); };
+            const now=ctx.currentTime; mk(now); mk(now+0.36); mk(now+0.72);
+            setTimeout(()=>ctx.close(), 1200);
+          }
+        }catch(_){}
+        setRunning(false);
+        setSec(Math.max(5, Number(prefs.timerPreset||60)));
+        try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
+      }else{
+        setSec(remain);
+        const delay = Math.max(150, 1000 - (Date.now() % 1000));
+        loop = setTimeout(tick, delay);
+      }
+    };
+    loop = setTimeout(tick, 150);
+    return ()=> clearTimeout(loop);
+  },[running]);
+
+  const start = () => {
+    const duration = Math.max(1, Number(sec||0));
+    endRef.current = Date.now() + duration*1000;
+    setRunning(true);
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:true, endTime:endRef.current})); }catch(_){}
+  };
+  const pause = () => {
+    const remain = Math.max(0, Math.ceil((endRef.current - Date.now())/1000));
+    setRunning(false);
+    setSec(remain || Math.max(5, Number(prefs.timerPreset||60)));
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:false, pausedSec: remain})); }catch(_){}
+  };
+  const reset = () => {
+    setRunning(false);
+    setSec(Math.max(5, Number(prefs.timerPreset||60)));
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
+  };
+
+  const fmtTime = (s) => {
+    const m = Math.floor(s / 60);
+    const ss = s % 60;
+    return m > 0 ? `${m}:${String(ss).padStart(2,'0')}` : `${s}s`;
+  };
+  const presets=[30,60,90,120,150,180];
+  return (
+    <div className="border border-borderDark rounded-2xl p-3 grid gap-2 bg-cardDark/70">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col">
+          <div className="font-semibold">DarkTimer</div>
+          <div className="text-2xl font-semibold tabular-nums mt-1">{fmtTime(sec)}</div>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={reset}>Reset</Button>
+          <Button variant={running?"danger":"accent"} onClick={()=> running ? pause() : start()}>{running? "Pausar":"Iniciar"}</Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {presets.map(p=>(
+          <button key={p} onClick={()=>{ if(!running){ setSec(p); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:false, pausedSec:p})); }catch(_){} } }} className={"px-3 py-1.5 rounded-full border border-borderDark "+(sec===p?"bg-white/10":"")}>{fmtTime(p)}</button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+
+const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
+  const activePlanId=plans.activeId||(plans.list[0]?.id??null);
+  const activePlan=plans.list.find(p=>p.id===activePlanId)||null;
+  const [started,setStarted]=useState(false);
+  const [day,setDay]=useState(DAYS[(new Date().getDay()||7)-1]);
+  const [cursor,setCursor]=useState(0);
+  const planItems=activePlan?.byDay?.[day]||[];
+  const [sets,setSets]=useState([]);
+  const [rir,setRir]=useState([]);
+  const [savedSnap,setSavedSnap]=useState({});
+  const [previewOpen,setPreviewOpen]=useState(false);
+
+  useEffect(()=>{
+    if(!started) return;
+    const planned=planItems[cursor]?.setsPlanned||3;
+    setSets(Array.from({length:planned},()=>({w:"",r:""})));
+    const _def = (typeof prefs.rirDefault==="number") ? (prefs.rirDefault===0? "Falha" : String(prefs.rirDefault)) : "--";
+    setRir(Array.from({length:planned},()=> _def));
+    setSavedSnap({});
+  },[cursor,day,started]);
+
+  const start=()=>setStarted(true);
+  const back=()=>setStarted(false);
+
+  const snapshot=()=>JSON.stringify({sets,rir});
+  const isDirty=!savedSnap[cursor] || savedSnap[cursor]!==snapshot();
+
+  const lastPerf=(()=>{
+    const ex=planItems[cursor]; if(!ex) return null;
+    const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
+    for(const [,obj] of entries){
+      const f=obj.entries.find(e=>e.name===ex.name);
+      if(f) return f;
+    }
+    return null;
+  })();
+
+  const saveCurrent=()=>{
+    const ex=planItems[cursor]; if(!ex) return;
+    const dateKey=new Date().toISOString().slice(0,10);
+    setHistory(prev=>{
+      const copy={...prev};
+      if(!copy[dateKey]) copy[dateKey]={planId:activePlanId, planName:activePlan.name, day, entries:[]};
+      const setsOut=sets.map((s,i)=>({w:s.w,r:s.r, ...(rir[i]&&rir[i]!=="--"?{rir:rir[i]}:{})}));
+      const idx=copy[dateKey].entries.findIndex(en=>en.name===ex.name);
+      if(idx>=0) copy[dateKey].entries[idx].sets=setsOut; else copy[dateKey].entries.push({name:ex.name, exId:ex.exId, sets:setsOut});
+      return copy;
+    });
+    setSavedSnap(m=>({...m,[cursor]:snapshot()}));
+    if(prefs.vibrate && navigator.vibrate) navigator.vibrate(20);
+    setToast("Séries salvas");
+  };
+
+  if(!activePlan) return <Card title="Modo Treino"><div className="text-sm text-textSub">Crie e ative uma ficha primeiro.</div></Card>;
+
+  if(!started){
+    return (
+      <Card title="Modo Treino">
+        <div className="grid gap-3">
+          <div>Ficha ativa: <b>{activePlan.name}</b></div>
+          <div className="flex items-center gap-2"><span>Dia:</span>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={day} onChange={e=>{setDay(e.target.value);setCursor(0);}}>{DAYS.map(d=><option key={d}>{d}</option>)}</select>
+          </div>
+          <div className="text-sm text-textSub">Foco no básico. Bora treinar?</div>
+          <div className="flex gap-2"><Button variant="accent" onClick={start}>Iniciar treino</Button></div>
+        </div>
+      </Card>
+    );
+  }
+
+  if(planItems.length===0) return <Card title="Modo Treino"><div className="text-sm text-textSub">Sem exercícios para {day}.</div><div className="mt-2"><Button variant="ghost" onClick={back}>Voltar</Button></div></Card>
+
+  const current=planItems[cursor];
+  const exMeta = EXS.find(e=> e.id===current?.exId);
+
+  const openPreview=()=>{
+    const hasMedia = !!(exMeta && (exMeta.media?.srcMp4 || exMeta.media?.srcWebm));
+    setPreviewOpen(true);
+  };
+  return (
+    <Card title="Modo Treino">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <div className="text-sm text-textSub">Exercício {cursor+1} de {planItems.length}</div>
+          <div className="font-semibold text-lg">{current.name}</div>
+                  </div>
+        <Button variant="ghost" onClick={back}>Voltar p/ iniciar</Button>
+      </div>
+
+      {prefs.showTimer && <div className="mb-3"><DarkTimer prefs={prefs}/></div>}
+      <div className="grid gap-2">
+        {sets.map((s,i)=>(
+          <div key={i} className="grid grid-cols-[3rem,1fr,1fr,1fr] items-center gap-2 border border-borderDark rounded-xl p-2">
+            <div className="w-12 text-sm text-textSub">S{i+1}</div>
+            <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"} className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.w} onChange={e=> setSets(prev=>prev.map((v,ix)=>ix===i?{...v,w:e.target.value}:v))}/>
+            <input type="number" placeholder="reps" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.r} onChange={e=> setSets(prev=>prev.map((v,ix)=>ix===i?{...v,r:e.target.value}:v))}/>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={rir[i]} onChange={e=> setRir(prev=>prev.map((v,ix)=>ix===i?e.target.value:v))}>
+              <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between mt-3">
+        <Button variant="ghost" onClick={()=>setCursor(i=>Math.max(0,i-1))} disabled={cursor===0}>Anterior</Button>
+        <div className="flex gap-2">
+          <Button variant={isDirty? "accent":"success"} onClick={saveCurrent} disabled={!isDirty}>{isDirty? "Salvar":"Salvo ✓"}</Button>
+          <Button onClick={()=>setCursor(i=>Math.min(planItems.length-1,i+1))} disabled={cursor===planItems.length-1}>Próximo</Button>
+        </div>
+      </div>
+    {lastPerf && (
+        <div className="mt-3">
+          <div className="ds-card rounded-2xl p-3 border border-borderDark">
+            <div className="font-medium mb-2">Último Treino</div>
+            <div className="space-y-2">
+              {lastPerf.sets.map((s,i)=>(
+                <div key={i} className="flex items-center justify-between rounded-xl border border-borderDark px-3 py-2">
+                  <div className="text-sm text-textSub">S{i+1}</div>
+                  <div className="text-base tabular-nums">{(s.w||"-")}{prefs.unit==="kg"?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* Preview de execução (inline, GIF-only) */}
+      <div className="mt-3">
+        <div className="ds-card rounded-2xl p-3 border border-borderDark">
+          <div className="font-medium mb-2">Execução do exercício</div>
+          {(() => {
+            const hasGif = !!(exMeta && exMeta.media?.srcGif);
+            if (hasGif) {
+              return (
+                <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black">
+                  <img src={exMeta.media.srcGif} alt={current.name} className="w-full h-auto" />
+                </div>
+              );
+            }
+            return (
+              <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden">
+                <div className="pt-[56.25%] bg-black/30"></div>
+                <div className="absolute inset-0 flex items-center justify-center text-textSub text-sm">
+                  Prévia ainda não disponível
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+
+// History (cards compact + modal details)
+const History=({history, setHistory, prefs})=>{
+  const [weekday,setWeekday]=useState("");
+  const [planFilter,setPlanFilter]=useState("");
+  const [detail,setDetail]=useState(null); // {date,obj}
+
+  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
+  const toBR=(iso)=>{const [y,m,d]=iso.split("-");return `${d}/${m}/${y}`;}
+  const filtered=entries.filter(([_,o])=>(!weekday||o.day===weekday)&&(!planFilter||o.planName===planFilter));
+  const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
+  const chartsEnabled = !!prefs.chartsPremium;
+  const deleteEntry = (date) => {
+    if(!confirm(`Excluir o treino de ${toBR(date)}?`)) return;
+    setHistory(prev => { const copy = {...prev}; delete copy[date]; return copy; });
+  };
+
+  const parseNum = (v)=>{ const n = parseFloat(String(v).replace(",", ".")); return isFinite(n)? n : 0; };
+  const volSets = (sets)=> sets.reduce((acc,s)=> acc + (parseNum(s.w)*parseNum(s.r)), 0);
+  const volSession = (obj)=> (obj.entries||[]).reduce((acc,en)=> acc + volSets(en.sets||[]), 0);
+
+  return (
+    <div className="grid gap-4">
+      <Card title="Histórico">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-sm">Filtrar:</span>
+          <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={weekday} onChange={e=>setWeekday(e.target.value)}>
+            <option value="">Dia da semana</option>{DAYS.map(d=><option key={d}>{d}</option>)}
+          </select>
+          <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
+            <option value="">Ficha</option>{planOptions.map(n=><option key={n}>{n}</option>)}
+          </select>
+
+          <div className="ml-auto">
+            <Button variant="ghost" disabled={!chartsEnabled} onClick={()=> window.openChartsModal && window.openChartsModal()}>
+              <span className="inline-flex items-center gap-1">{!chartsEnabled && <LockIcon className="opacity-80"/>} Gráficos</span>
+            </Button>
+          </div>
+        </div>
+
+        {filtered.length===0? <div className="text-sm text-textSub">Sem registros.</div> : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {filtered.map(([date,obj])=>{
+              const vol = Math.round(volSession(obj));
+              return (
+                <button key={date} onClick={()=>setDetail({date,obj})} className="text-left ds-card rounded-2xl p-3 border border-borderDark hover:bg-white/5 transition">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-sm text-textSub">{obj.day}</div>
+                      <div className="font-semibold">{toBR(date)} — {obj.planName||"Sem ficha"}</div>
+                      <div className="text-xs text-textSub">{obj.entries.length} exercício(s)</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="text-xs text-textSub">Vol: {vol}</div>
+                      <button onClick={e=>{e.stopPropagation();deleteEntry(date);}} className="text-xs text-red-500 hover:text-red-400 px-2 py-0.5 rounded-lg border border-red-900/40 hover:bg-red-900/20 transition">Excluir</button>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {detail && (
+        <Modal onClose={()=>setDetail(null)}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="text-sm text-textSub">{detail.obj.day}</div>
+              <div className="font-semibold">{toBR(detail.date)} — {detail.obj.planName||"Sem ficha"}</div>
+              <div className="text-xs text-textSub">{detail.obj.entries.length} exercício(s)</div>
+            </div>
+            <Button variant="ghost" onClick={()=>setDetail(null)}>Fechar</Button>
+          </div>
+          <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
+            {detail.obj.entries.map((en,i)=> (
+              <div key={i} className="border border-borderDark rounded-xl p-2">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{en.name}</div>
+                  <div className="text-xs text-textSub">Vol: {Math.round(volSets(en.sets))}</div>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {en.sets.map((s,ix)=> (
+                    <span key={ix} className="inline-flex items-center rounded-full border border-borderDark px-2 py-0.5 text-xs">
+                      S{ix+1}: {s.w||"-"}{(prefs.unit==="kg")?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+// Profile
+const Profile=({prefs,setPrefs})=>{
+  const [name,setName]=useState(prefs.name);
+  const [avatar,setAvatar]=useState(prefs.avatar);
+  const [avatarUrl,setAvatarUrl]=useState(prefs.avatarUrl||null);
+  const [unit,setUnit]=useState(prefs.unit);
+  const [vibrate,setVibrate]=useState(prefs.vibrate);
+  const [goal,setGoal]=useState(prefs.weeklyGoal);
+  const [showTimer,setShowTimer]=useState(prefs.showTimer!==false);
+  const [timerPreset,setTimerPreset]=useState(Number(prefs.timerPreset||60));
+  const [rir,setRir]=useState(typeof prefs.rirDefault==="number"? prefs.rirDefault : 2);
+  const [chartsPremium,setChartsPremium]=useState(!!prefs.chartsPremium);
+  const [uploading,setUploading]=useState(false);
+  const [uploadErr,setUploadErr]=useState(null);
+  const fileRef=useRef(null);
+
+  const dirty = (name!==prefs.name)||(avatar!==prefs.avatar)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==prefs.vibrate)||(goal!==prefs.weeklyGoal)||((showTimer)!==(prefs.showTimer!==false))||((Number(timerPreset||0))!==(Number(prefs.timerPreset||60)))||((Number(rir))!==(Number((typeof prefs.rirDefault==="number"? prefs.rirDefault : 2))))||(chartsPremium!==!!prefs.chartsPremium);
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    if(!file.type.startsWith('image/')){ setUploadErr('Selecione uma imagem.'); return; }
+    if(file.size > 5*1024*1024){ setUploadErr('Imagem muito grande (máx 5MB).'); return; }
+    setUploadErr(null);
+    setUploading(true);
+    try{
+      // Verifica se Firebase Storage está disponível
+      if(!window.firebase || !firebase.storage){
+        setUploadErr('Firebase Storage não disponível. Tente recarregar.');
+        setUploading(false); return;
+      }
+      const user = JSON.parse(localStorage.getItem('darkset.user')||'null');
+      if(!user){ setUploadErr('Faça login para enviar foto.'); setUploading(false); return; }
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `avatars/${user.uid}/avatar.${ext}`;
+      const ref = firebase.storage().ref(path);
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+      setAvatarUrl(url);
+      setAvatar(''); // limpa emoji ao usar foto
+    }catch(err){
+      setUploadErr('Erro ao enviar foto: ' + (err.message||''));
+    }finally{ setUploading(false); }
+  };
+
+  const displayImg = avatarUrl || (prefs.avatarUrl||null);
+
+  return (
+    <div className="grid gap-4">
+      <Card title="Perfil">
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Avatar: foto ou iniciais */}
+            <div className="relative">
+              {displayImg
+                ? <img src={displayImg} className="w-16 h-16 rounded-full border-2 border-borderDark object-cover" alt="avatar"/>
+                : <div className="w-16 h-16 rounded-full border-2 border-borderDark bg-black/30 flex items-center justify-center text-xl font-bold text-textSub">{name ? name.slice(0,2).toUpperCase() : 'DS'}</div>
+              }
+              <button
+                onClick={()=>fileRef.current && fileRef.current.click()}
+                className="absolute bottom-0 right-0 bg-accent rounded-full w-6 h-6 flex items-center justify-center text-white text-xs border-2 border-bgDark"
+                title="Trocar foto"
+              >✎</button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange}/>
+            </div>
+            <div className="flex-1 grid gap-2">
+              <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)}/>
+            </div>
+          </div>
+          {uploading && <div className="text-xs text-textSub">Enviando foto…</div>}
+          {uploadErr && <div className="text-xs text-red-400">{uploadErr}</div>}
+          <div className="flex flex-wrap items-center gap-3">
+            <label>Unidade:</label>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={unit} onChange={e=>setUnit(e.target.value)}>
+              <option value="kg">kg</option>
+              <option value="lb">lb</option>
+            </select>
+            <label className="ml-4">Vibração:</label>
+            <Switch checked={vibrate} onChange={setVibrate}/>
+            <label className="ml-4">Meta semanal:</label>
+            <input type="number" min="1" max="14" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-20" value={goal} onChange={e=>setGoal(Number(e.target.value)||1)}/>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label>DarkTimer</label>
+            <Switch checked={showTimer} onChange={setShowTimer}/>
+            <label className="ml-4">Tempo padrão:</label>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={timerPreset} onChange={e=>setTimerPreset(Number(e.target.value)||60)}>
+              <option value="30">30s</option>
+              <option value="60">1min</option>
+              <option value="90">1min30s</option>
+              <option value="120">2min</option>
+              <option value="150">2min30s</option>
+              <option value="180">3min</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label>RIR padrão:</label>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={rir} onChange={e=>setRir(Math.max(0, Math.min(4, Number(e.target.value)||0)))}>
+              <option value="0">0 (Falha)</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label>Gráficos (Premium):</label>
+            <Switch checked={chartsPremium} onChange={setChartsPremium}/>
+            <span className="text-xs text-textSub">Habilita o botão "Gráficos" no Histórico.</span>
+          </div>
+          <div><Button variant="accent" disabled={!dirty||uploading} onClick={()=>setPrefs({name,avatar,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium})}>Salvar perfil</Button></div>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+function App(){
+  const [screen,setScreen]=useState("home");
+  const [plans,setPlans]=usePlans();
+  const [history,setHistory]=useHistory();
+  const [prefs,setPrefs]=usePrefs();
+  const [toast,setToast]=useState(null);
+  const [builderPlanId,setBuilderPlanId]=useState(null);
+  const [viewerPlanId,setViewerPlanId]=useState(null);
+  const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
+  useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
+
+  // Import via ?import= na URL
+  useEffect(()=>{
+    const doImport = (json) => {
+      const days=Object.entries(json.byDay||{}).map(([d,arr])=>`${d}: ${arr.length}`).join(" | ");
+      const ok = confirm(`Ficha encontrada: ${json.name}\n${days}\n\nAdicionar ao seu DarkSet?`);
+      if(ok){
+        const id=Date.now();
+        setPlans(p=>({...p,list:[...p.list,{id,name:json.name,byDay:json.byDay||{}}]}));
+        setToast("Ficha importada");
+        window.history.replaceState({}, "", location.pathname);
+      }
+    };
+
+    // Verifica ?import= na URL
+    const params=new URLSearchParams(location.search);
+    const imp=params.get("import");
+    if(imp){
+      try{
+        const json=JSON.parse(decodeURIComponent(atob(imp).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+        doImport(json);
+      }catch(e){ alert("Link de importação inválido."); }
+    }
+
+    // Verifica import pendente do Firebase (?id=)
+    if(window.__pendingImport){
+      doImport(window.__pendingImport);
+      window.__pendingImport = null;
+    }
+
+    // Escuta evento disparado pelo Firebase handler
+    const handler = (e) => doImport(e.detail);
+    window.addEventListener('darkset:import', handler);
+    return () => window.removeEventListener('darkset:import', handler);
+  },[]);
+
+  return (
+    <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
+      <header className="ds-hdr">
+        <LogoRow/>
+        <nav className="ds-nav flex gap-2">
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="home"?"bg-white/10":"")} onClick={()=>goto("home")}>Início</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="plans"?"bg-white/10":"")} onClick={()=>goto("plans")}>Fichas</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="builder"?"bg-white/10":"")} onClick={()=> goto("builder", plans.activeId || (plans.list[0]?.id ?? null))}>Montar Ficha</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="session"?"bg-white/10":"")} onClick={()=>goto("session")}>Modo Treino</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="history"?"bg-white/10":"")} onClick={()=>goto("history")}>Histórico</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="profile"?"bg-white/10":"")} onClick={()=>goto("profile")}>Perfil</button>
+        </nav>
+      </header>
+
+      {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs}/>}
+      {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
+      {screen==="builder" && <Builder planId={builderPlanId || (plans.activeId || plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
+      {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
+      {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
+      {screen==="viewer" && <Viewer planId={(viewerPlanId || (plans.activeId || plans.list[0]?.id))} plans={plans} goto={goto}/>}
+      {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs}/>}
+
+      <footer className="mt-8 text-center text-xs text-textSub">© {new Date().getFullYear()} DarkSet — V4.7.5</footer>
+      {toast && <Toast text={toast}/>}
+    </div>
+  );
+}
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+
+</script>
+
+<script>
+  // PWA: registra service worker (requer HTTPS ou localhost)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      // Only register if running from a real server (not file://) and SW file likely exists
+      if (location.protocol !== 'file:') {
+        navigator.serviceWorker.register('service-worker.js').catch(function(e){
+          // SW file not found — silently ignore, PWA offline not available
+        });
+      }
+    });
+  }
+</script>
+
+<!-- ===== Modal de Gráficos (IIE) ===== -->
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<div id="chartsModalBackdrop" class="charts-modal-backdrop" aria-hidden="true">
+  <div class="charts-modal" role="dialog" aria-modal="true" aria-label="Gráficos de treino">
+    <div class="charts-hd">
+      <h3>Gráficos de Evolução (IIE)</h3>
+      <div class="charts-help" id="chartsHelpBtn">?</div>
+      <div class="charts-actions"><button class="charts-btn" id="chartsCloseBtn">Fechar</button></div>
+    </div>
+    <div class="charts-body">
+      <div class="charts-row">
+        <div class="charts-field">
+          <label for="chartsType">Tipo</label>
+          <select id="chartsType" class="charts-select">
+            <option value="exercise">Exercício</option>
+            <option value="muscle">Músculo</option>
+            <option value="plan">Ficha</option>
+          </select>
+        </div>
+        <div class="charts-field">
+          <label for="chartsSubject">Assunto</label>
+          <select id="chartsSubject" class="charts-select"></select>
+        </div>
+      </div>
+      <div class="charts-pills">
+        <button class="charts-pill" data-range="7">7d</button>
+        <button class="charts-pill" data-range="30">30d</button>
+        <button class="charts-pill" data-range="90">90d</button>
+        <button class="charts-pill active" data-range="all">Tudo</button>
+      </div>
+      <div class="charts-canvas-wrap"><canvas id="chartsCanvas" height="260"></canvas></div>
+      <div id="chartsEmpty" class="charts-empty">Sem dados para o filtro selecionado.</div>
+      <div id="chartsSummary" style="display:none;margin-top:12px;display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
+          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Variação</div>
+            <div id="sumDelta" style="font-size:18px;font-weight:700">—</div>
+          </div>
+          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Volume total</div>
+            <div id="sumVol" style="font-size:18px;font-weight:700">—</div>
+          </div>
+          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Séries</div>
+            <div id="sumSets" style="font-size:18px;font-weight:700">—</div>
+          </div>
+          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Repetições</div>
+            <div id="sumReps" style="font-size:18px;font-weight:700">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const LS_HISTORY_KEY = "darkset.v3.history";
+  function getHistory(){ try{ return JSON.parse(localStorage.getItem(LS_HISTORY_KEY)) || {}; }catch(e){ return {}; } }
+  const toBR = (iso) => { const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; };
+  const dayMs = 86400000;
+
+  const RIR_W = { "Falha":1.00, 0:1.00, 1:1.00, 2:0.92, 3:0.84, 4:0.75 };
+  const num = (v)=>{ const n=parseFloat(String(v).replace(',', '.')); return isFinite(n)?n:0; };
+  const tOf = (iso)=> +new Date(iso+"T00:00:00");
+
+  function metaOf(name){
+    return (window.EXS||[]).find(e=> e && e.name && e.name.toLowerCase()===String(name).toLowerCase()) || null;
+  }
+  function primaryOf(name){ const m=metaOf(name); return m? m.primary : null; }
+  function isUnilateral(name){ const m=metaOf(name); return m? !!m.unilateral : false; }
+
+  function listSubjects(hist, type){
+    const set = new Set();
+    for(const [date, obj] of Object.entries(hist)){
+      if(!obj || !Array.isArray(obj.entries)) continue;
+      if(type==='plan'){ if(obj.planName) set.add(obj.planName); continue; }
+      for(const en of obj.entries){
+        if(!en || !en.name || !Array.isArray(en.sets)) continue;
+        const has = en.sets.some(s=> num(s.r)>0);
+        if(!has) continue;
+        if(type==='exercise') set.add(en.name);
+        if(type==='muscle'){ const p=primaryOf(en.name); if(p) set.add(p); }
+      }
+    }
+    return Array.from(set).sort((a,b)=> a.localeCompare(b));
+  }
+
+  function weekStart(d){
+    const dt = new Date(d);
+    const day = (dt.getDay()+6)%7;
+    dt.setDate(dt.getDate()-day);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+  function weekEndFromStart(ws){
+    const dt = new Date(+ws + 6*dayMs);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+  function fmtISO(d){ return d.toISOString().slice(0,10); }
+
+  // Calcula moving average (janela de 3 pontos)
+  function movingAvg(data, window=3){
+    return data.map((_, i)=>{
+      const start = Math.max(0, i - Math.floor(window/2));
+      const end   = Math.min(data.length, start + window);
+      const slice = data.slice(start, end);
+      return slice.reduce((a,b)=>a+b,0) / slice.length;
+    });
+  }
+
+  function buildAgg(hist, type, subject, rangeDays){
+    const since = (rangeDays && rangeDays!=='all') ? (Date.now() - Number(rangeDays)*dayMs) : 0;
+    const dayMap = new Map();
+
+    for(const [iso, obj] of Object.entries(hist)){
+      const t = tOf(iso); if(since && t < since) continue;
+      if(!obj || !Array.isArray(obj.entries)) continue;
+      if(type==='plan' && obj.planName !== subject) continue;
+
+      for(const en of obj.entries){
+        if(!en || !en.name || !Array.isArray(en.sets)) continue;
+        if(type==='exercise' && en.name !== subject) continue;
+        if(type==='muscle'){ const p=primaryOf(en.name); if(p!==subject) continue; }
+
+        // Fator unilateral: exercícios de 1 lado × 2 para equivaler ao bilateral
+        const uFactor = isUnilateral(en.name) ? 2 : 1;
+
+        for(const s of en.sets){
+          const r=num(s.r), w=num(s.w);
+          if(r<=0) continue;
+          const rw = (s.rir in RIR_W) ? RIR_W[s.rir] : (RIR_W[String(s.rir)] ?? 0.90);
+          const vol = (w>0 ? w*r : r) * uFactor;
+          const iie = vol * rw / 1000.0;
+
+          let acc = dayMap.get(iso);
+          if(!acc){ acc={iie:0,volume:0,sets:0,reps:0}; dayMap.set(iso,acc); }
+          acc.iie += iie; acc.volume += vol; acc.sets += 1; acc.reps += r;
+        }
+      }
+    }
+
+    // Exercício: diário
+    if(type==='exercise'){
+      const labels = Array.from(dayMap.keys()).sort((a,b)=> a.localeCompare(b));
+      const series = labels.map(d=> dayMap.get(d));
+      const tot = series.reduce((o,s)=>({iie:o.iie+s.iie, vol:o.vol+s.volume, sets:o.sets+s.sets, reps:o.reps+s.reps}), {iie:0,vol:0,sets:0,reps:0});
+      const delta = (series.length>1)? Math.round(((series.at(-1).iie - series[0].iie)/Math.max(1e-6, series[0].iie))*100) : 0;
+      window.__chartsWeekTitles = null;
+      return { labels: labels.map(toBR), series, tot, delta };
+    }
+
+    // Agrupamento semanal com SOMA (não média) para músculo/ficha
+    const wkMap = new Map();
+    for(const [iso, vals] of Array.from(dayMap.entries())){
+      const ws = weekStart(new Date(iso+"T00:00:00"));
+      const we = weekEndFromStart(ws);
+      const key = fmtISO(ws);
+      let acc = wkMap.get(key);
+      if(!acc){ acc={sumIie:0, days:0, volume:0, sets:0, reps:0, ws, we}; wkMap.set(key, acc); }
+      acc.sumIie += vals.iie; acc.days += 1;
+      acc.volume += vals.volume; acc.sets += vals.sets; acc.reps += vals.reps;
+    }
+    const weeks = Array.from(wkMap.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
+    const labels = [], series = [], titles = [];
+    let idx = 1;
+    for(const [, v] of weeks){
+      labels.push("Sem " + (idx++));
+      // Soma semanal (não mais média)
+      series.push({ iie: v.sumIie, volume: v.volume, sets: v.sets, reps: v.reps });
+      titles.push(`${toBR(fmtISO(v.ws))} — ${toBR(fmtISO(v.we))}`);
+    }
+    const tot = series.reduce((o,s)=>({iie:o.iie+s.iie, vol:o.vol+s.volume, sets:o.sets+s.sets, reps:o.reps+s.reps}), {iie:0,vol:0,sets:0,reps:0});
+    const delta = (series.length>1)? Math.round(((series.at(-1).iie - series[0].iie)/Math.max(1e-6, series[0].iie))*100) : 0;
+    window.__chartsWeekTitles = titles;
+    return { labels, series, tot, delta };
+  }
+
+  let chart;
+  function renderChart(labels, series, tot, delta){
+    const elEmpty  = document.getElementById('chartsEmpty');
+    const elSummary= document.getElementById('chartsSummary');
+    const ctx = document.getElementById('chartsCanvas');
+    if(chart){ chart.destroy(); chart=null; }
+
+    if(!labels.length){
+      elEmpty.style.display=''; elSummary.style.display='none'; return;
+    }
+    elEmpty.style.display='none';
+
+    // Atualiza estatísticas resumidas
+    if(elSummary){
+      elSummary.style.display='block';
+      const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+      const color = delta > 0 ? '#4ade80' : delta < 0 ? '#f87171' : '#a3a3a3';
+      document.getElementById('sumDelta').innerHTML = `<span style="color:${color}">${arrow} ${Math.abs(delta)}%</span>`;
+      const vol = tot.vol >= 1000 ? `${(tot.vol/1000).toFixed(1)}t` : `${Math.round(tot.vol)}kg`;
+      document.getElementById('sumVol').textContent = vol;
+      document.getElementById('sumSets').textContent = tot.sets;
+      document.getElementById('sumReps').textContent = tot.reps;
+    }
+
+    const iieData  = series.map(s=> +s.iie.toFixed(4));
+    const trendData = movingAvg(iieData);
+    const titles   = window.__chartsWeekTitles;
+
+    chart = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {
+            label:'IIE',
+            data: iieData,
+            borderWidth:2, tension:.25, pointRadius:4, pointHoverRadius:6,
+            borderColor:'#ff3b30', backgroundColor:'rgba(255,59,48,.15)',
+            fill: true, order: 2
+          },
+          {
+            label:'Tendência',
+            data: trendData,
+            borderWidth:2, tension:.4, pointRadius:0, pointHoverRadius:0,
+            borderColor:'rgba(255,200,0,.6)', backgroundColor:'transparent',
+            borderDash:[5,4], fill: false, order: 1
+          }
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index', intersect:false},
+        plugins:{
+          legend:{ display: true, labels:{ color:'#eaeaea', boxWidth:12, font:{size:11} } },
+          tooltip:{
+            enabled:true,
+            callbacks:{
+              title:(items)=>{
+                const i = items && items.length? items[0].dataIndex : 0;
+                return titles && titles[i] ? titles[i] : items[0].label;
+              },
+              label:(item)=>{
+                if(item.datasetIndex === 1) return `Tendência: ${Number(item.raw).toFixed(3)}`;
+                const s = series[item.dataIndex];
+                const lines = [`IIE: ${Number(item.raw).toFixed(3)}`];
+                if(s.volume > 0) lines.push(`Volume: ${Math.round(s.volume)}kg`);
+                lines.push(`Séries: ${s.sets}  ·  Reps: ${s.reps}`);
+                return lines;
+              }
+            }
+          }
+        },
+        scales:{
+          x:{ ticks:{ color:'#a3a3a3', maxRotation:0, autoSkip:true }, grid:{ color:'rgba(255,255,255,.05)' } },
+          y:{ beginAtZero:true, ticks:{ color:'#a3a3a3' }, grid:{ color:'rgba(255,255,255,.05)' } }
+        }
+      }
+    });
+  }
+
+  function refillAndPlot(defaults){
+    const hist = getHistory();
+    const typeSel = document.getElementById('chartsType');
+    const subjSel = document.getElementById('chartsSubject');
+    const pills = Array.from(document.querySelectorAll('.charts-pill'));
+    if(defaults && defaults.type) typeSel.value = defaults.type;
+
+    function fillSubj(){
+      const list = listSubjects(hist, typeSel.value);
+      subjSel.innerHTML = '';
+      if(!list.length){ subjSel.innerHTML = '<option>Sem dados</option>'; renderChart([],[],{},{delta:0}); return; }
+      for(const name of list){ const o=document.createElement('option'); o.value=name; o.textContent=name; subjSel.appendChild(o); }
+      if(defaults && defaults.subject && list.includes(defaults.subject)) subjSel.value = defaults.subject;
+    }
+    fillSubj();
+
+    let range = 'all';
+    function plot(){
+      const {labels, series, tot, delta} = buildAgg(hist, typeSel.value, subjSel.value, range);
+      renderChart(labels, series, tot, delta);
+    }
+    plot();
+
+    typeSel.onchange = ()=>{ fillSubj(); plot(); };
+    subjSel.onchange = ()=> plot();
+    pills.forEach(p=> p.onclick = ()=>{ pills.forEach(x=>x.classList.remove('active')); p.classList.add('active'); range=p.dataset.range; plot(); });
+  }
+
+  window.openChartsModal = function(defaultExerciseName){
+    const el = document.getElementById('chartsModalBackdrop'); if(!el) return;
+    el.style.display='flex';
+    const defaults = defaultExerciseName? {type:'exercise', subject: defaultExerciseName} : null;
+    setTimeout(()=> refillAndPlot(defaults), 0);
+  };
+  window.closeChartsModal = function(){ const el = document.getElementById('chartsModalBackdrop'); if(el) el.style.display='none'; };
+
+  document.getElementById('chartsCloseBtn')?.addEventListener('click', ()=> window.closeChartsModal());
+  document.getElementById('chartsHelpBtn')?.addEventListener('click', ()=>{
+    alert('IIE (Índice de Intensidade Efetiva) = Volume × Fator RIR / 1000\n\nExercícios unilaterais têm fator ×2 (equivalência bilateral).\n\nA linha amarela tracejada é a tendência (média móvel de 3 pontos).\n\nMúsculo/Ficha: IIE somado por semana. Exercício: IIE diário.');
+  });
+
+  document.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('button, a'); if(!btn) return;
+    const t = (btn.innerText || btn.textContent || '').toLowerCase();
+    if(t.includes('gráfico')){ ev.preventDefault(); window.openChartsModal(); }
+  });
+})();
+</script>
+<!-- ===== /Modal de Gráficos ===== -->
+
+
+<!-- Firebase compat SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script>
+(function(){
+  // ---- Helpers b64 ----
+  function b64ToJson(b64){
+    try{ return JSON.parse(decodeURIComponent(atob(b64).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''))); }catch(e){ return null; }
+  }
+  function jsonToB64(obj){
+    try{ return btoa(encodeURIComponent(JSON.stringify(obj)).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode('0x'+p))); }catch(e){ return ''; }
+  }
+
+  // ---- Handle ?id= param (share link) ----
+  async function handleIdParam(){
+    try{
+      var url = new URL(location.href);
+      var id = url.searchParams.get('id');
+      if(!id) return;
+      if(!window._db) return;
+      var snap = await window._db.collection('fichas').doc(id).get();
+      if(!snap.exists) return;
+      var data = snap.data() || {};
+      var payload = { name: data.name || data.title || "Importada", byDay: data.byDay || data.Semana || data.semana || {} };
+      window.history.replaceState({}, '', location.pathname);
+      window.__pendingImport = payload;
+      window.dispatchEvent(new CustomEvent('darkset:import', { detail: payload }));
+    }catch(e){ console.warn('handleIdParam error', e); }
+  }
+
+  // ---- Shorten share link via Firestore ----
+  var replacedOnce = false;
+  async function fireStoreShorten(){
+    try{
+      if(replacedOnce) return;
+      var inp = document.getElementById('share-link');
+      if(!inp) return;
+      var val = inp.value || '';
+      var imp = null;
+      if(val.includes('?import=')) imp = (new URL(val, location.href)).searchParams.get('import');
+      if(!imp) return;
+      var qb = document.getElementById('qr-box');
+      if(qb) qb.innerHTML = '<div style="padding:6px;font-size:12px;opacity:.8">Gerando link curto…</div>';
+      inp.value = 'gerando…';
+      if(!window._db) return;
+      var obj = b64ToJson(imp);
+      if(!obj || !obj.byDay) return;
+      var docRef = await window._db.collection('fichas').add(Object.assign({}, obj, { ts: Date.now() }));
+      var shortUrl = location.origin + '/?id=' + docRef.id;
+      inp.value = shortUrl;
+      if(qb && window.QRCode){ qb.innerHTML=''; new QRCode(qb, { text: shortUrl, width: 196, height: 196 }); }
+      replacedOnce = true;
+    }catch(e){ console.warn('fireStoreShorten error', e); }
+  }
+
+  // ---- MutationObserver para o modal de compartilhamento ----
+  var mo = new MutationObserver(function(){
+    if(document.getElementById('share-link')) fireStoreShorten();
+  });
+
+  // ---- Init Firebase com retry ----
+  var initAttempts = 0;
+  function tryInitFirebase(){
+    initAttempts++;
+    if(typeof firebase === 'undefined'){
+      if(initAttempts < 20) setTimeout(tryInitFirebase, 300);
+      else console.warn('Firebase SDK não carregou após várias tentativas');
+      return;
+    }
+    try{
+      var firebaseConfig = {
+        apiKey: "AIzaSyB3bu3XercwmnlV0jdaldoXvd5gnHfj0GU",
+        authDomain: "darkset-538d1.firebaseapp.com",
+        projectId: "darkset-538d1",
+        storageBucket: "darkset-538d1.firebasestorage.app",
+        messagingSenderId: "354165019689",
+        appId: "1:354165019689:web:dc458f0a61e26e6289f838",
+        measurementId: "G-PVJ7QJ0T7F"
+      };
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      window._db   = firebase.firestore();
+      window._auth = firebase.auth();
+    }catch(e){ console.warn('Firebase init failed', e); return; }
+
+    // ---- DSAuth API ----
+    try{
+      var auth = window._auth;
+      var db   = window._db;
+      window.DSAuth = {
+        signInGoogle: async function(){
+          var provider = new firebase.auth.GoogleAuthProvider();
+          try{ await auth.signInWithPopup(provider); }
+          catch(e){
+            if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
+              await auth.signInWithRedirect(provider);
+            } else { throw e; }
+          }
+        },
+        signInApple: async function(){
+          var provider = new firebase.auth.OAuthProvider('apple.com');
+          provider.addScope('email'); provider.addScope('name');
+          try{ await auth.signInWithPopup(provider); }
+          catch(e){
+            if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
+              await auth.signInWithRedirect(provider);
+            } else { throw e; }
+          }
+        },
+        signUpEmail: function(email, pass, name){
+          return auth.createUserWithEmailAndPassword(email, pass).then(function(cred){
+            if(name) return cred.user.updateProfile({ displayName: name });
+          });
+        },
+        signInEmail: function(email, pass){
+          return auth.signInWithEmailAndPassword(email, pass);
+        },
+        signOut: function(){ return auth.signOut(); }
+      };
+
+      auth.onAuthStateChanged(async function(user){
+        try{
+          if(user){
+            var info = { uid: user.uid, email: user.email||null, displayName: user.displayName||null, photoURL: user.photoURL||null, lastLogin: Date.now() };
+            localStorage.setItem('darkset.user', JSON.stringify(info));
+            try{ if(db) await db.collection('users').doc(user.uid).set({ email: info.email, name: info.displayName, photoURL: info.photoURL, updatedAt: Date.now() }, { merge: true }); }catch(_){}
+            try{
+              var prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
+              if(info.displayName && !prefs.name){ prefs.name = info.displayName; localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs)); }
+            }catch(_){}
+            if(window.closeAuthModal) closeAuthModal();
+          } else {
+            localStorage.removeItem('darkset.user');
+          }
+        }catch(_){}
+      });
+
+      auth.getRedirectResult().catch(function(){});
+    }catch(e){ console.warn('DSAuth init error', e); }
+
+    // Inicia observadores após Firebase pronto
+    mo.observe(document.getElementById('root') || document.body, { subtree: true, childList: true });
+    handleIdParam();
+    fireStoreShorten();
+  }
+
+  // Inicia com pequeno delay para garantir que os SDKs externos carregaram
+  setTimeout(tryInitFirebase, 100);
+})();
+</script>
+
+
+<!-- ===== Auth Popup ===== -->
+<style>
+  .auth-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:99999}
+  .auth-card{width:min(420px,92vw);background:#0b0b0c;border:1px solid #1f2024;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#eaeaea;overflow:hidden}
+  .auth-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #1f2024;background:linear-gradient(180deg,#0f0f11,#0b0b0c)}
+  .auth-title{font-weight:700;font-size:16px}
+  .auth-x{background:transparent;border:0;color:#a9a9b0;font-size:20px;cursor:pointer;line-height:1;padding:0 4px}
+  .auth-body{padding:16px;display:grid;gap:12px}
+  .auth-social{display:flex;flex-direction:column;gap:8px}
+  .btn-social{display:flex;align-items:center;gap:10px;justify-content:center;background:#fff;color:#111;border:1px solid #e5e5e5;border-radius:10px;padding:11px 12px;font-weight:700;cursor:pointer;font-size:15px}
+  .btn-social:active{transform:translateY(1px)}
+  .btn-social .ico{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+  .btn-social .ico svg{width:18px;height:18px;display:block}
+  .auth-sep{display:flex;align-items:center;gap:8px;color:#555;font-size:12px}
+  .auth-sep::before,.auth-sep::after{content:'';flex:1;height:1px;background:#1f2024}
+  .auth-field{display:flex;flex-direction:column;gap:5px}
+  .auth-field label{font-size:12px;opacity:.8}
+  .auth-input{background:#111114;border:1px solid #28282c;border-radius:10px;color:#eaeaea;padding:10px 12px;font-size:14px;outline:none;width:100%;box-sizing:border-box}
+  .auth-input:focus{border-color:#6e5bff}
+  .auth-primary{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .auth-btn{background:#e31b23;border:1px solid #b31217;color:#fff;border-radius:10px;padding:10px 18px;cursor:pointer;font-weight:700;font-size:15px}
+  .auth-btn:active{transform:translateY(1px)}
+  .auth-muted{font-size:12px;color:#a9a9b0;text-align:center}
+  .auth-muted button{background:none;border:0;color:#ff7b7e;text-decoration:underline;cursor:pointer;font-size:12px}
+  .auth-error{background:#3a0a0a;border:1px solid #7a1a1a;border-radius:8px;padding:8px 12px;font-size:13px;color:#ff9a9a;display:none}
+</style>
+
+<div id="authModalBackdrop" class="auth-backdrop" aria-hidden="true">
+  <div class="auth-card" role="dialog" aria-modal="true" aria-label="Autenticação">
+    <div class="auth-hd">
+      <div class="auth-title" id="authModalTitle">Entrar</div>
+      <button class="auth-x" id="authCloseBtn" aria-label="Fechar">✕</button>
+    </div>
+    <div class="auth-body">
+      <div class="auth-social">
+        <button class="btn-social" id="authGoogleBtn">
+          <span class="ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M23.5 12.27c0-.84-.07-1.45-.22-2.09H12.22v3.8h6.42c-.13 1.01-.83 2.53-2.39 3.55l-.02.13 3.47 2.69.24.02c2.19-2.02 3.46-4.99 3.46-8.1z"/><path fill="#34A853" d="M12.22 23.5c3.14 0 5.77-1.03 7.69-2.82l-3.66-2.83c-.98.67-2.31 1.14-4.03 1.14-3.08 0-5.68-2.02-6.61-4.82l-.12.01-3.58 2.77-.05.11C2.83 21 7.19 23.5 12.22 23.5z"/><path fill="#FBBC05" d="M5.61 14.17c-.24-.73-.38-1.52-.38-2.35 0-.82.14-1.61.37-2.35l-.01-.16-3.62-2.8-.12.06C.75 8.26.22 10.06.22 11.82c0 1.76.53 3.56 1.63 5.25l3.76-2.9z"/><path fill="#EA4335" d="M12.22 4.64c2.18 0 3.64.94 4.48 1.72l3.26-3.18C17.98 1.2 15.36.14 12.22.14 7.19.14 2.83 2.63.75 6.4l3.84 2.98C5.52 7.58 8.12 4.64 12.22 4.64z"/></svg></span>
+          <span>Continuar com Google</span>
+        </button>
+      </div>
+      <div class="auth-sep">ou</div>
+      <div class="auth-error" id="authError"></div>
+      <div class="auth-field" id="authNameField" style="display:none">
+        <label>Nome</label>
+        <input class="auth-input" id="authNameInput" placeholder="Seu nome" autocomplete="name"/>
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input class="auth-input" id="authEmailInput" type="email" placeholder="email@exemplo.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label>Senha</label>
+        <input class="auth-input" id="authPassInput" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <div class="auth-primary">
+        <button class="auth-btn" id="authPrimaryBtn">Entrar</button>
+      </div>
+      <div class="auth-muted" id="authToggleRow">
+        Ainda não tem uma conta? <button id="authToggleBtn">Criar conta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var mode = 'signIn';
+  var backdrop = document.getElementById('authModalBackdrop');
+  var titleEl  = document.getElementById('authModalTitle');
+  var closeBtn = document.getElementById('authCloseBtn');
+  var googleBtn= document.getElementById('authGoogleBtn');
+  var primaryBtn=document.getElementById('authPrimaryBtn');
+  var toggleBtn= document.getElementById('authToggleBtn');
+  var toggleRow= document.getElementById('authToggleRow');
+  var nameField= document.getElementById('authNameField');
+  var nameInput= document.getElementById('authNameInput');
+  var emailInput=document.getElementById('authEmailInput');
+  var passInput= document.getElementById('authPassInput');
+  var errorEl  = document.getElementById('authError');
+
+  function showError(msg){ if(errorEl){ errorEl.textContent=msg; errorEl.style.display=msg?'block':'none'; } }
+  function setMode(m){
+    mode = m;
+    var isUp = mode==='signUp';
+    if(titleEl)   titleEl.textContent  = isUp? 'Criar conta' : 'Entrar';
+    if(primaryBtn) primaryBtn.textContent = isUp? 'Criar conta' : 'Entrar';
+    if(nameField) nameField.style.display = isUp? 'flex' : 'none';
+    if(toggleRow) toggleRow.innerHTML = isUp
+      ? 'Já tem uma conta? <button id="authToggleBtn">Entrar</button>'
+      : 'Ainda não tem uma conta? <button id="authToggleBtn">Criar conta</button>';
+    document.getElementById('authToggleBtn').addEventListener('click', function(){ setMode(mode==='signUp'?'signIn':'signUp'); showError(''); });
+    if(passInput) passInput.setAttribute('autocomplete', isUp? 'new-password':'current-password');
+    showError('');
+  }
+
+  window.openAuthModal  = function(m){ setMode(m||'signIn'); backdrop.style.display='flex'; backdrop.setAttribute('aria-hidden','false'); };
+  window.closeAuthModal = function(){ backdrop.style.display='none'; backdrop.setAttribute('aria-hidden','true'); showError(''); };
+
+  closeBtn && closeBtn.addEventListener('click', closeAuthModal);
+  backdrop.addEventListener('click', function(e){ if(e.target===backdrop) closeAuthModal(); });
+
+  googleBtn && googleBtn.addEventListener('click', async function(){
+    showError('');
+    try{
+      if(!window.DSAuth) return showError('Firebase não carregou. Tente recarregar a página.');
+      googleBtn.textContent = 'Aguarde…'; googleBtn.disabled = true;
+      await DSAuth.signInGoogle();
+    }catch(e){
+      showError(e && e.message ? e.message : 'Erro ao entrar com Google.');
+      googleBtn.disabled = false;
+      googleBtn.innerHTML = '<span class="ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M23.5 12.27c0-.84-.07-1.45-.22-2.09H12.22v3.8h6.42c-.13 1.01-.83 2.53-2.39 3.55l-.02.13 3.47 2.69.24.02c2.19-2.02 3.46-4.99 3.46-8.1z"/><path fill="#34A853" d="M12.22 23.5c3.14 0 5.77-1.03 7.69-2.82l-3.66-2.83c-.98.67-2.31 1.14-4.03 1.14-3.08 0-5.68-2.02-6.61-4.82l-.12.01-3.58 2.77-.05.11C2.83 21 7.19 23.5 12.22 23.5z"/><path fill="#FBBC05" d="M5.61 14.17c-.24-.73-.38-1.52-.38-2.35 0-.82.14-1.61.37-2.35l-.01-.16-3.62-2.8-.12.06C.75 8.26.22 10.06.22 11.82c0 1.76.53 3.56 1.63 5.25l3.76-2.9z"/><path fill="#EA4335" d="M12.22 4.64c2.18 0 3.64.94 4.48 1.72l3.26-3.18C17.98 1.2 15.36.14 12.22.14 7.19.14 2.83 2.63.75 6.4l3.84 2.98C5.52 7.58 4.64 12.22 4.64z"/></svg></span><span>Continuar com Google</span>';
+    }
+  });
+
+  primaryBtn && primaryBtn.addEventListener('click', async function(){
+    showError('');
+    var email = (emailInput && emailInput.value||'').trim();
+    var pass  = (passInput  && passInput.value ||'').trim();
+    var name  = (nameInput  && nameInput.value ||'').trim();
+    if(!email||!pass){ showError('Preencha email e senha.'); return; }
+    if(!window.DSAuth){ showError('Firebase não carregou. Tente recarregar.'); return; }
+    primaryBtn.disabled = true; primaryBtn.textContent = 'Aguarde…';
+    try{
+      if(mode==='signUp') await DSAuth.signUpEmail(email, pass, name);
+      else                await DSAuth.signInEmail(email, pass);
+      closeAuthModal();
+    }catch(e){
+      var msg = e && e.message ? e.message : 'Erro desconhecido.';
+      if(e.code==='auth/user-not-found'||e.code==='auth/wrong-password') msg='Email ou senha incorretos.';
+      if(e.code==='auth/email-already-in-use') msg='Este email já está cadastrado. Tente entrar.';
+      if(e.code==='auth/weak-password') msg='Senha muito fraca (mínimo 6 caracteres).';
+      if(e.code==='auth/invalid-email') msg='Email inválido.';
+      showError(msg);
+    }finally{
+      primaryBtn.disabled = false;
+      primaryBtn.textContent = mode==='signUp'? 'Criar conta':'Entrar';
+    }
+  });
+
+  toggleBtn && toggleBtn.addEventListener('click', function(){ setMode(mode==='signUp'?'signIn':'signUp'); showError(''); });
+
+  // Abre automaticamente para visitantes sem conta
+  try{
+    var hasUser = !!JSON.parse(localStorage.getItem('darkset.user')||'null');
+    if(!hasUser){ setTimeout(function(){ openAuthModal('signIn'); }, 600); }
+  }catch(_){}
+})();
+</script>
+<!-- ===== /Auth Popup ===== -->
+
+</body>
+</html>
