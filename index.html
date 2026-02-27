@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>DarkSet — V4.7.5</title>
+  <title>DarkSet — V4.9.0</title>
   <meta name="theme-color" content="#0b0b0b"/>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-512.png">
@@ -21,24 +21,41 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
-    /* ===== CSS Variables para o tema dark ===== */
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
     :root{
-      --color-bg: #0b0b0b;
-      --color-card: #121212;
-      --color-card-soft: #181818;
-      --color-text: #f1f1f1;
-      --color-text-sub: #a3a3a3;
-      --color-border: #2a2a2a;
+      --color-bg: #080808;
+      --color-card: #0f0f0f;
+      --color-card-soft: #141414;
+      --color-text: #f0f0f0;
+      --color-text-sub: #888;
+      --color-border: #1e1e1e;
       --color-accent: #e31b23;
-      --color-accent2: #ff4d4f;
-      --ds-radius: 18px;
+      --color-accent2: #ff3b3b;
+      --color-accent-glow: rgba(227,27,35,0.18);
+      --ds-radius: 12px;
     }
 
-    /* Fundo e texto base — garantido mesmo sem Tailwind processar */
-    html, body { background-color: var(--color-bg) !important; color: var(--color-text) !important; }
-    #root { background-color: var(--color-bg); min-height: 100vh; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      background-color: var(--color-bg) !important;
+      color: var(--color-text) !important;
+      font-family: 'Inter', -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Subtle noise texture on body */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.35;
+    }
+    #root { background-color: var(--color-bg); min-height: 100vh; position: relative; z-index: 1; }
 
-    /* Sobrescreve classes Tailwind customizadas via CSS puro */
+    /* Tailwind overrides */
     .bg-bgDark   { background-color: var(--color-bg) !important; }
     .bg-cardDark { background-color: var(--color-card) !important; }
     .bg-cardSoft { background-color: var(--color-card-soft) !important; }
@@ -47,61 +64,247 @@
     .border-borderDark { border-color: var(--color-border) !important; }
     .bg-accent   { background-color: var(--color-accent) !important; }
     .text-accent { color: var(--color-accent) !important; }
-
-    /* Inputs e selects — tema escuro */
-    input, select, textarea {
-      background-color: rgba(0,0,0,0.3) !important;
-      color: var(--color-text) !important;
-      border-color: var(--color-border) !important;
-    }
-    input::placeholder { color: var(--color-text-sub) !important; }
-
-    /* Ocultar barra de rolagem horizontal mantendo scroll */
-    nav.ds-nav{ overflow-x:auto; -webkit-overflow-scrolling: touch; gap:.5rem; scrollbar-width: none; }
-    nav.ds-nav::-webkit-scrollbar{ display:none; }
-    header.ds-hdr{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
-    @media (max-width: 480px){ nav.ds-nav button{ flex:0 0 auto } }
-    .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:50 }
-
-    header.ds-hdr{ position: sticky; top: 0; z-index: 30; backdrop-filter: blur(8px); background: rgba(11,11,11,.85) !important; border-bottom: 1px solid rgba(255,255,255,.06); padding: .6rem .5rem; border-radius: 0 0 16px 16px;}
-    .ds-card{ border-radius: var(--ds-radius); background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02)); border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02); }
-    .ds-btn{ border-radius: 14px; padding: .65rem 1rem; font-weight: 600; color: var(--color-text); }
-    .ds-btn-primary{ background: linear-gradient(180deg, #e31b23, #b31217); border: 1px solid #8f0f13; color: #fff; }
-    .ds-btn-primary:active{ transform: translateY(1px); }
-    .ds-btn-ghost{ background: rgba(255,255,255,.06); border: 1px solid #2a2a2a; color: var(--color-text); }
-    .ds-shadow{ box-shadow: 0 8px 24px rgba(0,0,0,.35); }
-    .safe-pb{ padding-bottom: max(env(safe-area-inset-bottom), 16px); }
-    .safe-pt{ padding-top: max(env(safe-area-inset-top), 8px); }
-    @media (max-width: 480px){
-      .grid-cols-mobile-1{ grid-template-columns: 1fr; }
-    }
-
-    /* Cards e bordas gerais */
     .rounded-2xl, .rounded-xl { color: inherit; }
     .border { border-color: var(--color-border); }
 
-    /* Modal */
-    .bg-cardDark { background-color: var(--color-card) !important; }
+    /* Inputs */
+    input, select, textarea {
+      background-color: rgba(0,0,0,0.45) !important;
+      color: var(--color-text) !important;
+      border-color: var(--color-border) !important;
+      font-family: 'Inter', sans-serif;
+    }
+    input::placeholder { color: #444 !important; }
+    input:focus, select:focus { outline: none; border-color: var(--color-accent) !important; box-shadow: 0 0 0 2px var(--color-accent-glow); }
 
-    /* Charts modal */
-    .charts-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999}
-    .charts-modal{width:min(980px,92vw);max-height:90vh;background:#0b0b0c;color:#eaeaea;border:1px solid #202025;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
-    .charts-hd{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #202025;background:linear-gradient(180deg,#0f0f11 0,#0b0b0c 100%)}
-    .charts-hd h3{font-size:16px;font-weight:700;margin:0}
+    /* HEADER */
+    nav.ds-nav{ overflow-x:auto; -webkit-overflow-scrolling: touch; gap:.4rem; scrollbar-width: none; display:flex; }
+    nav.ds-nav::-webkit-scrollbar{ display:none; }
+    @media (max-width: 480px){ nav.ds-nav button{ flex:0 0 auto } }
+    header.ds-hdr{
+      position: sticky; top: 0; z-index: 30;
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      background: rgba(8,8,8,.92) !important;
+      border-bottom: 1px solid rgba(227,27,35,.12);
+      padding: .55rem .75rem;
+      display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap;
+    }
+
+    /* NAV BUTTONS */
+    .ds-nav-btn {
+      padding: .45rem .85rem;
+      border-radius: 8px;
+      border: 1px solid #1e1e1e;
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #666;
+      background: transparent;
+      transition: color .15s, border-color .15s, background .15s;
+      white-space: nowrap;
+    }
+    .ds-nav-btn:hover { color: #ccc; border-color: #333; background: rgba(255,255,255,.04); }
+    .ds-nav-btn.active {
+      color: #fff;
+      border-color: var(--color-accent);
+      background: rgba(227,27,35,.1);
+      box-shadow: 0 0 12px rgba(227,27,35,.15);
+    }
+
+    /* CARDS */
+    .ds-card{
+      border-radius: var(--ds-radius);
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      position: relative;
+      overflow: hidden;
+    }
+    .ds-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
+    }
+    /* Red accent left border on active cards */
+    .ds-card-accent { border-left: 2px solid var(--color-accent); }
+
+    /* SECTION HEADERS — Barlow Condensed for aggressive look */
+    .ds-section-title {
+      font-family: 'Barlow Condensed', 'Inter', sans-serif;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .ds-section-title span { color: var(--color-accent); }
+
+    /* BUTTONS */
+    .ds-btn {
+      border-radius: 8px;
+      padding: .6rem 1rem;
+      font-weight: 700;
+      font-size: .8rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      transition: all .15s;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex; align-items: center; gap: .4rem;
+    }
+    .ds-btn-primary {
+      background: linear-gradient(160deg, #e31b23, #a81018);
+      border-color: rgba(255,255,255,.08);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(227,27,35,.3), inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .ds-btn-primary:hover { box-shadow: 0 4px 20px rgba(227,27,35,.5), inset 0 1px 0 rgba(255,255,255,.1); }
+    .ds-btn-primary:active { transform: translateY(1px); box-shadow: 0 2px 8px rgba(227,27,35,.3); }
+    .ds-btn-ghost {
+      background: rgba(255,255,255,.04);
+      border-color: #222;
+      color: #aaa;
+    }
+    .ds-btn-ghost:hover { background: rgba(255,255,255,.08); color: #ddd; border-color: #333; }
+    .ds-btn-success {
+      background: rgba(34,197,94,.12);
+      border-color: rgba(34,197,94,.3);
+      color: #4ade80;
+    }
+    .ds-btn-danger {
+      background: rgba(227,27,35,.12);
+      border-color: rgba(227,27,35,.3);
+      color: var(--color-accent2);
+    }
+
+    /* SET ROW */
+    .set-row {
+      background: rgba(0,0,0,.3);
+      border: 1px solid #1a1a1a;
+      border-radius: 10px;
+      padding: .5rem .75rem;
+      display: grid;
+      align-items: center;
+      gap: .5rem;
+    }
+    .set-row:focus-within { border-color: rgba(227,27,35,.3); background: rgba(227,27,35,.04); }
+
+    /* STAT CHIPS */
+    .ds-stat {
+      background: rgba(0,0,0,.4);
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      padding: .5rem .85rem;
+      text-align: center;
+    }
+    .ds-stat-val {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+    .ds-stat-label { font-size: .65rem; color: #555; text-transform: uppercase; letter-spacing: .06em; margin-top: .2rem; }
+
+    /* WEEK STREAK BAR */
+    .streak-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #1e1e1e;
+      transition: background .2s;
+    }
+    .streak-dot.done { background: var(--color-accent); box-shadow: 0 0 6px rgba(227,27,35,.5); }
+
+    /* EXERCISE CARD in session */
+    .ex-card {
+      background: rgba(0,0,0,.3);
+      border: 1px solid #1e1e1e;
+      border-radius: 10px;
+      padding: .75rem 1rem;
+    }
+    .ex-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: rgba(227,27,35,.15);
+      line-height: 1;
+      position: absolute;
+      right: .75rem;
+      top: .5rem;
+    }
+
+    /* PROGRESS BAR */
+    .ds-progress-track { background: #1a1a1a; border-radius: 4px; height: 3px; }
+    .ds-progress-fill { background: var(--color-accent); border-radius: 4px; height: 100%; transition: width .3s ease; box-shadow: 0 0 8px rgba(227,27,35,.4); }
+
+    /* HISTORY CARD */
+    .hist-card {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      padding: .85rem 1rem;
+      transition: border-color .15s, background .15s;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+    .hist-card:hover { border-color: #333; background: #111; }
+    .hist-date {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      color: #fff;
+    }
+
+    /* TOAST */
+    .ds-toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: #111; border: 1px solid #2a2a2a;
+      color: #f0f0f0; font-size: .8rem; font-weight: 600;
+      padding: .6rem 1.2rem; border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      z-index: 999; white-space: nowrap;
+      animation: toastIn .2s ease;
+    }
+    @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(6px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+    /* MODAL */
+    .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:50; backdrop-filter: blur(4px); }
+
+    /* MODE TOGGLE */
+    .mode-toggle { display: flex; background: rgba(0,0,0,.4); border: 1px solid #1e1e1e; border-radius: 10px; padding: 3px; gap: 3px; }
+    .mode-toggle-btn { flex: 1; padding: .5rem .75rem; border-radius: 8px; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #555; background: transparent; border: none; cursor: pointer; transition: all .15s; }
+    .mode-toggle-btn.active { background: var(--color-accent); color: #fff; box-shadow: 0 2px 8px rgba(227,27,35,.3); }
+
+    /* Safe areas */
+    .safe-pb{ padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+    .safe-pt{ padding-top: max(env(safe-area-inset-top), 8px); }
+
+    @media (max-width: 480px){ .grid-cols-mobile-1{ grid-template-columns: 1fr; } }
+
+    /* Charts */
+    .charts-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
+    .charts-modal{width:min(980px,92vw);max-height:90vh;background:#0a0a0a;color:#eaeaea;border:1px solid #1e1e1e;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .charts-hd{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #1a1a1a;background:#0a0a0a}
+    .charts-hd h3{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:0}
     .charts-help{width:30px;height:30px;border-radius:999px;background:#141418;border:1px solid #2b2b31;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .charts-body{padding:14px 16px;overflow:auto}
     .charts-row{display:grid;grid-template-columns:1fr;gap:12px}
     @media (min-width:700px){.charts-row{grid-template-columns:1fr 1fr}}
     .charts-field{display:flex;flex-direction:column;gap:6px}
     .charts-field label{font-size:12px;opacity:.85}
-    .charts-select{background:#111114 !important;color:#eaeaea !important;border:1px solid #28282c !important;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+    .charts-select{background:#0d0d0d !important;color:#eaeaea !important;border:1px solid #1e1e1e !important;border-radius:8px;padding:10px 12px;font-size:14px;outline:none}
     .charts-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    .charts-pill{background:#141418;border:1px solid #2b2b31;color:#eaeaea;border-radius:999px;padding:6px 10px;font-size:13px;cursor:pointer}
-    .charts-pill.active{background:#1f1f25;border-color:#3a3a42}
-    .charts-canvas-wrap{margin-top:14px;background:#0e0e12;border:1px solid #1f2024;border-radius:12px;padding:8px}
-    .charts-empty{padding:12px;border:1px dashed #2c2c31;border-radius:12px;text-align:center;opacity:.8;display:none}
+    .charts-pill{background:#111;border:1px solid #1e1e1e;color:#aaa;border-radius:999px;padding:6px 10px;font-size:13px;cursor:pointer;transition:all .15s}
+    .charts-pill.active{background:rgba(227,27,35,.1);border-color:var(--color-accent);color:#fff}
+    .charts-canvas-wrap{margin-top:14px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:8px}
+    .charts-empty{padding:12px;border:1px dashed #1e1e1e;border-radius:10px;text-align:center;opacity:.8;display:none}
     .charts-actions{margin-left:auto}
-    .charts-btn{background:#1a1a1f;border:1px solid #2c2c31;color:#eaeaea;border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer}
+    .charts-btn{background:#111;border:1px solid #1e1e1e;color:#eaeaea;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer}
   </style>
 </head>
 <body class="bg-bgDark text-textMain min-h-screen overflow-x-hidden">
@@ -262,59 +465,61 @@ function usePrefs(){
   return [prefs,setPrefs];
 }
 
-const Card=({title,children,footer})=>(
-  <div className="ds-card rounded-2xl p-4 border border-borderDark">
-    {title && <div className="font-semibold text-lg mb-2">{title}</div>}
-    <div>{children}</div>
-    {footer && <div className="mt-3 pt-3 border-t border-borderDark text-sm text-textSub">{footer}</div>}
-  </div>
-);
-const Button=({children,onClick,variant="default",disabled,full=false})=>{
+
+const Button=({children,onClick,variant="ghost",disabled=false,full=false})=>{
   const cls={
-    default:"ds-btn ds-btn-ghost",
     ghost:"ds-btn ds-btn-ghost",
-    danger:"ds-btn ds-btn-ghost border-red-700 bg-red-600/80 text-white",
-    success:"ds-btn ds-btn-ghost border-green-700 bg-green-600/80 text-white",
+    default:"ds-btn ds-btn-ghost",
+    danger:"ds-btn ds-btn-danger",
+    success:"ds-btn ds-btn-success",
     accent:"ds-btn ds-btn-primary"
-  }[variant];
-  return <button className={cls+(disabled?" opacity-60":"")+(full?" w-full justify-center text-center":"")} onClick={onClick} disabled={disabled}>{children}</button>;
+  }[variant]||"ds-btn ds-btn-ghost";
+  return <button className={cls+(disabled?" opacity-40 cursor-not-allowed":"")+(full?" w-full justify-center":"")} onClick={onClick} disabled={disabled}>{children}</button>;
 };
+
 const Switch=({checked,onChange})=>(
   <label className="inline-flex items-center cursor-pointer">
     <input type="checkbox" className="sr-only" checked={checked} onChange={e=>onChange(e.target.checked)}/>
-    <div className={"w-10 h-6 rounded-full "+(checked?"bg-accent":"bg-zinc-700")}>
-      <div className={"w-5 h-5 bg-white rounded-full mt-0.5 ml-0.5 transition-transform "+(checked?"translate-x-4":"")}></div>
+    <div style={{width:'2.4rem',height:'1.4rem',borderRadius:'999px',background:checked?'var(--color-accent)':'#222',border:'1px solid #333',position:'relative',transition:'background .2s'}}>
+      <div style={{width:'1rem',height:'1rem',borderRadius:'50%',background:'#fff',position:'absolute',top:'2px',left:checked?'calc(100% - 18px)':'2px',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.4)'}}></div>
     </div>
   </label>
 );
-const LockIcon=({className=""})=> (
-  <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+const LockIcon=({className=""})=>(
+  <svg className={className} width="13" height="13" viewBox="0 0 24 24" fill="none">
     <path d="M7 10V8a5 5 0 1 1 10 0v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2"/>
     <circle cx="12" cy="15" r="1.5" fill="currentColor"/>
   </svg>
 );
 
-
-const LogoRow=({name})=> (
-  <div className="flex items-center gap-3">
-    <img src="icons/icon-512.png" width="40" height="40" className="rounded-2xl shadow" style={{filter:'drop-shadow(0 0 6px rgba(227,27,35,.45))'}}/>
+const LogoRow=()=>(
+  <div className="flex items-center gap-2.5">
+    <img src="icons/icon-512.png" width="36" height="36" style={{borderRadius:'8px',filter:'drop-shadow(0 0 8px rgba(227,27,35,.5))'}}/>
     <div>
-      <div className="text-2xl font-black"><span>Dark</span><span className="text-textSub">Set</span></div>
-      <div className="text-xs text-textSub -mt-1">Seu treino, sua evolução</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.35rem',letterSpacing:'.04em',textTransform:'uppercase',lineHeight:1}}>
+        <span style={{color:'#fff'}}>DARK</span><span style={{color:'var(--color-accent)'}}>SET</span>
+      </div>
+      <div style={{fontSize:'.6rem',color:'#444',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'1px'}}>Seu treino · Sua evolução</div>
     </div>
   </div>
 );
 
-// Toast
-const Toast=({text})=> <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/10 border border-borderDark px-4 py-2 rounded-xl">{text}</div>;
+const Toast=({text})=><div className="ds-toast">{text}</div>;
 
-// Modal
 const Modal=({onClose,children})=>(
   <div className="modal-bg" onClick={onClose}>
-    <div className="bg-cardDark border border-borderDark rounded-2xl p-4 max-w-md w-[92%]" onClick={e=>e.stopPropagation()}>
+    <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'12px',padding:'1.25rem',maxWidth:'440px',width:'92%'}} onClick={e=>e.stopPropagation()}>
       {children}
     </div>
+  </div>
+);
+
+const Card=({title,children,accent=false})=>(
+  <div className={"ds-card"+(accent?" ds-card-accent":"")} style={{padding:'1rem 1.1rem',marginBottom:0}}>
+    {title && <div className="ds-section-title" style={{marginBottom:'.75rem'}}>{title}</div>}
+    {children}
   </div>
 );
 
@@ -346,58 +551,141 @@ const PreviewBox=({label="Execução do exercício", onClick, disabled})=>{
 // Home
 const Home=({goto,plans,history,prefs})=>{
   const active=plans.list.find(p=>p.id===plans.activeId)||null;
-  const entries=Object.entries(history);
-  const thisWeek=(()=>{const now=new Date();const start=new Date(now);start.setDate(now.getDate()-now.getDay()+1);return entries.filter(([iso])=>new Date(iso)>=start).length;})();
+  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
+  const today=new Date();
   const [authUser,setAuthUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('darkset.user'));}catch(_){return null;}});
   useEffect(()=>{
     const iv=setInterval(()=>{try{setAuthUser(JSON.parse(localStorage.getItem('darkset.user')));}catch(_){}},800);
     return ()=>clearInterval(iv);
   },[]);
+
+  // Semana atual
+  const weekStart=new Date(today); weekStart.setDate(today.getDate()-((today.getDay()||7)-1));
+  const thisWeekEntries=entries.filter(([iso])=>new Date(iso)>=weekStart);
+  const thisWeek=thisWeekEntries.length;
+
+  // Streak: dias consecutivos treinando
+  const streak=(()=>{
+    let s=0; const d=new Date(today);
+    while(true){
+      const k=d.toISOString().slice(0,10);
+      if(history[k]){s++;d.setDate(d.getDate()-1);}
+      else if(s===0&&d.toISOString().slice(0,10)===today.toISOString().slice(0,10)){d.setDate(d.getDate()-1);}
+      else break;
+    }
+    return s;
+  })();
+
+  // Volume total da semana
+  const parseNum=(v)=>{const n=parseFloat(String(v).replace(",",".")); return isFinite(n)?n:0;};
+  const weekVol=Math.round(thisWeekEntries.reduce((_acc,[,obj])=>_acc+(obj.entries||[]).reduce((a,en)=>a+(en.sets||[]).reduce((s2,s)=>s2+parseNum(s.w)*parseNum(s.r),0),0),0));
+
+  // Total de treinos no histórico
+  const totalSessions=entries.length;
+
+  // Pontos da semana (Seg a Dom)
+  const weekDots=Array.from({length:7},(_,i)=>{
+    const d=new Date(weekStart); d.setDate(weekStart.getDate()+i);
+    return !!history[d.toISOString().slice(0,10)];
+  });
+
+  const dayNames=["S","T","Q","Q","S","S","D"];
+
   return (
-    <div className="grid gap-4">
-      <Card>
-        <div className="flex items-center justify-between"><LogoRow/><div className="text-sm text-textSub">Semana: <b>{thisWeek}</b> / {prefs.weeklyGoal} treinos</div></div>
-      </Card>
-      <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-        <Button onClick={()=>goto('plans')} variant="ghost">Fichas</Button>
-        <Button onClick={()=>goto('session')} variant="accent">Modo Treino</Button>
-        <Button onClick={()=>goto('history')} variant="ghost">Histórico</Button>
+    <div className="grid gap-3 mt-3">
+      {/* Hero stats */}
+      <div className="ds-card" style={{padding:'1.1rem',background:'linear-gradient(135deg, #0d0d0d 0%, #111 100%)'}}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.8rem',fontWeight:900,lineHeight:1,textTransform:'uppercase'}}>
+              {prefs.name ? `E aí, ${prefs.name.split(' ')[0]}!` : 'Bora Treinar!'}
+            </div>
+            <div style={{fontSize:'.72rem',color:'#555',marginTop:'.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>
+              {today.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
+            </div>
+          </div>
+          {prefs.avatarUrl
+            ? <img src={prefs.avatarUrl} style={{width:'44px',height:'44px',borderRadius:'50%',border:'2px solid #222',objectFit:'cover'}} alt="avatar"/>
+            : <div style={{width:'44px',height:'44px',borderRadius:'50%',border:'2px solid #222',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#555'}}>{prefs.name?prefs.name.slice(0,2).toUpperCase():'DS'}</div>
+          }
+        </div>
+
+        {/* Stat chips */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="ds-stat">
+            <div className="ds-stat-val" style={{color:'var(--color-accent)'}}>{streak}</div>
+            <div className="ds-stat-label">Streak</div>
+          </div>
+          <div className="ds-stat">
+            <div className="ds-stat-val">{thisWeek}<span style={{fontSize:'.9rem',color:'#444'}}>/{prefs.weeklyGoal}</span></div>
+            <div className="ds-stat-label">Esta semana</div>
+          </div>
+          <div className="ds-stat">
+            <div className="ds-stat-val" style={{fontSize:'1.1rem'}}>{weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}</div>
+            <div className="ds-stat-label">Vol. semanal</div>
+          </div>
+        </div>
+
+        {/* Week dots */}
+        <div className="flex items-center justify-between" style={{padding:'0 .25rem'}}>
+          {weekDots.map((done,i)=>(
+            <div key={i} style={{textAlign:'center'}}>
+              <div className={"streak-dot"+(done?" done":"")} style={{margin:'0 auto .3rem'}}></div>
+              <div style={{fontSize:'.6rem',color:'#333',textTransform:'uppercase'}}>{dayNames[i]}</div>
+            </div>
+          ))}
+        </div>
       </div>
-      <Card title="Ficha ativa">
-        {active? (<div className="flex items-center justify-between"><div className="font-medium">{active.name}</div><Button onClick={()=>goto('builder',active.id)} variant="ghost">Editar</Button></div>)
-        :(<div className="flex items-center justify-between"><div className="text-textSub">Nenhuma ficha ativa.</div><Button onClick={()=>goto('plans')} variant="ghost">Criar agora</Button></div>)}
-      </Card>
-      <Card title={authUser ? "Conta" : "Acesso"}>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={()=>goto('session')} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',right:'-8px',top:'-8px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'4rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1}}>▶</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em'}}>Modo Treino</div>
+          <div style={{fontSize:'.7rem',color:'rgba(255,255,255,.6)',marginTop:'.2rem'}}>Com ou sem ficha</div>
+        </button>
+        <button onClick={()=>goto('history')} style={{background:'#0f0f0f',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',right:'-4px',top:'-8px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'4rem',fontWeight:900,color:'rgba(255,255,255,.04)',lineHeight:1}}>H</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em'}}>Histórico</div>
+          <div style={{fontSize:'.7rem',color:'#444',marginTop:'.2rem'}}>{totalSessions} treinos registrados</div>
+        </button>
+      </div>
+
+      {/* Ficha ativa */}
+      <div className="ds-card ds-card-accent" style={{padding:'1rem 1.1rem'}}>
+        <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Ficha Ativa</div>
+        {active
+          ? <div className="flex items-center justify-between">
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:700,color:'#fff'}}>{active.name}</div>
+              <Button onClick={()=>goto('builder',active.id)} variant="ghost">Editar</Button>
+            </div>
+          : <div className="flex items-center justify-between">
+              <div style={{color:'#444',fontSize:'.85rem'}}>Nenhuma ficha ativa</div>
+              <Button onClick={()=>goto('plans')} variant="ghost">Criar</Button>
+            </div>
+        }
+      </div>
+
+      {/* Conta */}
+      <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
         {authUser ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              {authUser.photoURL && <img src={authUser.photoURL} className="w-9 h-9 rounded-full border border-borderDark" alt="foto"/>}
+              {authUser.photoURL && <img src={authUser.photoURL} style={{width:'36px',height:'36px',borderRadius:'50%',border:'1px solid #222'}} alt="foto"/>}
               <div className="min-w-0">
-                <div className="font-medium truncate">{authUser.displayName || authUser.email}</div>
-                <div className="text-xs text-textSub truncate">{authUser.email}</div>
+                <div style={{fontWeight:600,fontSize:'.85rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{authUser.displayName||authUser.email}</div>
+                <div style={{fontSize:'.7rem',color:'#555',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{authUser.email}</div>
               </div>
             </div>
-            <Button variant="ghost" onClick={()=>window.DSAuth && DSAuth.signOut()}>Sair</Button>
+            <Button variant="ghost" onClick={()=>window.DSAuth&&DSAuth.signOut()}>Sair</Button>
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <div className="text-sm text-textSub">Entre para sincronizar seus treinos.</div>
-            <Button variant="accent" onClick={()=>window.openAuthModal && openAuthModal('signIn')}>Entrar</Button>
+            <div style={{fontSize:'.8rem',color:'#555'}}>Entre para sincronizar seus treinos</div>
+            <Button variant="accent" onClick={()=>window.openAuthModal&&openAuthModal('signIn')}>Entrar</Button>
           </div>
         )}
-      </Card>
-      <Card title="Perfil rápido">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {prefs.avatarUrl
-              ? <img src={prefs.avatarUrl} className="w-10 h-10 rounded-full border border-borderDark object-cover" alt="avatar"/>
-              : <div className="w-10 h-10 rounded-full border border-borderDark bg-black/30 flex items-center justify-center text-sm font-bold text-textSub">{prefs.name ? prefs.name.slice(0,2).toUpperCase() : 'DS'}</div>
-            }
-            <div className="text-sm text-textSub">{prefs.name || "Sem nome"}</div>
-          </div>
-          <Button onClick={()=>goto('profile')} variant="ghost">Editar perfil</Button>
-        </div>
-      </Card>
+      </div>
     </div>
   );
 };
@@ -872,305 +1160,353 @@ const DarkTimer = ({prefs}) => {
 
 
 // ── Modo Livre (treino sem ficha) ──────────────────────────────────────────
+// ── UNIFIED SESSION: Com Ficha + Treino Livre ────────────────────────────
+const DRAFT_KEY = "darkset.draft.session";
 const DRAFT_FREE_KEY = "darkset.draft.free";
 
-const FreeSession=({history,setHistory,prefs,setToast})=>{
-  const [exercises,setExercises]=useState(()=>{
-    try{ const d=JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d)&&d.length?d:[]; }catch(_){ return []; }
+// Autosalva rascunho por exercício no modo com ficha
+function saveDraft(planId, day, cursor, sets, rir) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    all[`${planId}__${day}__${cursor}`] = {sets, rir, ts: Date.now()};
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(all));
+  } catch(_) {}
+}
+function loadDraft(planId, day, cursor) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    return all[`${planId}__${day}__${cursor}`] || null;
+  } catch(_) { return null; }
+}
+function clearDraftSession(planId, day) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    Object.keys(all).filter(k=>k.startsWith(`${planId}__${day}__`)).forEach(k=>delete all[k]);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(all));
+  } catch(_) {}
+}
+
+const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
+  const activePlanId = plans.activeId || (plans.list[0]?.id ?? null);
+  const activePlan = plans.list.find(p => p.id === activePlanId) || null;
+  const [mode, setMode] = useState('plan'); // 'plan' | 'free'
+  const [started, setStarted] = useState(false);
+  const [day, setDay] = useState(DAYS[(new Date().getDay() || 7) - 1]);
+  const [cursor, setCursor] = useState(0);
+  const planItems = activePlan?.byDay?.[day] || [];
+  const [sets, setSets] = useState([]);
+  const [rir, setRir] = useState([]);
+  const [savedSnap, setSavedSnap] = useState({});
+
+  // ── FREE MODE STATE ──
+  const [freeExercises, setFreeExercises] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d) && d.length ? d : []; } catch(_) { return []; }
   });
-  const [search,setSearch]=useState("");
-  const [showSearch,setShowSearch]=useState(false);
-  const rirDefault=(typeof prefs.rirDefault==="number")?(prefs.rirDefault===0?"Falha":String(prefs.rirDefault)):"--";
+  const [freeSearch, setFreeSearch] = useState('');
+  const [showFreeSearch, setShowFreeSearch] = useState(false);
+  const rirDefault = (typeof prefs.rirDefault === 'number') ? (prefs.rirDefault === 0 ? 'Falha' : String(prefs.rirDefault)) : '--';
 
-  // Auto-salva rascunho sempre que mudar
-  useEffect(()=>{
-    try{ localStorage.setItem(DRAFT_FREE_KEY, JSON.stringify(exercises)); }catch(_){}
-  },[exercises]);
+  // Autosave free exercises
+  useEffect(() => {
+    try { localStorage.setItem(DRAFT_FREE_KEY, JSON.stringify(freeExercises)); } catch(_) {}
+  }, [freeExercises]);
 
-  const addExercise=(name)=>{
-    setExercises(prev=>[...prev,{name, sets:[{w:"",r:""}], rir:[rirDefault]}]);
-    setSearch(""); setShowSearch(false);
-  };
-  const removeExercise=(i)=>setExercises(prev=>prev.filter((_,ix)=>ix!==i));
-
-  const updateSet=(ei,si,field,val)=>setExercises(prev=>prev.map((ex,ix)=>
-    ix!==ei?ex:{...ex,sets:ex.sets.map((s,six)=>six!==si?s:{...s,[field]:val})}
-  ));
-  const updateRir=(ei,si,val)=>setExercises(prev=>prev.map((ex,ix)=>
-    ix!==ei?ex:{...ex,rir:ex.rir.map((r,six)=>six!==si?r:val)}
-  ));
-  const addSet=(ei)=>setExercises(prev=>prev.map((ex,ix)=>
-    ix!==ei?ex:{...ex,sets:[...ex.sets,{w:"",r:""}],rir:[...ex.rir,rirDefault]}
-  ));
-  const removeSet=(ei,si)=>setExercises(prev=>prev.map((ex,ix)=>
-    ix!==ei?ex:{...ex,
-      sets:ex.sets.filter((_,six)=>six!==si),
-      rir:ex.rir.filter((_,six)=>six!==si)
+  // ── PLAN MODE: load draft when cursor/day changes ──
+  useEffect(() => {
+    if (!started || mode !== 'plan') return;
+    const planned = planItems[cursor]?.setsPlanned || 3;
+    const draft = loadDraft(activePlanId, day, cursor);
+    if (draft && draft.sets?.length) {
+      setSets(draft.sets);
+      setRir(draft.rir || Array.from({length: draft.sets.length}, () => rirDefault));
+    } else {
+      const _def = rirDefault;
+      setSets(Array.from({length: planned}, () => ({w: '', r: ''})));
+      setRir(Array.from({length: planned}, () => _def));
     }
-  ));
+  }, [cursor, day, started, mode]);
 
-  const saveSession=()=>{
-    const valid=exercises.filter(ex=>ex.sets.some(s=>s.r));
-    if(!valid.length){setToast("Adicione ao menos uma série com reps"); return;}
-    const dateKey=new Date().toISOString().slice(0,10);
-    setHistory(prev=>{
-      const copy={...prev};
-      if(!copy[dateKey]) copy[dateKey]={planName:"Treino Livre",day:DAYS[(new Date().getDay()||7)-1],entries:[]};
-      for(const ex of valid){
-        const setsOut=ex.sets.map((s,i)=>({w:s.w,r:s.r,...(ex.rir[i]&&ex.rir[i]!=="--"?{rir:ex.rir[i]}:{})}));
-        const idx=copy[dateKey].entries.findIndex(e=>e.name===ex.name);
-        if(idx>=0) copy[dateKey].entries[idx].sets=setsOut;
-        else copy[dateKey].entries.push({name:ex.name,sets:setsOut});
-      }
-      return copy;
-    });
-    try{ localStorage.removeItem(DRAFT_FREE_KEY); }catch(_){}
-    setExercises([]);
-    if(prefs.vibrate&&navigator.vibrate) navigator.vibrate([100,50,200]);
-    setToast("Treino salvo!");
-  };
+  // Autosave plan draft on every sets/rir change
+  useEffect(() => {
+    if (!started || mode !== 'plan' || !activePlanId) return;
+    saveDraft(activePlanId, day, cursor, sets, rir);
+  }, [sets, rir]);
 
-  const suggestions=search.length>=2
-    ? EXS.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())).slice(0,8)
-    : [];
+  const start = () => setStarted(true);
+  const back = () => setStarted(false);
 
-  return (
-    <div className="grid gap-4">
-      <Card title="Treino Livre">
-        <div className="text-sm text-textSub mb-3">Sem ficha — adicione os exercícios conforme vai treinando.</div>
+  const snapshot = () => JSON.stringify({sets, rir});
+  const isDirty = !savedSnap[cursor] || savedSnap[cursor] !== snapshot();
 
-        {/* Busca de exercício */}
-        <div className="relative mb-4">
-          <div className="flex gap-2">
-            <input
-              className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 flex-1 text-sm"
-              placeholder="Buscar exercício para adicionar…"
-              value={search}
-              onChange={e=>{setSearch(e.target.value);setShowSearch(true);}}
-              onFocus={()=>setShowSearch(true)}
-            />
-            <Button variant="accent" onClick={()=>{if(search.trim()) addExercise(search.trim());}}>+ Novo</Button>
-          </div>
-          {showSearch && suggestions.length>0 && (
-            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[#0f0f12] border border-borderDark rounded-xl shadow-xl overflow-hidden">
-              {suggestions.map(e=>(
-                <button key={e.id} className="w-full text-left px-4 py-2.5 hover:bg-white/5 text-sm border-b border-borderDark last:border-0"
-                  onClick={()=>addExercise(e.name)}>
-                  <span className="font-medium">{e.name}</span>
-                  <span className="text-textSub ml-2 text-xs">{e.primary}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Lista de exercícios */}
-        {exercises.length===0 && <div className="text-sm text-textSub text-center py-6">Nenhum exercício ainda. Busque acima para começar.</div>}
-        <div className="grid gap-4">
-          {exercises.map((ex,ei)=>(
-            <div key={ei} className="border border-borderDark rounded-2xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-semibold">{ex.name}</div>
-                <button onClick={()=>removeExercise(ei)} className="text-xs text-red-500 px-2 py-0.5 rounded-lg border border-red-900/40">Remover</button>
-              </div>
-              {prefs.showTimer && ei===0 && <div className="mb-3"><DarkTimer prefs={prefs}/></div>}
-              <div className="grid gap-2">
-                {ex.sets.map((s,si)=>(
-                  <div key={si} className="grid grid-cols-[2.5rem,1fr,1fr,1fr,2rem] items-center gap-2">
-                    <div className="text-sm text-textSub">S{si+1}</div>
-                    <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"}
-                      className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 w-full text-sm"
-                      value={s.w} onChange={e=>updateSet(ei,si,"w",e.target.value)}/>
-                    <input type="number" placeholder="reps"
-                      className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 w-full text-sm"
-                      value={s.r} onChange={e=>updateSet(ei,si,"r",e.target.value)}/>
-                    <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm"
-                      value={ex.rir[si]||"--"} onChange={e=>updateRir(ei,si,e.target.value)}>
-                      <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
-                    </select>
-                    <button onClick={()=>removeSet(ei,si)} className="text-red-500 text-lg leading-none">×</button>
-                  </div>
-                ))}
-              </div>
-              <button onClick={()=>addSet(ei)} className="mt-2 text-xs text-textSub border border-borderDark rounded-lg px-3 py-1.5 hover:bg-white/5">+ Série</button>
-            </div>
-          ))}
-        </div>
-
-        {exercises.length>0 && (
-          <div className="mt-4 flex justify-end">
-            <Button variant="accent" onClick={saveSession}>Salvar treino</Button>
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-};
-
-// ── Session (com ficha) — agora com autosave do rascunho ──────────────────
-const DRAFT_KEY = "darkset.draft.session";
-
-const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
-  const activePlanId=plans.activeId||(plans.list[0]?.id??null);
-  const activePlan=plans.list.find(p=>p.id===activePlanId)||null;
-  const [started,setStarted]=useState(false);
-  const [day,setDay]=useState(DAYS[(new Date().getDay()||7)-1]);
-  const [cursor,setCursor]=useState(0);
-  const planItems=activePlan?.byDay?.[day]||[];
-  const [sets,setSets]=useState([]);
-  const [rir,setRir]=useState([]);
-  const [savedSnap,setSavedSnap]=useState({});
-  const [previewOpen,setPreviewOpen]=useState(false);
-
-  // Restaura rascunho ao montar
-  useEffect(()=>{
-    try{
-      const d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');
-      if(d && d.planId===activePlanId && d.day===day && d.cursor===cursor){
-        setSets(d.sets||[]); setRir(d.rir||[]);
-      }
-    }catch(_){}
-  },[cursor,day,started]);
-
-  // Autosave rascunho a cada mudança
-  useEffect(()=>{
-    if(!started) return;
-    try{
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({planId:activePlanId,day,cursor,sets,rir}));
-    }catch(_){}
-  },[sets,rir]);
-
-  useEffect(()=>{
-    if(!started) return;
-    const planned=planItems[cursor]?.setsPlanned||3;
-    // Só reseta se não tiver rascunho
-    try{
-      const d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');
-      if(d && d.planId===activePlanId && d.day===day && d.cursor===cursor && d.sets?.length){
-        setSets(d.sets); setRir(d.rir||[]); return;
-      }
-    }catch(_){}
-    setSets(Array.from({length:planned},()=>({w:"",r:""})));
-    const _def=(typeof prefs.rirDefault==="number")?(prefs.rirDefault===0?"Falha":String(prefs.rirDefault)):"--";
-    setRir(Array.from({length:planned},()=>_def));
-    setSavedSnap({});
-  },[cursor,day,started]);
-
-  const start=()=>setStarted(true);
-  const back=()=>setStarted(false);
-
-  const snapshot=()=>JSON.stringify({sets,rir});
-  const isDirty=!savedSnap[cursor]||savedSnap[cursor]!==snapshot();
-
-  const lastPerf=(()=>{
-    const ex=planItems[cursor]; if(!ex) return null;
-    const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
-    for(const [,obj] of entries){
-      const f=obj.entries.find(e=>e.name===ex.name);
-      if(f) return f;
+  const lastPerf = (() => {
+    const ex = planItems[cursor]; if (!ex) return null;
+    const entries = Object.entries(history).sort((a, b) => a[0] > b[0] ? -1 : 1);
+    for (const [, obj] of entries) {
+      const f = obj.entries.find(e => e.name === ex.name);
+      if (f) return f;
     }
     return null;
   })();
 
-  const saveCurrent=()=>{
-    const ex=planItems[cursor]; if(!ex) return;
-    const dateKey=new Date().toISOString().slice(0,10);
-    setHistory(prev=>{
-      const copy={...prev};
-      if(!copy[dateKey]) copy[dateKey]={planId:activePlanId,planName:activePlan.name,day,entries:[]};
-      const setsOut=sets.map((s,i)=>({w:s.w,r:s.r,...(rir[i]&&rir[i]!=="--"?{rir:rir[i]}:{})}));
-      const idx=copy[dateKey].entries.findIndex(en=>en.name===ex.name);
-      if(idx>=0) copy[dateKey].entries[idx].sets=setsOut; else copy[dateKey].entries.push({name:ex.name,exId:ex.exId,sets:setsOut});
+  const saveCurrent = () => {
+    const ex = planItems[cursor]; if (!ex) return;
+    const dateKey = new Date().toISOString().slice(0, 10);
+    setHistory(prev => {
+      const copy = {...prev};
+      if (!copy[dateKey]) copy[dateKey] = {planId: activePlanId, planName: activePlan.name, day, entries: []};
+      const setsOut = sets.map((s, i) => ({w: s.w, r: s.r, ...(rir[i] && rir[i] !== '--' ? {rir: rir[i]} : {})}));
+      const idx = copy[dateKey].entries.findIndex(en => en.name === ex.name);
+      if (idx >= 0) copy[dateKey].entries[idx].sets = setsOut;
+      else copy[dateKey].entries.push({name: ex.name, exId: ex.exId, sets: setsOut});
       return copy;
     });
-    setSavedSnap(m=>({...m,[cursor]:snapshot()}));
-    try{ localStorage.removeItem(DRAFT_KEY); }catch(_){}
-    if(prefs.vibrate&&navigator.vibrate) navigator.vibrate(20);
-    setToast("Séries salvas");
+    setSavedSnap(m => ({...m, [cursor]: snapshot()}));
+    if (prefs.vibrate && navigator.vibrate) navigator.vibrate(20);
+    setToast('Séries salvas ✓');
   };
 
-  if(!activePlan) return <Card title="Modo Treino"><div className="text-sm text-textSub">Crie e ative uma ficha primeiro.</div></Card>;
+  // ── FREE MODE helpers ──
+  const freeAddExercise = (name) => {
+    setFreeExercises(prev => [...prev, {name, sets: [{w: '', r: ''}], rir: [rirDefault]}]);
+    setFreeSearch(''); setShowFreeSearch(false);
+  };
+  const freeRemoveExercise = (i) => setFreeExercises(prev => prev.filter((_, ix) => ix !== i));
+  const freeUpdateSet = (ei, si, field, val) => setFreeExercises(prev => prev.map((ex, ix) =>
+    ix !== ei ? ex : {...ex, sets: ex.sets.map((s, six) => six !== si ? s : {...s, [field]: val})}
+  ));
+  const freeUpdateRir = (ei, si, val) => setFreeExercises(prev => prev.map((ex, ix) =>
+    ix !== ei ? ex : {...ex, rir: ex.rir.map((r, six) => six !== si ? r : val)}
+  ));
+  const freeAddSet = (ei) => setFreeExercises(prev => prev.map((ex, ix) =>
+    ix !== ei ? ex : {...ex, sets: [...ex.sets, {w: '', r: ''}], rir: [...ex.rir, rirDefault]}
+  ));
+  const freeRemoveSet = (ei, si) => setFreeExercises(prev => prev.map((ex, ix) =>
+    ix !== ei ? ex : {...ex, sets: ex.sets.filter((_, six) => six !== si), rir: ex.rir.filter((_, six) => six !== si)}
+  ));
+  const freeSaveSession = () => {
+    const valid = freeExercises.filter(ex => ex.sets.some(s => s.r));
+    if (!valid.length) { setToast('Adicione ao menos uma série com reps'); return; }
+    const dateKey = new Date().toISOString().slice(0, 10);
+    setHistory(prev => {
+      const copy = {...prev};
+      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: []};
+      for (const ex of valid) {
+        const setsOut = ex.sets.map((s, i) => ({w: s.w, r: s.r, ...(ex.rir[i] && ex.rir[i] !== '--' ? {rir: ex.rir[i]} : {})}));
+        const idx = copy[dateKey].entries.findIndex(e => e.name === ex.name);
+        if (idx >= 0) copy[dateKey].entries[idx].sets = setsOut;
+        else copy[dateKey].entries.push({name: ex.name, sets: setsOut});
+      }
+      return copy;
+    });
+    try { localStorage.removeItem(DRAFT_FREE_KEY); } catch(_) {}
+    setFreeExercises([]);
+    if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100, 50, 200]);
+    setToast('Treino salvo!');
+  };
 
-  if(!started){
-    return (
-      <Card title="Modo Treino">
-        <div className="grid gap-3">
-          <div>Ficha ativa: <b>{activePlan.name}</b></div>
-          <div className="flex items-center gap-2"><span>Dia:</span>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={day} onChange={e=>{setDay(e.target.value);setCursor(0);}}>{DAYS.map(d=><option key={d}>{d}</option>)}</select>
-          </div>
-          <div className="text-sm text-textSub">Foco no básico. Bora treinar?</div>
-          <div className="flex gap-2"><Button variant="accent" onClick={start}>Iniciar treino</Button></div>
+  const freeSuggestions = freeSearch.length >= 2
+    ? EXS.filter(e => e.name.toLowerCase().includes(freeSearch.toLowerCase())).slice(0, 8)
+    : [];
+
+  // ── PRE-START SCREEN ──
+  const preStartScreen = (
+    <div className="grid gap-3 mt-3">
+      {/* Mode toggle */}
+      <div className="mode-toggle">
+        <button className={'mode-toggle-btn' + (mode === 'plan' ? ' active' : '')} onClick={() => setMode('plan')}>Com Ficha</button>
+        <button className={'mode-toggle-btn' + (mode === 'free' ? ' active' : '')} onClick={() => setMode('free')}>Treino Livre</button>
+      </div>
+
+      {mode === 'plan' && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          {!activePlan ? (
+            <div>
+              <div style={{color:'#555',fontSize:'.85rem',marginBottom:'.75rem'}}>Nenhuma ficha ativa. Crie uma primeiro.</div>
+              <Button onClick={() => goto('plans')} variant="ghost">Ir para Fichas</Button>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:800,textTransform:'uppercase'}}>{activePlan.name}</div>
+              <div className="flex items-center gap-2">
+                <span style={{fontSize:'.8rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>Dia:</span>
+                <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.4rem .75rem',fontSize:'.85rem',color:'#fff',flex:1}} value={day} onChange={e => {setDay(e.target.value); setCursor(0);}}>
+                  {DAYS.map(d => <option key={d}>{d}</option>)}
+                </select>
+              </div>
+              <div style={{fontSize:'.75rem',color:'#444'}}>{planItems.length} exercício(s) programado(s)</div>
+              <Button variant="accent" onClick={start} full>Iniciar Treino</Button>
+            </div>
+          )}
         </div>
-      </Card>
-    );
-  }
+      )}
 
-  if(planItems.length===0) return <Card title="Modo Treino"><div className="text-sm text-textSub">Sem exercícios para {day}.</div><div className="mt-2"><Button variant="ghost" onClick={back}>Voltar</Button></div></Card>;
+      {mode === 'free' && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          <div style={{fontSize:'.75rem',color:'#555',marginBottom:'1rem',textTransform:'uppercase',letterSpacing:'.05em'}}>Adicione exercícios conforme vai treinando</div>
 
-  const current=planItems[cursor];
-  const exMeta=EXS.find(e=>e.id===current?.exId);
+          {/* Search */}
+          <div style={{position:'relative',marginBottom:'1rem'}}>
+            <div className="flex gap-2">
+              <input
+                style={{background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'#fff',flex:1}}
+                placeholder="Buscar exercício…"
+                value={freeSearch}
+                onChange={e => {setFreeSearch(e.target.value); setShowFreeSearch(true);}}
+                onFocus={() => setShowFreeSearch(true)}
+              />
+              <Button variant="ghost" onClick={() => {if (freeSearch.trim()) freeAddExercise(freeSearch.trim());}}>+ Add</Button>
+            </div>
+            {showFreeSearch && freeSuggestions.length > 0 && (
+              <div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',marginTop:'4px',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'8px',overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,.5)'}}>
+                {freeSuggestions.map(e => (
+                  <button key={e.id} style={{width:'100%',textAlign:'left',padding:'.65rem 1rem',background:'transparent',border:'none',borderBottom:'1px solid #111',cursor:'pointer',color:'#ddd',fontSize:'.85rem'}}
+                    onMouseDown={() => freeAddExercise(e.name)}>
+                    <span style={{fontWeight:600}}>{e.name}</span>
+                    <span style={{color:'#444',marginLeft:'.5rem',fontSize:'.75rem'}}>{e.primary}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Free exercises list */}
+          {freeExercises.length === 0 && (
+            <div style={{textAlign:'center',padding:'1.5rem 0',color:'#333',fontSize:'.85rem'}}>Nenhum exercício ainda</div>
+          )}
+          <div className="grid gap-3">
+            {freeExercises.map((ex, ei) => (
+              <div key={ei} style={{background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.75rem'}}>
+                <div className="flex items-center justify-between" style={{marginBottom:'.5rem'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.03em'}}>{ex.name}</div>
+                  <button onClick={() => freeRemoveExercise(ei)} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',fontSize:'.7rem',padding:'.25rem .5rem',cursor:'pointer',fontWeight:600,textTransform:'uppercase'}}>×</button>
+                </div>
+                <div className="grid gap-1.5">
+                  {ex.sets.map((s, si) => (
+                    <div key={si} className="set-row" style={{gridTemplateColumns:'2rem 1fr 1fr 1fr 1.5rem'}}>
+                      <div style={{fontSize:'.7rem',color:'#444',fontWeight:700}}>S{si+1}</div>
+                      <input type="number" placeholder={prefs.unit==='kg'?'kg':'lb'} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .5rem',fontSize:'.85rem',color:'#fff',width:'100%'}} value={s.w} onChange={e => freeUpdateSet(ei, si, 'w', e.target.value)}/>
+                      <input type="number" placeholder="reps" style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .5rem',fontSize:'.85rem',color:'#fff',width:'100%'}} value={s.r} onChange={e => freeUpdateSet(ei, si, 'r', e.target.value)}/>
+                      <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .3rem',fontSize:'.8rem',color:'#fff'}} value={ex.rir[si]||'--'} onChange={e => freeUpdateRir(ei, si, e.target.value)}>
+                        <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
+                      </select>
+                      <button onClick={() => freeRemoveSet(ei, si)} style={{color:'#444',fontSize:'1rem',background:'none',border:'none',cursor:'pointer',padding:0}}>×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => freeAddSet(ei)} style={{marginTop:'.5rem',fontSize:'.7rem',color:'#444',background:'none',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.3rem .65rem',cursor:'pointer',textTransform:'uppercase',letterSpacing:'.05em'}}>+ Série</button>
+              </div>
+            ))}
+          </div>
+
+          {freeExercises.length > 0 && (
+            <div style={{marginTop:'1rem'}}>
+              <Button variant="accent" onClick={freeSaveSession} full>Salvar Treino</Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (!started || mode === 'free') return preStartScreen;
+  if (planItems.length === 0) return (
+    <div className="ds-card grid gap-3 mt-3" style={{padding:'1rem 1.1rem'}}>
+      <div className="mode-toggle">
+        <button className={'mode-toggle-btn' + (mode === 'plan' ? ' active' : '')} onClick={() => setMode('plan')}>Com Ficha</button>
+        <button className={'mode-toggle-btn' + (mode === 'free' ? ' active' : '')} onClick={() => setMode('free')}>Treino Livre</button>
+      </div>
+      <div style={{color:'#555',fontSize:'.85rem'}}>Sem exercícios para {day}.</div>
+      <Button variant="ghost" onClick={back}>Voltar</Button>
+    </div>
+  );
+
+  const current = planItems[cursor];
+  const exMeta = EXS.find(e => e.id === current?.exId);
+  const progress = ((cursor + 1) / planItems.length) * 100;
 
   return (
-    <Card title="Modo Treino">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <div className="text-sm text-textSub">Exercício {cursor+1} de {planItems.length}</div>
-          <div className="font-semibold text-lg">{current.name}</div>
-        </div>
-        <Button variant="ghost" onClick={back}>Voltar p/ iniciar</Button>
-      </div>
-
-      {prefs.showTimer && <div className="mb-3"><DarkTimer prefs={prefs}/></div>}
-      <div className="grid gap-2">
-        {sets.map((s,i)=>(
-          <div key={i} className="grid grid-cols-[3rem,1fr,1fr,1fr] items-center gap-2 border border-borderDark rounded-xl p-2">
-            <div className="w-12 text-sm text-textSub">S{i+1}</div>
-            <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"} className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.w} onChange={e=>setSets(prev=>prev.map((v,ix)=>ix===i?{...v,w:e.target.value}:v))}/>
-            <input type="number" placeholder="reps" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.r} onChange={e=>setSets(prev=>prev.map((v,ix)=>ix===i?{...v,r:e.target.value}:v))}/>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={rir[i]} onChange={e=>setRir(prev=>prev.map((v,ix)=>ix===i?e.target.value:v))}>
-              <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
-            </select>
+    <div className="grid gap-3 mt-3">
+      {/* Header com progresso */}
+      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div className="flex items-center justify-between" style={{marginBottom:'.6rem'}}>
+          <div>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>{activePlan.name} · {day}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1,marginTop:'.15rem'}}>{current.name}</div>
           </div>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between mt-3">
-        <Button variant="ghost" onClick={()=>setCursor(i=>Math.max(0,i-1))} disabled={cursor===0}>Anterior</Button>
-        <div className="flex gap-2">
-          <Button variant={isDirty?"accent":"success"} onClick={saveCurrent} disabled={!isDirty}>{isDirty?"Salvar":"Salvo ✓"}</Button>
-          <Button onClick={()=>setCursor(i=>Math.min(planItems.length-1,i+1))} disabled={cursor===planItems.length-1}>Próximo</Button>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.6rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'1rem',color:'#333'}}>/{planItems.length}</span></div>
+            <Button variant="ghost" onClick={back} style={{fontSize:'.65rem',padding:'.25rem .5rem'}}>Sair</Button>
+          </div>
+        </div>
+        <div className="ds-progress-track">
+          <div className="ds-progress-fill" style={{width:`${progress}%`}}></div>
         </div>
       </div>
 
-      {lastPerf && (
-        <div className="mt-3">
-          <div className="ds-card rounded-2xl p-3 border border-borderDark">
-            <div className="font-medium mb-2">Último Treino</div>
-            <div className="space-y-2">
-              {lastPerf.sets.map((s,i)=>(
-                <div key={i} className="flex items-center justify-between rounded-xl border border-borderDark px-3 py-2">
-                  <div className="text-sm text-textSub">S{i+1}</div>
-                  <div className="text-base tabular-nums">{(s.w||"-")}{prefs.unit==="kg"?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}</div>
-                </div>
-              ))}
+      {/* Timer */}
+      {prefs.showTimer && <DarkTimer prefs={prefs}/>}
+
+      {/* Sets */}
+      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.6rem'}}>Séries</div>
+        <div className="grid gap-2">
+          {sets.map((s, i) => (
+            <div key={i} className="set-row" style={{gridTemplateColumns:'2.5rem 1fr 1fr 1fr'}}>
+              <div style={{fontSize:'.75rem',color:s.w&&s.r?'var(--color-accent)':'#333',fontWeight:700,textTransform:'uppercase'}}>S{i+1}</div>
+              <input type="number" placeholder={prefs.unit==='kg'?'kg':'lb'} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.45rem .6rem',fontSize:'.9rem',color:'#fff',width:'100%'}}
+                value={s.w} onChange={e => setSets(prev => prev.map((v, ix) => ix===i ? {...v, w: e.target.value} : v))}/>
+              <input type="number" placeholder="reps" style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.45rem .6rem',fontSize:'.9rem',color:'#fff',width:'100%'}}
+                value={s.r} onChange={e => setSets(prev => prev.map((v, ix) => ix===i ? {...v, r: e.target.value} : v))}/>
+              <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.45rem .3rem',fontSize:'.82rem',color:'#fff'}}
+                value={rir[i]} onChange={e => setRir(prev => prev.map((v, ix) => ix===i ? e.target.value : v))}>
+                <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
+              </select>
             </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between" style={{marginTop:'.85rem'}}>
+          <Button variant="ghost" onClick={() => setCursor(i => Math.max(0, i-1))} disabled={cursor===0}>← Anterior</Button>
+          <div className="flex gap-2">
+            <Button variant={isDirty?'accent':'success'} onClick={saveCurrent}>{isDirty?'Salvar':'Salvo ✓'}</Button>
+            {cursor < planItems.length-1
+              ? <Button onClick={() => { saveCurrent(); setCursor(i => i+1); }}>Próximo →</Button>
+              : <Button variant="accent" onClick={() => { saveCurrent(); clearDraftSession(activePlanId, day); back(); setToast('Treino concluído! 💪'); }}>Concluir</Button>
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Último treino */}
+      {lastPerf && (
+        <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+          <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Último Treino</div>
+          <div className="grid gap-1.5">
+            {lastPerf.sets.map((s, i) => (
+              <div key={i} className="flex items-center justify-between" style={{background:'rgba(0,0,0,.2)',borderRadius:'6px',padding:'.35rem .75rem'}}>
+                <div style={{fontSize:'.7rem',color:'#444',fontWeight:700}}>S{i+1}</div>
+                <div style={{fontSize:'.85rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600,letterSpacing:'.03em'}}>
+                  {s.w||'–'}{prefs.unit==='kg'?'kg':'lb'} × {s.r||'–'}{s.rir?` · RIR ${s.rir}`:''}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="mt-3">
-        <div className="ds-card rounded-2xl p-3 border border-borderDark">
-          <div className="font-medium mb-2">Execução do exercício</div>
-          {exMeta?.media?.srcGif
-            ? <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black"><img src={exMeta.media.srcGif} alt={current.name} className="w-full h-auto"/></div>
-            : <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden"><div className="pt-[56.25%] bg-black/30"></div><div className="absolute inset-0 flex items-center justify-center text-textSub text-sm">Prévia ainda não disponível</div></div>
-          }
+      {/* GIF */}
+      {exMeta?.media?.srcGif && (
+        <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+          <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Execução</div>
+          <div style={{borderRadius:'8px',overflow:'hidden',border:'1px solid #1a1a1a',background:'#000'}}>
+            <img src={exMeta.media.srcGif} alt={current.name} style={{width:'100%',height:'auto',display:'block'}}/>
+          </div>
         </div>
-      </div>
-    </Card>
+      )}
+    </div>
   );
 };
+
 
 
 // History (cards compact + modal details)
@@ -1457,13 +1793,12 @@ function App(){
       <header className="ds-hdr">
         <LogoRow/>
         <nav className="ds-nav flex gap-2">
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="home"?"bg-white/10":"")} onClick={()=>goto("home")}>Início</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="plans"?"bg-white/10":"")} onClick={()=>goto("plans")}>Fichas</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="builder"?"bg-white/10":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar Ficha</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="session"?"bg-white/10":"")} onClick={()=>goto("session")}>Modo Treino</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="free"?"bg-white/10":"")} onClick={()=>goto("free")}>Treino Livre</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="history"?"bg-white/10":"")} onClick={()=>goto("history")}>Histórico</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="profile"?"bg-white/10":"")} onClick={()=>goto("profile")}>Perfil</button>
+          <button className={"ds-nav-btn"+(screen==="home"?" active":"")} onClick={()=>goto("home")}>Início</button>
+          <button className={"ds-nav-btn"+(screen==="plans"?" active":"")} onClick={()=>goto("plans")}>Fichas</button>
+          <button className={"ds-nav-btn"+(screen==="builder"?" active":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar</button>
+          <button className={"ds-nav-btn"+(screen==="session"?" active":"")} onClick={()=>goto("session")}>Treino</button>
+          <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
+          <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
         </nav>
       </header>
 
@@ -1471,12 +1806,11 @@ function App(){
       {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
       {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
-      {screen==="free" && <FreeSession history={history} setHistory={setHistory} prefs={prefs} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs}/>}
 
-      <footer className="mt-8 text-center text-xs text-textSub">© {new Date().getFullYear()} DarkSet — V4.8.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V4.9.0</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
