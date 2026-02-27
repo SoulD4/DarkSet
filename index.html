@@ -714,12 +714,40 @@ const Viewer = ({planId, plans, goto}) => {
 
 ;// Session
 
-// DarkTimer — V4.4.4 (persistente, sem Wake Lock)
+// Pede permissão de notificação uma vez
+function requestNotifPermission(){
+  try{
+    if('Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission();
+    }
+  }catch(_){}
+}
+
+// Avisa o Service Worker sobre o timer
+function swTimerStart(endsAt){
+  try{
+    if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({ type:'TIMER_START', endsAt });
+    }
+  }catch(_){}
+}
+function swTimerCancel(){
+  try{
+    if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({ type:'TIMER_CANCEL' });
+    }
+  }catch(_){}
+}
+
+// DarkTimer — V4.5 (background via SW notification)
 const DarkTimer = ({prefs}) => {
   const STORAGE_KEY = "darkset.timer.v1";
   const [sec,setSec]=useState(Math.max(5, Number(prefs.timerPreset||60)));
   const [running,setRunning]=useState(false);
   const endRef = useRef(0);
+
+  // Pede permissão na primeira vez que o componente monta
+  useEffect(()=>{ requestNotifPermission(); },[]);
 
   useEffect(()=>{ if(!running){ setSec(Math.max(5, Number(prefs.timerPreset||60))); } }, [prefs.timerPreset]);
 
@@ -747,6 +775,20 @@ const DarkTimer = ({prefs}) => {
     }catch(_){}
   },[]);
 
+  // Escuta mensagem do SW avisando que o timer terminou em background
+  useEffect(()=>{
+    const handler = (event) => {
+      if(event.data && event.data.type === 'TIMER_DONE'){
+        try{ if(navigator.vibrate) navigator.vibrate([320,140,320,140,420]); }catch(_){}
+        setRunning(false);
+        setSec(Math.max(5, Number(prefs.timerPreset||60)));
+        try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
+      }
+    };
+    navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', handler);
+    return ()=> navigator.serviceWorker && navigator.serviceWorker.removeEventListener('message', handler);
+  },[]);
+
   useEffect(()=>{
     if(!running) return;
     let loop;
@@ -766,6 +808,7 @@ const DarkTimer = ({prefs}) => {
             setTimeout(()=>ctx.close(), 1200);
           }
         }catch(_){}
+        swTimerCancel();
         setRunning(false);
         setSec(Math.max(5, Number(prefs.timerPreset||60)));
         try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
@@ -784,17 +827,20 @@ const DarkTimer = ({prefs}) => {
     endRef.current = Date.now() + duration*1000;
     setRunning(true);
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:true, endTime:endRef.current})); }catch(_){}
+    swTimerStart(endRef.current);
   };
   const pause = () => {
     const remain = Math.max(0, Math.ceil((endRef.current - Date.now())/1000));
     setRunning(false);
     setSec(remain || Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:false, pausedSec: remain})); }catch(_){}
+    swTimerCancel();
   };
   const reset = () => {
     setRunning(false);
     setSec(Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
+    swTimerCancel();
   };
 
   const fmtTime = (s) => {
