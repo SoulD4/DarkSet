@@ -871,6 +871,145 @@ const DarkTimer = ({prefs}) => {
 };
 
 
+// ── Modo Livre (treino sem ficha) ──────────────────────────────────────────
+const DRAFT_FREE_KEY = "darkset.draft.free";
+
+const FreeSession=({history,setHistory,prefs,setToast})=>{
+  const [exercises,setExercises]=useState(()=>{
+    try{ const d=JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d)&&d.length?d:[]; }catch(_){ return []; }
+  });
+  const [search,setSearch]=useState("");
+  const [showSearch,setShowSearch]=useState(false);
+  const rirDefault=(typeof prefs.rirDefault==="number")?(prefs.rirDefault===0?"Falha":String(prefs.rirDefault)):"--";
+
+  // Auto-salva rascunho sempre que mudar
+  useEffect(()=>{
+    try{ localStorage.setItem(DRAFT_FREE_KEY, JSON.stringify(exercises)); }catch(_){}
+  },[exercises]);
+
+  const addExercise=(name)=>{
+    setExercises(prev=>[...prev,{name, sets:[{w:"",r:""}], rir:[rirDefault]}]);
+    setSearch(""); setShowSearch(false);
+  };
+  const removeExercise=(i)=>setExercises(prev=>prev.filter((_,ix)=>ix!==i));
+
+  const updateSet=(ei,si,field,val)=>setExercises(prev=>prev.map((ex,ix)=>
+    ix!==ei?ex:{...ex,sets:ex.sets.map((s,six)=>six!==si?s:{...s,[field]:val})}
+  ));
+  const updateRir=(ei,si,val)=>setExercises(prev=>prev.map((ex,ix)=>
+    ix!==ei?ex:{...ex,rir:ex.rir.map((r,six)=>six!==si?r:val)}
+  ));
+  const addSet=(ei)=>setExercises(prev=>prev.map((ex,ix)=>
+    ix!==ei?ex:{...ex,sets:[...ex.sets,{w:"",r:""}],rir:[...ex.rir,rirDefault]}
+  ));
+  const removeSet=(ei,si)=>setExercises(prev=>prev.map((ex,ix)=>
+    ix!==ei?ex:{...ex,
+      sets:ex.sets.filter((_,six)=>six!==si),
+      rir:ex.rir.filter((_,six)=>six!==si)
+    }
+  ));
+
+  const saveSession=()=>{
+    const valid=exercises.filter(ex=>ex.sets.some(s=>s.r));
+    if(!valid.length){setToast("Adicione ao menos uma série com reps"); return;}
+    const dateKey=new Date().toISOString().slice(0,10);
+    setHistory(prev=>{
+      const copy={...prev};
+      if(!copy[dateKey]) copy[dateKey]={planName:"Treino Livre",day:DAYS[(new Date().getDay()||7)-1],entries:[]};
+      for(const ex of valid){
+        const setsOut=ex.sets.map((s,i)=>({w:s.w,r:s.r,...(ex.rir[i]&&ex.rir[i]!=="--"?{rir:ex.rir[i]}:{})}));
+        const idx=copy[dateKey].entries.findIndex(e=>e.name===ex.name);
+        if(idx>=0) copy[dateKey].entries[idx].sets=setsOut;
+        else copy[dateKey].entries.push({name:ex.name,sets:setsOut});
+      }
+      return copy;
+    });
+    try{ localStorage.removeItem(DRAFT_FREE_KEY); }catch(_){}
+    setExercises([]);
+    if(prefs.vibrate&&navigator.vibrate) navigator.vibrate([100,50,200]);
+    setToast("Treino salvo!");
+  };
+
+  const suggestions=search.length>=2
+    ? EXS.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())).slice(0,8)
+    : [];
+
+  return (
+    <div className="grid gap-4">
+      <Card title="Treino Livre">
+        <div className="text-sm text-textSub mb-3">Sem ficha — adicione os exercícios conforme vai treinando.</div>
+
+        {/* Busca de exercício */}
+        <div className="relative mb-4">
+          <div className="flex gap-2">
+            <input
+              className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 flex-1 text-sm"
+              placeholder="Buscar exercício para adicionar…"
+              value={search}
+              onChange={e=>{setSearch(e.target.value);setShowSearch(true);}}
+              onFocus={()=>setShowSearch(true)}
+            />
+            <Button variant="accent" onClick={()=>{if(search.trim()) addExercise(search.trim());}}>+ Novo</Button>
+          </div>
+          {showSearch && suggestions.length>0 && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[#0f0f12] border border-borderDark rounded-xl shadow-xl overflow-hidden">
+              {suggestions.map(e=>(
+                <button key={e.id} className="w-full text-left px-4 py-2.5 hover:bg-white/5 text-sm border-b border-borderDark last:border-0"
+                  onClick={()=>addExercise(e.name)}>
+                  <span className="font-medium">{e.name}</span>
+                  <span className="text-textSub ml-2 text-xs">{e.primary}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Lista de exercícios */}
+        {exercises.length===0 && <div className="text-sm text-textSub text-center py-6">Nenhum exercício ainda. Busque acima para começar.</div>}
+        <div className="grid gap-4">
+          {exercises.map((ex,ei)=>(
+            <div key={ei} className="border border-borderDark rounded-2xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-semibold">{ex.name}</div>
+                <button onClick={()=>removeExercise(ei)} className="text-xs text-red-500 px-2 py-0.5 rounded-lg border border-red-900/40">Remover</button>
+              </div>
+              {prefs.showTimer && ei===0 && <div className="mb-3"><DarkTimer prefs={prefs}/></div>}
+              <div className="grid gap-2">
+                {ex.sets.map((s,si)=>(
+                  <div key={si} className="grid grid-cols-[2.5rem,1fr,1fr,1fr,2rem] items-center gap-2">
+                    <div className="text-sm text-textSub">S{si+1}</div>
+                    <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"}
+                      className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 w-full text-sm"
+                      value={s.w} onChange={e=>updateSet(ei,si,"w",e.target.value)}/>
+                    <input type="number" placeholder="reps"
+                      className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 w-full text-sm"
+                      value={s.r} onChange={e=>updateSet(ei,si,"r",e.target.value)}/>
+                    <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm"
+                      value={ex.rir[si]||"--"} onChange={e=>updateRir(ei,si,e.target.value)}>
+                      <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
+                    </select>
+                    <button onClick={()=>removeSet(ei,si)} className="text-red-500 text-lg leading-none">×</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>addSet(ei)} className="mt-2 text-xs text-textSub border border-borderDark rounded-lg px-3 py-1.5 hover:bg-white/5">+ Série</button>
+            </div>
+          ))}
+        </div>
+
+        {exercises.length>0 && (
+          <div className="mt-4 flex justify-end">
+            <Button variant="accent" onClick={saveSession}>Salvar treino</Button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+// ── Session (com ficha) — agora com autosave do rascunho ──────────────────
+const DRAFT_KEY = "darkset.draft.session";
+
 const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
   const activePlanId=plans.activeId||(plans.list[0]?.id??null);
   const activePlan=plans.list.find(p=>p.id===activePlanId)||null;
@@ -883,12 +1022,37 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
   const [savedSnap,setSavedSnap]=useState({});
   const [previewOpen,setPreviewOpen]=useState(false);
 
+  // Restaura rascunho ao montar
+  useEffect(()=>{
+    try{
+      const d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');
+      if(d && d.planId===activePlanId && d.day===day && d.cursor===cursor){
+        setSets(d.sets||[]); setRir(d.rir||[]);
+      }
+    }catch(_){}
+  },[cursor,day,started]);
+
+  // Autosave rascunho a cada mudança
+  useEffect(()=>{
+    if(!started) return;
+    try{
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({planId:activePlanId,day,cursor,sets,rir}));
+    }catch(_){}
+  },[sets,rir]);
+
   useEffect(()=>{
     if(!started) return;
     const planned=planItems[cursor]?.setsPlanned||3;
+    // Só reseta se não tiver rascunho
+    try{
+      const d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');
+      if(d && d.planId===activePlanId && d.day===day && d.cursor===cursor && d.sets?.length){
+        setSets(d.sets); setRir(d.rir||[]); return;
+      }
+    }catch(_){}
     setSets(Array.from({length:planned},()=>({w:"",r:""})));
-    const _def = (typeof prefs.rirDefault==="number") ? (prefs.rirDefault===0? "Falha" : String(prefs.rirDefault)) : "--";
-    setRir(Array.from({length:planned},()=> _def));
+    const _def=(typeof prefs.rirDefault==="number")?(prefs.rirDefault===0?"Falha":String(prefs.rirDefault)):"--";
+    setRir(Array.from({length:planned},()=>_def));
     setSavedSnap({});
   },[cursor,day,started]);
 
@@ -896,7 +1060,7 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
   const back=()=>setStarted(false);
 
   const snapshot=()=>JSON.stringify({sets,rir});
-  const isDirty=!savedSnap[cursor] || savedSnap[cursor]!==snapshot();
+  const isDirty=!savedSnap[cursor]||savedSnap[cursor]!==snapshot();
 
   const lastPerf=(()=>{
     const ex=planItems[cursor]; if(!ex) return null;
@@ -913,14 +1077,15 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
     const dateKey=new Date().toISOString().slice(0,10);
     setHistory(prev=>{
       const copy={...prev};
-      if(!copy[dateKey]) copy[dateKey]={planId:activePlanId, planName:activePlan.name, day, entries:[]};
-      const setsOut=sets.map((s,i)=>({w:s.w,r:s.r, ...(rir[i]&&rir[i]!=="--"?{rir:rir[i]}:{})}));
+      if(!copy[dateKey]) copy[dateKey]={planId:activePlanId,planName:activePlan.name,day,entries:[]};
+      const setsOut=sets.map((s,i)=>({w:s.w,r:s.r,...(rir[i]&&rir[i]!=="--"?{rir:rir[i]}:{})}));
       const idx=copy[dateKey].entries.findIndex(en=>en.name===ex.name);
-      if(idx>=0) copy[dateKey].entries[idx].sets=setsOut; else copy[dateKey].entries.push({name:ex.name, exId:ex.exId, sets:setsOut});
+      if(idx>=0) copy[dateKey].entries[idx].sets=setsOut; else copy[dateKey].entries.push({name:ex.name,exId:ex.exId,sets:setsOut});
       return copy;
     });
     setSavedSnap(m=>({...m,[cursor]:snapshot()}));
-    if(prefs.vibrate && navigator.vibrate) navigator.vibrate(20);
+    try{ localStorage.removeItem(DRAFT_KEY); }catch(_){}
+    if(prefs.vibrate&&navigator.vibrate) navigator.vibrate(20);
     setToast("Séries salvas");
   };
 
@@ -941,22 +1106,18 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
     );
   }
 
-  if(planItems.length===0) return <Card title="Modo Treino"><div className="text-sm text-textSub">Sem exercícios para {day}.</div><div className="mt-2"><Button variant="ghost" onClick={back}>Voltar</Button></div></Card>
+  if(planItems.length===0) return <Card title="Modo Treino"><div className="text-sm text-textSub">Sem exercícios para {day}.</div><div className="mt-2"><Button variant="ghost" onClick={back}>Voltar</Button></div></Card>;
 
   const current=planItems[cursor];
-  const exMeta = EXS.find(e=> e.id===current?.exId);
+  const exMeta=EXS.find(e=>e.id===current?.exId);
 
-  const openPreview=()=>{
-    const hasMedia = !!(exMeta && (exMeta.media?.srcMp4 || exMeta.media?.srcWebm));
-    setPreviewOpen(true);
-  };
   return (
     <Card title="Modo Treino">
       <div className="flex items-center justify-between mb-2">
         <div>
           <div className="text-sm text-textSub">Exercício {cursor+1} de {planItems.length}</div>
           <div className="font-semibold text-lg">{current.name}</div>
-                  </div>
+        </div>
         <Button variant="ghost" onClick={back}>Voltar p/ iniciar</Button>
       </div>
 
@@ -965,9 +1126,9 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
         {sets.map((s,i)=>(
           <div key={i} className="grid grid-cols-[3rem,1fr,1fr,1fr] items-center gap-2 border border-borderDark rounded-xl p-2">
             <div className="w-12 text-sm text-textSub">S{i+1}</div>
-            <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"} className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.w} onChange={e=> setSets(prev=>prev.map((v,ix)=>ix===i?{...v,w:e.target.value}:v))}/>
-            <input type="number" placeholder="reps" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.r} onChange={e=> setSets(prev=>prev.map((v,ix)=>ix===i?{...v,r:e.target.value}:v))}/>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={rir[i]} onChange={e=> setRir(prev=>prev.map((v,ix)=>ix===i?e.target.value:v))}>
+            <input type="number" placeholder={prefs.unit==="kg"?"kg":"lb"} className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.w} onChange={e=>setSets(prev=>prev.map((v,ix)=>ix===i?{...v,w:e.target.value}:v))}/>
+            <input type="number" placeholder="reps" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" value={s.r} onChange={e=>setSets(prev=>prev.map((v,ix)=>ix===i?{...v,r:e.target.value}:v))}/>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={rir[i]} onChange={e=>setRir(prev=>prev.map((v,ix)=>ix===i?e.target.value:v))}>
               <option>--</option><option>Falha</option><option>1</option><option>2</option><option>3</option><option>4</option>
             </select>
           </div>
@@ -977,11 +1138,12 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
       <div className="flex items-center justify-between mt-3">
         <Button variant="ghost" onClick={()=>setCursor(i=>Math.max(0,i-1))} disabled={cursor===0}>Anterior</Button>
         <div className="flex gap-2">
-          <Button variant={isDirty? "accent":"success"} onClick={saveCurrent} disabled={!isDirty}>{isDirty? "Salvar":"Salvo ✓"}</Button>
+          <Button variant={isDirty?"accent":"success"} onClick={saveCurrent} disabled={!isDirty}>{isDirty?"Salvar":"Salvo ✓"}</Button>
           <Button onClick={()=>setCursor(i=>Math.min(planItems.length-1,i+1))} disabled={cursor===planItems.length-1}>Próximo</Button>
         </div>
       </div>
-    {lastPerf && (
+
+      {lastPerf && (
         <div className="mt-3">
           <div className="ds-card rounded-2xl p-3 border border-borderDark">
             <div className="font-medium mb-2">Último Treino</div>
@@ -997,29 +1159,13 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
         </div>
       )}
 
-      
-      {/* Preview de execução (inline, GIF-only) */}
       <div className="mt-3">
         <div className="ds-card rounded-2xl p-3 border border-borderDark">
           <div className="font-medium mb-2">Execução do exercício</div>
-          {(() => {
-            const hasGif = !!(exMeta && exMeta.media?.srcGif);
-            if (hasGif) {
-              return (
-                <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black">
-                  <img src={exMeta.media.srcGif} alt={current.name} className="w-full h-auto" />
-                </div>
-              );
-            }
-            return (
-              <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden">
-                <div className="pt-[56.25%] bg-black/30"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-textSub text-sm">
-                  Prévia ainda não disponível
-                </div>
-              </div>
-            );
-          })()}
+          {exMeta?.media?.srcGif
+            ? <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black"><img src={exMeta.media.srcGif} alt={current.name} className="w-full h-auto"/></div>
+            : <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden"><div className="pt-[56.25%] bg-black/30"></div><div className="absolute inset-0 flex items-center justify-center text-textSub text-sm">Prévia ainda não disponível</div></div>
+          }
         </div>
       </div>
     </Card>
@@ -1031,45 +1177,66 @@ const Session=({plans,history,setHistory,prefs,goto,setToast})=>{
 const History=({history, setHistory, prefs})=>{
   const [weekday,setWeekday]=useState("");
   const [planFilter,setPlanFilter]=useState("");
-  const [detail,setDetail]=useState(null); // {date,obj}
+  const [dateSearch,setDateSearch]=useState("");
+  const [detail,setDetail]=useState(null);
 
   const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
   const toBR=(iso)=>{const [y,m,d]=iso.split("-");return `${d}/${m}/${y}`;}
-  const filtered=entries.filter(([_,o])=>(!weekday||o.day===weekday)&&(!planFilter||o.planName===planFilter));
-  const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
-  const chartsEnabled = !!prefs.chartsPremium;
-  const deleteEntry = (date) => {
-    if(!confirm(`Excluir o treino de ${toBR(date)}?`)) return;
-    setHistory(prev => { const copy = {...prev}; delete copy[date]; return copy; });
+
+  // Busca por data: aceita dd/mm/yyyy, dd/mm, ou yyyy-mm-dd
+  const matchesDate=(iso)=>{
+    if(!dateSearch) return true;
+    const q=dateSearch.trim().toLowerCase();
+    const br=toBR(iso).toLowerCase();
+    return br.includes(q) || iso.includes(q);
   };
 
-  const parseNum = (v)=>{ const n = parseFloat(String(v).replace(",", ".")); return isFinite(n)? n : 0; };
-  const volSets = (sets)=> sets.reduce((acc,s)=> acc + (parseNum(s.w)*parseNum(s.r)), 0);
-  const volSession = (obj)=> (obj.entries||[]).reduce((acc,en)=> acc + volSets(en.sets||[]), 0);
+  const filtered=entries.filter(([date,o])=>
+    (!weekday||o.day===weekday) &&
+    (!planFilter||o.planName===planFilter) &&
+    matchesDate(date)
+  );
+  const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
+  const chartsEnabled=!!prefs.chartsPremium;
+  const deleteEntry=(date)=>{
+    if(!confirm(`Excluir o treino de ${toBR(date)}?`)) return;
+    setHistory(prev=>{const copy={...prev};delete copy[date];return copy;});
+  };
+
+  const parseNum=(v)=>{const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:0;};
+  const volSets=(sets)=>sets.reduce((acc,s)=>acc+(parseNum(s.w)*parseNum(s.r)),0);
+  const volSession=(obj)=>(obj.entries||[]).reduce((acc,en)=>acc+volSets(en.sets||[]),0);
 
   return (
     <div className="grid gap-4">
       <Card title="Histórico">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="text-sm">Filtrar:</span>
-          <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={weekday} onChange={e=>setWeekday(e.target.value)}>
-            <option value="">Dia da semana</option>{DAYS.map(d=><option key={d}>{d}</option>)}
-          </select>
-          <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2" value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
-            <option value="">Ficha</option>{planOptions.map(n=><option key={n}>{n}</option>)}
-          </select>
-
-          <div className="ml-auto">
-            <Button variant="ghost" disabled={!chartsEnabled} onClick={()=> window.openChartsModal && window.openChartsModal()}>
-              <span className="inline-flex items-center gap-1">{!chartsEnabled && <LockIcon className="opacity-80"/>} Gráficos</span>
-            </Button>
+        <div className="grid gap-2 mb-3">
+          {/* Busca por data */}
+          <input
+            className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm w-full"
+            placeholder="Buscar por data (ex: 25/02 ou 25/02/2025)…"
+            value={dateSearch}
+            onChange={e=>setDateSearch(e.target.value)}
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm" value={weekday} onChange={e=>setWeekday(e.target.value)}>
+              <option value="">Dia da semana</option>{DAYS.map(d=><option key={d}>{d}</option>)}
+            </select>
+            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm" value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
+              <option value="">Ficha</option>{planOptions.map(n=><option key={n}>{n}</option>)}
+            </select>
+            <div className="ml-auto">
+              <Button variant="ghost" disabled={!chartsEnabled} onClick={()=>window.openChartsModal&&window.openChartsModal()}>
+                <span className="inline-flex items-center gap-1">{!chartsEnabled&&<LockIcon className="opacity-80"/>} Gráficos</span>
+              </Button>
+            </div>
           </div>
         </div>
 
-        {filtered.length===0? <div className="text-sm text-textSub">Sem registros.</div> : (
+        {filtered.length===0?<div className="text-sm text-textSub">Sem registros.</div>:(
           <div className="grid gap-3 md:grid-cols-2">
             {filtered.map(([date,obj])=>{
-              const vol = Math.round(volSession(obj));
+              const vol=Math.round(volSession(obj));
               return (
                 <button key={date} onClick={()=>setDetail({date,obj})} className="text-left ds-card rounded-2xl p-3 border border-borderDark hover:bg-white/5 transition">
                   <div className="flex items-start justify-between">
@@ -1090,7 +1257,7 @@ const History=({history, setHistory, prefs})=>{
         )}
       </Card>
 
-      {detail && (
+      {detail&&(
         <Modal onClose={()=>setDetail(null)}>
           <div className="flex items-start justify-between mb-2">
             <div>
@@ -1101,16 +1268,16 @@ const History=({history, setHistory, prefs})=>{
             <Button variant="ghost" onClick={()=>setDetail(null)}>Fechar</Button>
           </div>
           <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
-            {detail.obj.entries.map((en,i)=> (
+            {detail.obj.entries.map((en,i)=>(
               <div key={i} className="border border-borderDark rounded-xl p-2">
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{en.name}</div>
                   <div className="text-xs text-textSub">Vol: {Math.round(volSets(en.sets))}</div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {en.sets.map((s,ix)=> (
+                  {en.sets.map((s,ix)=>(
                     <span key={ix} className="inline-flex items-center rounded-full border border-borderDark px-2 py-0.5 text-xs">
-                      S{ix+1}: {s.w||"-"}{(prefs.unit==="kg")?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}
+                      S{ix+1}: {s.w||"-"}{prefs.unit==="kg"?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}
                     </span>
                   ))}
                 </div>
@@ -1292,8 +1459,9 @@ function App(){
         <nav className="ds-nav flex gap-2">
           <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="home"?"bg-white/10":"")} onClick={()=>goto("home")}>Início</button>
           <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="plans"?"bg-white/10":"")} onClick={()=>goto("plans")}>Fichas</button>
-          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="builder"?"bg-white/10":"")} onClick={()=> goto("builder", plans.activeId || (plans.list[0]?.id ?? null))}>Montar Ficha</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="builder"?"bg-white/10":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar Ficha</button>
           <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="session"?"bg-white/10":"")} onClick={()=>goto("session")}>Modo Treino</button>
+          <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="free"?"bg-white/10":"")} onClick={()=>goto("free")}>Treino Livre</button>
           <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="history"?"bg-white/10":"")} onClick={()=>goto("history")}>Histórico</button>
           <button className={"px-4 py-2.5 rounded-xl border border-borderDark "+(screen==="profile"?"bg-white/10":"")} onClick={()=>goto("profile")}>Perfil</button>
         </nav>
@@ -1301,13 +1469,14 @@ function App(){
 
       {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs}/>}
       {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
-      {screen==="builder" && <Builder planId={builderPlanId || (plans.activeId || plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
+      {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
+      {screen==="free" && <FreeSession history={history} setHistory={setHistory} prefs={prefs} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
-      {screen==="viewer" && <Viewer planId={(viewerPlanId || (plans.activeId || plans.list[0]?.id))} plans={plans} goto={goto}/>}
+      {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs}/>}
 
-      <footer className="mt-8 text-center text-xs text-textSub">© {new Date().getFullYear()} DarkSet — V4.7.5</footer>
+      <footer className="mt-8 text-center text-xs text-textSub">© {new Date().getFullYear()} DarkSet — V4.8.0</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
