@@ -740,14 +740,14 @@ const Plans=({plans,setPlans,goto,setToast})=>{
 
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
         <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.6rem'}}>Nova Ficha</div>
-        <div style={{display:'flex',gap:'.5rem'}}>
+        <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
           <input
-            style={{flex:1,background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}}
+            style={{flex:1,minWidth:0,background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}}
             placeholder="Nome da ficha…"
             value={newName} onChange={e=>setNewName(e.target.value)}
             onKeyDown={e=>e.key==='Enter'&&createPlan()}
           />
-          <button onClick={createPlan} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',whiteSpace:'nowrap'}}>+ Criar</button>
+          <button onClick={createPlan} style={{flexShrink:0,background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>+ Criar</button>
         </div>
       </div>
 
@@ -891,7 +891,7 @@ const Builder=({planId,plans,setPlans,setToast})=>{
         </div>
 
         {/* Day pills */}
-        <div style={{display:'flex',gap:'.4rem',overflowX:'auto',paddingBottom:'.2rem',scrollbarWidth:'none'}}>
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',paddingBottom:'.3rem',paddingTop:'.6rem'}}>
           {DAYS.map(dy=>{
             const count=plan.byDay?.[dy]?.length||0;
             const active=day===dy;
@@ -903,10 +903,10 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                 color:active?'#fff':'#555',
                 fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',
                 textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',
-                position:'relative'
+                position:'relative',overflow:'visible',marginTop:'6px'
               }}>
                 {dy.slice(0,3)}
-                {count>0&&<span style={{position:'absolute',top:'-4px',right:'-4px',background:active?'#fff':'var(--color-accent)',color:active?'var(--color-accent)':'#fff',borderRadius:'50%',width:'16px',height:'16px',fontSize:'.6rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>{count}</span>}
+                {count>0&&<span style={{position:'absolute',top:'-8px',right:'-6px',background:active?'#fff':'var(--color-accent)',color:active?'var(--color-accent)':'#fff',borderRadius:'50%',width:'18px',height:'18px',fontSize:'.6rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',zIndex:2,boxShadow:'0 0 0 2px var(--color-card)'}}>{count}</span>}
               </button>
             );
           })}
@@ -937,13 +937,13 @@ const Builder=({planId,plans,setPlans,setToast})=>{
           ) : (
             <div style={{display:'grid',gap:'.5rem'}}>
               {dayItems.map((it,i)=>(
-                <div key={i} style={{display:'grid',gridTemplateColumns:'1.5rem 1fr auto auto auto',alignItems:'center',gap:'.6rem',background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.6rem .85rem'}}>
+                <div key={i} style={{display:'grid',gridTemplateColumns:'2rem 1fr 3.5rem 2.5rem 2.5rem',alignItems:'center',gap:'.5rem',background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.6rem .75rem'}}>
                   {/* Número */}
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:900,color:'#222',lineHeight:1}}>{i+1}</div>
                   {/* Nome */}
-                  <div>
-                    <div style={{fontWeight:600,fontSize:'.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.name}</div>
-                    <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:'.85rem',lineHeight:1.2,wordBreak:'break-word'}}>{it.name}</div>
+                    <div style={{fontSize:'.68rem',color:'#444',marginTop:'2px'}}>
                       {EXS.find(e=>e.id===it.exId)?.primary||''} · {EXS.find(e=>e.id===it.exId)?.equipment||''}
                     </div>
                   </div>
@@ -951,17 +951,17 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                   <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
                     <input type="number" min="1" max="10" value={it.setsPlanned||3}
                       onChange={e=>updateSets(i,e.target.value)}
-                      style={{width:'2.8rem',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.85rem',color:'#fff'}}
+                      style={{width:'2.5rem',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.85rem',color:'#fff'}}
                     />
-                    <div style={{fontSize:'.55rem',color:'#333',textTransform:'uppercase',letterSpacing:'.05em'}}>séries</div>
+                    <div style={{fontSize:'.52rem',color:'#333',textTransform:'uppercase',letterSpacing:'.04em'}}>séries</div>
                   </div>
                   {/* Move */}
-                  <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
-                    <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===0?'#222':'#666',padding:'2px 6px',cursor:i===0?'default':'pointer',fontSize:'.75rem',lineHeight:1}}>↑</button>
-                    <button onClick={()=>move(i,1)} disabled={i===dayItems.length-1} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===dayItems.length-1?'#222':'#666',padding:'2px 6px',cursor:i===dayItems.length-1?'default':'pointer',fontSize:'.75rem',lineHeight:1}}>↓</button>
+                  <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                    <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===0?'#222':'#888',padding:'3px 7px',cursor:i===0?'default':'pointer',fontSize:'.8rem',lineHeight:1}}>↑</button>
+                    <button onClick={()=>move(i,1)} disabled={i===dayItems.length-1} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===dayItems.length-1?'#222':'#888',padding:'3px 7px',cursor:i===dayItems.length-1?'default':'pointer',fontSize:'.8rem',lineHeight:1}}>↓</button>
                   </div>
                   {/* Remove */}
-                  <button onClick={()=>removeItem(i)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',padding:'.35rem .5rem',cursor:'pointer',fontSize:'.75rem',fontWeight:700,lineHeight:1}}>✕</button>
+                  <button onClick={()=>removeItem(i)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',padding:'.4rem .4rem',cursor:'pointer',fontSize:'.8rem',fontWeight:700,lineHeight:1,alignSelf:'center'}}>✕</button>
                 </div>
               ))}
             </div>
