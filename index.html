@@ -271,6 +271,7 @@
       animation: toastIn .2s ease;
     }
     @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(6px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
     /* MODAL */
     .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:50; backdrop-filter: blur(4px); }
@@ -449,19 +450,113 @@ const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.prim
 const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
 const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
 
+// ── Firestore sync helpers ────────────────────────────────────────────────
+const SYNC_STATUS = { listeners: [] };
+function setSyncStatus(s){ SYNC_STATUS.current = s; SYNC_STATUS.listeners.forEach(fn=>fn(s)); }
+function useSyncStatus(){ const [s,setS]=useState(SYNC_STATUS.current||'idle'); useEffect(()=>{ SYNC_STATUS.listeners.push(setS); return ()=>{ SYNC_STATUS.listeners=SYNC_STATUS.listeners.filter(x=>x!==setS);};},[]);return s;}
+
+function getUID(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){return null;} }
+
+// debounce helper
+function debounce(fn,ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args),ms); }; }
+
+async function fsWrite(uid, docName, data){
+  if(!uid||!window._db) return;
+  setSyncStatus('saving');
+  try{
+    await window._db.collection('users').doc(uid).collection('data').doc(docName).set({ payload: JSON.stringify(data), updatedAt: Date.now() });
+    setSyncStatus('saved');
+    setTimeout(()=>setSyncStatus('idle'),2000);
+  }catch(e){ setSyncStatus('error'); console.warn('fsWrite error',e); }
+}
+
+async function fsRead(uid, docName, fallback){
+  if(!uid||!window._db) return fallback;
+  try{
+    const snap = await window._db.collection('users').doc(uid).collection('data').doc(docName).get();
+    if(snap.exists){ const d=snap.data(); if(d.payload) return JSON.parse(d.payload); }
+    return fallback;
+  }catch(e){ console.warn('fsRead error',e); return fallback; }
+}
+
+// Called on login — load cloud data and merge into localStorage
+window.DSSync = {
+  pull: async function(uid){
+    setSyncStatus('syncing');
+    try{
+      const [cloudPlans, cloudHistory, cloudPrefs] = await Promise.all([
+        fsRead(uid,'plans',null),
+        fsRead(uid,'history',null),
+        fsRead(uid,'prefs',null),
+      ]);
+      if(cloudPlans)  localStorage.setItem(LS.plans,   JSON.stringify(cloudPlans));
+      if(cloudHistory)localStorage.setItem(LS.history,  JSON.stringify(cloudHistory));
+      if(cloudPrefs)  localStorage.setItem(LS.prefs,    JSON.stringify(cloudPrefs));
+      setSyncStatus('saved');
+      setTimeout(()=>setSyncStatus('idle'),2000);
+      // Tell React to reload from localStorage
+      window.dispatchEvent(new Event('darkset.cloudloaded'));
+    }catch(e){ setSyncStatus('error'); console.warn('pull error',e); }
+  },
+  push: async function(uid){
+    if(!uid) return;
+    const plans   = JSON.parse(localStorage.getItem(LS.plans)||'null');
+    const history = JSON.parse(localStorage.getItem(LS.history)||'null');
+    const prefs   = JSON.parse(localStorage.getItem(LS.prefs)||'null');
+    await Promise.all([
+      plans   && fsWrite(uid,'plans',plans),
+      history && fsWrite(uid,'history',history),
+      prefs   && fsWrite(uid,'prefs',prefs),
+    ]);
+  }
+};
+
+const debouncedPush = debounce((uid,key,val)=>fsWrite(uid,key,val),1500);
+
 function usePlans(){
-  const [plans,setPlans]=useState(()=>load(LS.plans,{activeId:null,list:[]}));
-  useEffect(()=>save(LS.plans,plans),[plans]);
+  const [plans,setPlansState]=useState(()=>load(LS.plans,{activeId:null,list:[]}));
+  const setPlans=(v)=>setPlansState(prev=>{
+    const next=typeof v==='function'?v(prev):v;
+    save(LS.plans,next);
+    const uid=getUID(); if(uid) debouncedPush(uid,'plans',next);
+    return next;
+  });
+  // Reload from localStorage when cloud data arrives
+  useEffect(()=>{
+    const h=()=>setPlansState(load(LS.plans,{activeId:null,list:[]}));
+    window.addEventListener('darkset.cloudloaded',h);
+    return ()=>window.removeEventListener('darkset.cloudloaded',h);
+  },[]);
   return [plans,setPlans];
 }
 function useHistory(){
-  const [history,setHistory]=useState(()=>load(LS.history,{}));
-  useEffect(()=>save(LS.history,history),[history]);
+  const [history,setHistoryState]=useState(()=>load(LS.history,{}));
+  const setHistory=(v)=>setHistoryState(prev=>{
+    const next=typeof v==='function'?v(prev):v;
+    save(LS.history,next);
+    const uid=getUID(); if(uid) debouncedPush(uid,'history',next);
+    return next;
+  });
+  useEffect(()=>{
+    const h=()=>setHistoryState(load(LS.history,{}));
+    window.addEventListener('darkset.cloudloaded',h);
+    return ()=>window.removeEventListener('darkset.cloudloaded',h);
+  },[]);
   return [history,setHistory];
 }
 function usePrefs(){
-  const [prefs,setPrefs]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
-  useEffect(()=>save(LS.prefs,prefs),[prefs]);
+  const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
+  const setPrefs=(v)=>setPrefsState(prev=>{
+    const next=typeof v==='function'?v(prev):v;
+    save(LS.prefs,next);
+    const uid=getUID(); if(uid) debouncedPush(uid,'prefs',next);
+    return next;
+  });
+  useEffect(()=>{
+    const h=()=>setPrefsState(load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
+    window.addEventListener('darkset.cloudloaded',h);
+    return ()=>window.removeEventListener('darkset.cloudloaded',h);
+  },[]);
   return [prefs,setPrefs];
 }
 
@@ -942,8 +1037,8 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:900,color:'#222',lineHeight:1}}>{i+1}</div>
                   {/* Nome */}
                   <div style={{minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:'.85rem',lineHeight:1.2,wordBreak:'break-word'}}>{it.name}</div>
-                    <div style={{fontSize:'.68rem',color:'#444',marginTop:'2px'}}>
+                    <div style={{fontWeight:600,fontSize:'.82rem',lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{it.name}</div>
+                    <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px'}}>
                       {EXS.find(e=>e.id===it.exId)?.primary||''} · {EXS.find(e=>e.id===it.exId)?.equipment||''}
                     </div>
                   </div>
@@ -2107,6 +2202,10 @@ function App(){
     return () => window.removeEventListener('darkset:import', handler);
   },[]);
 
+  const syncStatus = useSyncStatus();
+  const syncLabel = {saving:'Salvando…',saved:'Salvo ✓',syncing:'Sincronizando…',error:'Erro sync',idle:''}[syncStatus]||'';
+  const syncColor = {saving:'#888',saved:'#4ade80',syncing:'#facc15',error:'#e31b23',idle:'transparent'}[syncStatus]||'transparent';
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
       <header className="ds-hdr">
@@ -2119,6 +2218,12 @@ function App(){
           <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
           <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
         </nav>
+        {syncLabel&&(
+          <div style={{fontSize:'.62rem',color:syncColor,fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',whiteSpace:'nowrap',flexShrink:0,display:'flex',alignItems:'center',gap:'.3rem'}}>
+            {syncStatus==='saving'||syncStatus==='syncing'?<span style={{display:'inline-block',width:'6px',height:'6px',borderRadius:'50%',background:syncColor,animation:'pulse 1s infinite'}}></span>:null}
+            {syncLabel}
+          </div>
+        )}
       </header>
 
       {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs}/>}
@@ -2595,6 +2700,8 @@ root.render(<App/>);
               var prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
               if(info.displayName && !prefs.name){ prefs.name = info.displayName; localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs)); }
             }catch(_){}
+            // ── Pull cloud data into localStorage then notify React ──
+            if(window.DSSync) window.DSSync.pull(user.uid);
             if(window.closeAuthModal) closeAuthModal();
           } else {
             localStorage.removeItem('darkset.user');
