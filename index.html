@@ -3,9 +3,12 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <title>DarkSet — V4.9.0</title>
-  <meta name="theme-color" content="#0b0b0b"/>
+  <meta name="theme-color" content="#080808"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-512.png">
   <script>
@@ -450,115 +453,114 @@ const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.prim
 const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
 const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
 
-// ── Firestore sync helpers ────────────────────────────────────────────────
+
+// ── Firestore sync ────────────────────────────────────────────────────────
 const SYNC_STATUS = { listeners: [] };
-function setSyncStatus(s){ SYNC_STATUS.current = s; SYNC_STATUS.listeners.forEach(fn=>fn(s)); }
-function useSyncStatus(){ const [s,setS]=useState(SYNC_STATUS.current||'idle'); useEffect(()=>{ SYNC_STATUS.listeners.push(setS); return ()=>{ SYNC_STATUS.listeners=SYNC_STATUS.listeners.filter(x=>x!==setS);};},[]);return s;}
+function setSyncStatus(s){ SYNC_STATUS.current=s; SYNC_STATUS.listeners.forEach(fn=>fn(s)); }
+function useSyncStatus(){ const [s,setS]=useState(SYNC_STATUS.current||'idle'); useEffect(()=>{ SYNC_STATUS.listeners.push(setS); return ()=>{SYNC_STATUS.listeners=SYNC_STATUS.listeners.filter(x=>x!==setS);};},[]);return s;}
 
-function getUID(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){return null;} }
+function getUID(){ try{return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null;}catch(_){return null;} }
+function debounce(fn,ms){ let t; return (...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms);}; }
 
-// debounce helper
-function debounce(fn,ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args),ms); }; }
+// Global state setters — React components register these on mount
+window._DS_SETTERS = { plans: null, history: null, prefs: null };
 
 async function fsWrite(uid, docName, data){
   if(!uid||!window._db) return;
   setSyncStatus('saving');
   try{
-    await window._db.collection('users').doc(uid).collection('data').doc(docName).set({ payload: JSON.stringify(data), updatedAt: Date.now() });
+    await window._db.collection('users').doc(uid).collection('data').doc(docName).set({payload:JSON.stringify(data),updatedAt:Date.now()});
     setSyncStatus('saved');
-    setTimeout(()=>setSyncStatus('idle'),2000);
-  }catch(e){ setSyncStatus('error'); console.warn('fsWrite error',e); }
+    setTimeout(()=>setSyncStatus('idle'),2500);
+  }catch(e){ setSyncStatus('error'); console.warn('fsWrite',docName,e.code||e.message); }
 }
 
-async function fsRead(uid, docName, fallback){
-  if(!uid||!window._db) return fallback;
+async function fsRead(uid, docName){
+  if(!uid||!window._db) return null;
   try{
-    const snap = await window._db.collection('users').doc(uid).collection('data').doc(docName).get();
-    if(snap.exists){ const d=snap.data(); if(d.payload) return JSON.parse(d.payload); }
-    return fallback;
-  }catch(e){ console.warn('fsRead error',e); return fallback; }
+    const snap=await window._db.collection('users').doc(uid).collection('data').doc(docName).get();
+    if(snap.exists){ const d=snap.data(); if(d&&d.payload) return JSON.parse(d.payload); }
+    return null;
+  }catch(e){ console.warn('fsRead',docName,e.code||e.message); return null; }
 }
 
-// Called on login — load cloud data and merge into localStorage
 window.DSSync = {
   pull: async function(uid){
+    if(!uid) return;
     setSyncStatus('syncing');
+    console.log('[DSSync] pulling for', uid);
     try{
       const [cloudPlans, cloudHistory, cloudPrefs] = await Promise.all([
-        fsRead(uid,'plans',null),
-        fsRead(uid,'history',null),
-        fsRead(uid,'prefs',null),
+        fsRead(uid,'plans'),
+        fsRead(uid,'history'),
+        fsRead(uid,'prefs'),
       ]);
-      if(cloudPlans)  localStorage.setItem(LS.plans,   JSON.stringify(cloudPlans));
-      if(cloudHistory)localStorage.setItem(LS.history,  JSON.stringify(cloudHistory));
-      if(cloudPrefs)  localStorage.setItem(LS.prefs,    JSON.stringify(cloudPrefs));
+      console.log('[DSSync] received:', {plans:!!cloudPlans, history:!!cloudHistory, prefs:!!cloudPrefs});
+
+      // Write to localStorage first
+      if(cloudPlans)   localStorage.setItem(LS.plans,   JSON.stringify(cloudPlans));
+      if(cloudHistory) localStorage.setItem(LS.history, JSON.stringify(cloudHistory));
+      if(cloudPrefs)   localStorage.setItem(LS.prefs,   JSON.stringify(cloudPrefs));
+
+      // Push directly into React state if setters are registered
+      if(cloudPlans   && window._DS_SETTERS.plans)   window._DS_SETTERS.plans(cloudPlans);
+      if(cloudHistory && window._DS_SETTERS.history) window._DS_SETTERS.history(cloudHistory);
+      if(cloudPrefs   && window._DS_SETTERS.prefs)   window._DS_SETTERS.prefs(cloudPrefs);
+
       setSyncStatus('saved');
-      setTimeout(()=>setSyncStatus('idle'),2000);
-      // Tell React to reload from localStorage
-      window.dispatchEvent(new Event('darkset.cloudloaded'));
-    }catch(e){ setSyncStatus('error'); console.warn('pull error',e); }
+      setTimeout(()=>setSyncStatus('idle'),2500);
+    }catch(e){ setSyncStatus('error'); console.warn('[DSSync] pull error',e); }
   },
   push: async function(uid){
-    if(!uid) return;
+    if(!uid||!window._db) return;
     const plans   = JSON.parse(localStorage.getItem(LS.plans)||'null');
     const history = JSON.parse(localStorage.getItem(LS.history)||'null');
     const prefs   = JSON.parse(localStorage.getItem(LS.prefs)||'null');
     await Promise.all([
-      plans   && fsWrite(uid,'plans',plans),
-      history && fsWrite(uid,'history',history),
-      prefs   && fsWrite(uid,'prefs',prefs),
-    ]);
+      plans   ? fsWrite(uid,'plans',plans)   : null,
+      history ? fsWrite(uid,'history',history): null,
+      prefs   ? fsWrite(uid,'prefs',prefs)   : null,
+    ].filter(Boolean));
   }
 };
 
-const debouncedPush = debounce((uid,key,val)=>fsWrite(uid,key,val),1500);
+const debouncedFsWrite = debounce((uid,key,val)=>fsWrite(uid,key,val),1500);
 
 function usePlans(){
   const [plans,setPlansState]=useState(()=>load(LS.plans,{activeId:null,list:[]}));
+  // Register setter so DSSync.pull can update React state directly
+  useEffect(()=>{ window._DS_SETTERS.plans=setPlansState; return ()=>{window._DS_SETTERS.plans=null;}; },[]);
   const setPlans=(v)=>setPlansState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.plans,next);
-    const uid=getUID(); if(uid) debouncedPush(uid,'plans',next);
+    const uid=getUID(); if(uid) debouncedFsWrite(uid,'plans',next);
     return next;
   });
-  // Reload from localStorage when cloud data arrives
-  useEffect(()=>{
-    const h=()=>setPlansState(load(LS.plans,{activeId:null,list:[]}));
-    window.addEventListener('darkset.cloudloaded',h);
-    return ()=>window.removeEventListener('darkset.cloudloaded',h);
-  },[]);
   return [plans,setPlans];
 }
 function useHistory(){
   const [history,setHistoryState]=useState(()=>load(LS.history,{}));
+  useEffect(()=>{ window._DS_SETTERS.history=setHistoryState; return ()=>{window._DS_SETTERS.history=null;}; },[]);
   const setHistory=(v)=>setHistoryState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.history,next);
-    const uid=getUID(); if(uid) debouncedPush(uid,'history',next);
+    const uid=getUID(); if(uid) debouncedFsWrite(uid,'history',next);
     return next;
   });
-  useEffect(()=>{
-    const h=()=>setHistoryState(load(LS.history,{}));
-    window.addEventListener('darkset.cloudloaded',h);
-    return ()=>window.removeEventListener('darkset.cloudloaded',h);
-  },[]);
   return [history,setHistory];
 }
 function usePrefs(){
   const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
+  useEffect(()=>{ window._DS_SETTERS.prefs=setPrefsState; return ()=>{window._DS_SETTERS.prefs=null;}; },[]);
   const setPrefs=(v)=>setPrefsState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.prefs,next);
-    const uid=getUID(); if(uid) debouncedPush(uid,'prefs',next);
+    const uid=getUID(); if(uid) debouncedFsWrite(uid,'prefs',next);
     return next;
   });
-  useEffect(()=>{
-    const h=()=>setPrefsState(load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
-    window.addEventListener('darkset.cloudloaded',h);
-    return ()=>window.removeEventListener('darkset.cloudloaded',h);
-  },[]);
   return [prefs,setPrefs];
 }
+
 
 
 const Button=({children,onClick,variant="ghost",disabled=false,full=false})=>{
@@ -2108,6 +2110,36 @@ const Profile=({prefs,setPrefs,history})=>{
           <button disabled={!dirty||uploading} onClick={()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium,theme})} style={{background:dirty&&!uploading?'var(--color-accent)':'rgba(255,255,255,.04)',border:'none',borderRadius:'8px',padding:'.65rem',color:dirty&&!uploading?'#fff':'#333',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:dirty&&!uploading?'pointer':'default',width:'100%',transition:'all .15s'}}>
             {dirty?'Salvar alteracoes':'Sem alteracoes'}
           </button>
+
+          {/* Sync section */}
+          {(()=>{
+            const uid=getUID();
+            const [syncMsg,setSyncMsg]=useState('');
+            const doSync=async()=>{
+              if(!uid){setSyncMsg('Faca login primeiro.');return;}
+              if(!window._db){setSyncMsg('Firebase nao conectado.');return;}
+              setSyncMsg('Sincronizando...');
+              try{
+                await window.DSSync.pull(uid);
+                setSyncMsg('Dados sincronizados!');
+                setTimeout(()=>setSyncMsg(''),3000);
+              }catch(e){setSyncMsg('Erro: '+e.message);}
+            };
+            return (
+              <div style={{borderTop:'1px solid #1a1a1a',paddingTop:'1rem',display:'grid',gap:'.5rem'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <div>
+                    <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Sincronização</div>
+                    <div style={{fontSize:'.7rem',color:uid?'#4ade80':'#555',marginTop:'1px'}}>{uid?'Conta conectada':'Sem login'}</div>
+                  </div>
+                  <button onClick={doSync} disabled={!uid} style={{background:uid?'rgba(74,222,128,.1)':'rgba(255,255,255,.03)',border:uid?'1px solid rgba(74,222,128,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.4rem .85rem',color:uid?'#4ade80':'#333',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:uid?'pointer':'default'}}>
+                    Sincronizar agora
+                  </button>
+                </div>
+                {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2700,8 +2732,22 @@ root.render(<App/>);
               var prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
               if(info.displayName && !prefs.name){ prefs.name = info.displayName; localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs)); }
             }catch(_){}
-            // ── Pull cloud data into localStorage then notify React ──
-            if(window.DSSync) window.DSSync.pull(user.uid);
+            // ── Pull cloud data — wait for React to be ready ──
+            if(window.DSSync){
+              // Retry até os setters do React estarem registrados (max 3s)
+              var attempts=0;
+              var tryPull=function(){
+                attempts++;
+                if(window._DS_SETTERS && window._DS_SETTERS.plans){
+                  window.DSSync.pull(user.uid);
+                } else if(attempts<30){
+                  setTimeout(tryPull,100);
+                } else {
+                  window.DSSync.pull(user.uid); // tenta de qualquer forma
+                }
+              };
+              setTimeout(tryPull,200);
+            }
             if(window.closeAuthModal) closeAuthModal();
           } else {
             localStorage.removeItem('darkset.user');
