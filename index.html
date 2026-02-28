@@ -88,10 +88,14 @@
       position: sticky; top: 0; z-index: 30;
       backdrop-filter: blur(16px) saturate(180%);
       -webkit-backdrop-filter: blur(16px) saturate(180%);
-      background: rgba(8,8,8,.92) !important;
+      background: rgba(8,8,8,.95);
       border-bottom: 1px solid rgba(227,27,35,.12);
       padding: .55rem .75rem;
       display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap;
+    }
+    [data-theme="light"] header.ds-hdr {
+      background: rgba(240,240,240,.97) !important;
+      border-bottom: 1px solid #ddd;
     }
 
     /* NAV BUTTONS */
@@ -273,8 +277,35 @@
       z-index: 999; white-space: nowrap;
       animation: toastIn .2s ease;
     }
+
+    /* Light theme */
+    [data-theme="light"] {
+      --color-bg: #f0f0f0;
+      --color-card: #ffffff;
+      --color-card-soft: #f8f8f8;
+      --color-border: #e0e0e0;
+      --color-text: #111111;
+      --color-text-sub: #666666;
+    }
+    [data-theme="light"] body { background-color: var(--color-bg) !important; color: var(--color-text) !important; }
+    [data-theme="light"] #root { background-color: var(--color-bg); }
+    [data-theme="light"] body::before { opacity: 0.05; }
+    [data-theme="light"] input, [data-theme="light"] select, [data-theme="light"] textarea {
+      background-color: rgba(0,0,0,.06) !important;
+      color: var(--color-text) !important;
+      border-color: var(--color-border) !important;
+    }
+    [data-theme="light"] .ds-nav-btn { color: #444; border-color: #ccc; }
+    [data-theme="light"] .ds-nav-btn:hover { background: rgba(0,0,0,.06); color: #111; }
+    [data-theme="light"] .ds-nav-btn.active { background: rgba(227,27,35,.1); color: #e31b23; border-color: var(--color-accent); }
+    [data-theme="light"] .mode-toggle { background: rgba(0,0,0,.08); border-color: #ddd; }
+    [data-theme="light"] .mode-toggle-btn { color: #666; }
+    [data-theme="light"] .ds-section-title { color: #111; }
+    [data-theme="light"] .ds-hdr { background: rgba(240,240,240,.92); border-color: #ddd; }
+
     @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(6px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 
     /* MODAL */
     .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:50; backdrop-filter: blur(4px); }
@@ -327,113 +358,128 @@ let exid=1;
 const E=(name,primary,subgroup,equipment,difficulty="intermediário",unilateral=false)=>({id:exid++,name,primary,subgroup,equipment,difficulty,unilateral,media:{type:"gif",srcGif:null,thumb:null}});
 const U=(name,primary,subgroup,equipment,difficulty="intermediário")=>E(name,primary,subgroup,equipment,difficulty,true);
 const EXS=[
-  // Peito
-  E("Supino reto barra","Peito","Peitoral Medial","Barra"),
-  E("Supino reto halteres","Peito","Peitoral Medial","Halteres"),
-  E("Supino reto Máquina","Peito","Peitoral Medial","Barra"),
-  E("Supino inclinado barra","Peito","Peitoral Superior","Barra"),
-  E("Supino inclinado com halter","Peito","Peitoral Superior","Halteres"),
-  E("Supino inclinado máquina","Peito","Peitoral Superior","Máquina","iniciante"),
-  E("Supino inclinado Articulado","Peito","Peitoral Superior","Máquina","iniciante"),
+  // ── PEITO ─────────────────────────────────────────────────────────────────
   E("Crossover polia alta","Peito","Peitoral Inferior","Cabo/Crossover"),
-  E("Crucifixo reto halteres","Peito","Peitoral Medial","Halteres","iniciante"),
   E("Crucifixo inclinado halteres","Peito","Peitoral Superior","Halteres","iniciante"),
   E("Crucifixo Máquina","Peito","Peitoral Medial","Máquina","iniciante"),
-
-  // Ombro
-  E("Desenvolvimento barra","Ombro","Frontal","Barra"),
-  U("Desenvolvimento halter","Ombro","Frontal","Halteres"),
-  E("Desenvolvimento máquina","Ombro","Frontal","Máquina","iniciante"),
-  U("Elevação lateral halter","Ombro","Lateral","Halteres","iniciante"),
-  U("Elevação lateral polia","Ombro","Lateral","Cabo/Crossover","iniciante"),
-  U("Elevação frontal halteres","Ombro","Frontal","Halteres","iniciante"),
-  E("Face Pull (corda)","Ombro","Posterior","Cabo/Crossover","iniciante"),
+  E("Crucifixo reto halteres","Peito","Peitoral Medial","Halteres","iniciante"),
+  E("Flexão de braço","Peito","Peitoral Medial","Peso corporal","iniciante"),
+  E("Peck deck","Peito","Peitoral Medial","Máquina","iniciante"),
+  E("Pullover halteres","Peito","Peitoral Medial","Halteres"),
+  E("Supino declinado barra","Peito","Peitoral Inferior","Barra"),
+  E("Supino declinado halteres","Peito","Peitoral Inferior","Halteres"),
+  E("Supino inclinado Articulado","Peito","Peitoral Superior","Máquina","iniciante"),
+  E("Supino inclinado barra","Peito","Peitoral Superior","Barra"),
+  E("Supino inclinado halteres","Peito","Peitoral Superior","Halteres"),
+  E("Supino inclinado máquina","Peito","Peitoral Superior","Máquina","iniciante"),
+  E("Supino reto barra","Peito","Peitoral Medial","Barra"),
+  E("Supino reto halteres","Peito","Peitoral Medial","Halteres"),
+  E("Supino reto máquina","Peito","Peitoral Medial","Máquina"),
+  // ── OMBRO ─────────────────────────────────────────────────────────────────
+  E("Arnold press halteres","Ombro","Frontal","Halteres","avançado"),
+  E("Crucifixo inverso halteres","Ombro","Posterior","Halteres","iniciante"),
   E("Crucifixo inverso máquina","Ombro","Posterior","Máquina","iniciante"),
-  U("Crucifixo inverso polia","Ombro","Posterior","Cabo/Crossover","iniciante"),
-  // Trapézio Superior (sem subgrupo "trapézio" extra)
-  E("Remada Alta Barra","Trapézio","Superior","Barra"),
-
-  // Trapézio isolado
-  E("Encolhimento Barra","Trapézio","Superior","Barra","iniciante"),
-  E("Encolhimento Halteres","Trapézio","Superior","Halteres","iniciante"),
-
-  // Costas
+  E("Crucifixo inverso polia","Ombro","Posterior","Cabo/Crossover","iniciante"),
+  E("Desenvolvimento barra","Ombro","Frontal","Barra"),
+  E("Desenvolvimento halteres","Ombro","Frontal","Halteres"),
+  E("Desenvolvimento máquina","Ombro","Frontal","Máquina","iniciante"),
+  E("Elevação frontal barra","Ombro","Frontal","Barra"),
+  E("Elevação frontal halteres","Ombro","Frontal","Halteres","iniciante"),
+  E("Elevação lateral halteres","Ombro","Lateral","Halteres","iniciante"),
+  E("Elevação lateral polia","Ombro","Lateral","Cabo/Crossover","iniciante"),
+  E("Elevação lateral unilateral polia","Ombro","Lateral","Cabo/Crossover"),
+  E("Face Pull (corda)","Ombro","Posterior","Cabo/Crossover","iniciante"),
+  // ── TRAPÉZIO ──────────────────────────────────────────────────────────────
+  E("Encolhimento barra","Trapézio","Superior","Barra","iniciante"),
+  E("Encolhimento halteres","Trapézio","Superior","Halteres","iniciante"),
+  E("Remada alta barra","Trapézio","Superior","Barra"),
+  // ── COSTAS ────────────────────────────────────────────────────────────────
   E("Barra fixa","Costas","Dorsal (Lats)","Peso corporal","avançado"),
-  E("Remada curvada barra","Costas","Romboides/Trapézio Médio","Barra"),
-  E("Remada Articulada","Costas","Romboides/Trapézio Médio","Máquina"),
-  U("Puxada alta unilateral","Costas","Dorsal (Lats)","Cabo/Crossover"),
-  E("Remada baixa polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
-  E("Remada baixa aberta polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
-  E("Puxada alta aberta","Costas","Dorsal (Lats)","Cabo/Crossover"),
-  E("Puxada triângulo","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Hiperextensão lombar","Costas","Lombar","Peso corporal","iniciante"),
   E("Pulldown","Costas","Dorsal (Lats)","Cabo/Crossover","iniciante"),
-  U("Remada baixa unilateral","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Puxada alta aberta","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Puxada alta unilateral","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Puxada fechada","Costas","Dorsal (Lats)","Cabo/Crossover","iniciante"),
+  E("Puxada triângulo","Costas","Dorsal (Lats)","Cabo/Crossover"),
+  E("Remada articulada","Costas","Romboides/Trapézio Médio","Máquina"),
+  E("Remada baixa aberta polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Remada baixa polia","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
+  E("Remada baixa unilateral","Costas","Romboides/Trapézio Médio","Cabo/Crossover"),
   E("Remada cavalinho","Costas","Romboides/Trapézio Médio","Barra"),
-  U("Remada serrote","Costas","Romboides", "Halteres","iniciante"),
-  E("Hiperextensão lombar","Lombar","Lombar","Peso corporal","iniciante"),
-
-  // Bíceps
+  E("Remada curvada barra","Costas","Romboides/Trapézio Médio","Barra"),
+  E("Remada curvada halteres","Costas","Romboides/Trapézio Médio","Halteres"),
+  E("Remada serrote halteres","Costas","Romboides/Trapézio Médio","Halteres","iniciante"),
+  E("Remada unilateral halteres","Costas","Romboides/Trapézio Médio","Halteres","iniciante"),
+  // ── BÍCEPS ────────────────────────────────────────────────────────────────
+  E("Rosca 21","Bíceps","Bíceps Braquial","Barra"),
+  E("Rosca 45° halteres","Bíceps","Bíceps Braquial","Halteres"),
+  E("Rosca alternada halteres","Bíceps","Bíceps Braquial","Halteres"),
+  E("Rosca concentrada halteres","Bíceps","Bíceps Braquial","Halteres","iniciante"),
   E("Rosca direta barra","Bíceps","Bíceps Braquial","Barra"),
   E("Rosca direta halteres","Bíceps","Bíceps Braquial","Halteres"),
-  U("Rosca alternada halter","Bíceps","Bíceps Braquial","Halteres"),
-  U("Rosca alternada sentada","Bíceps","Bíceps Braquial","Halteres"),
-  E("Rosca martelo halteres","Bíceps","Braquiorradial","Halteres"),
+  E("Rosca direta polia","Bíceps","Bíceps Braquial","Cabo/Crossover"),
+  E("Rosca inclinada halteres","Bíceps","Bíceps Braquial","Halteres"),
   E("Rosca martelo corda","Bíceps","Braquiorradial","Cabo/Crossover"),
+  E("Rosca martelo halteres","Bíceps","Braquiorradial","Halteres"),
   E("Rosca Scott máquina","Bíceps","Bíceps Braquial","Máquina","iniciante"),
-  U("Rosca 45°","Bíceps","Bíceps Braquial","Halteres"),
-
-  // Tríceps
-  E("Tríceps testa barra W","Tríceps","Cabeça Longa","Barra"),
-  E("Tríceps testa halter","Tríceps","Cabeça Longa","Halteres"),
-  U("Tríceps Francês halter","Tríceps","Cabeça Longa","Halteres"),
-  U("Tríceps Francês polia","Tríceps","Cabeça Longa","Cabo/Crossover"),
+  // ── TRÍCEPS ───────────────────────────────────────────────────────────────
+  E("Kick back tríceps halteres","Tríceps","Cabeça Lateral","Halteres","iniciante"),
+  E("Mergulho no banco","Tríceps","Geral","Peso corporal","iniciante"),
+  E("Paralelas","Tríceps","Geral","Peso corporal","avançado"),
+  E("Tríceps francês barra","Tríceps","Cabeça Longa","Barra"),
+  E("Tríceps francês halteres","Tríceps","Cabeça Longa","Halteres"),
+  E("Tríceps pulley barra reta","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
   E("Tríceps pulley corda","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
-  E("Mergulho no banco","Tríceps","Paralelas","Peso corporal","iniciante"),
-
-  // Quadríceps (sem subgrupos)
-  E("Agachamento livre","Quadríceps","", "Barra","avançado"),
-  E("Agachamento sumô halteres","Quadríceps","", "Halteres"),
-  U("Agachamento búlgaro","Quadríceps","", "Halteres","avançado"),
-  E("Leg press 45°","Quadríceps","", "Máquina"),
-  U("Leg 180° unilateral","Quadríceps","", "Máquina"),
-  E("Cadeira extensora","Quadríceps","", "Máquina","iniciante"),
-  U("Cadeira extensora unilateral","Quadríceps","", "Máquina","iniciante"),
-  U("Passada avançada halteres","Quadríceps","", "Halteres"),
-
-  // Posterior de Coxa (sem subgrupos)
-  E("Mesa flexora","Posterior de Coxa","", "Máquina","iniciante"),
-  E("Mesa flexora deitada","Posterior de Coxa","", "Máquina","iniciante"),
-  E("Cadeira flexora","Posterior de Coxa","", "Máquina","iniciante"),
-  U("Cadeira flexora unilateral","Posterior de Coxa","", "Máquina"),
-  U("Flexora unilateral em pé","Posterior de Coxa","", "Máquina"),
-  E("Stiff","Posterior de Coxa","", "Barra"),
-  E("Stiff com halteres","Posterior de Coxa","", "Halteres"),
-  E("Levantamento Terra","Posterior de Coxa","", "Barra"),
-
-  // Glúteo (com porções)
-  E("Elevação pélvica com barra","Glúteo","Glúteo Máximo","Barra"),
-  U("Extensão de quadril no cabo","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
-  U("Glúteo Crossover Polia","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
-
-  // Panturrilha
-  E("Panturrilha em pé maquina","Panturrilha","Gastrocnêmio","Máquina","iniciante"),
-  E("Panturrilha sentado máquina","Panturrilha","Sóleo","Máquina","iniciante"),
-  E("Panturrilha em pé barra livre","Panturrilha","Gastrocnêmio","Barra","iniciante"),
-
-  // Abdutores / Adutores (músculos separados)
-  E("Cadeira abdutora","Abdutores","Geral","Máquina","iniciante"),
-  E("Cadeira adutora","Adutores","Geral","Máquina","iniciante"),
-
-  // Abdômen
-  E("Abdômen infra","Abdômen","Infra","Peso corporal","iniciante"),
-  E("Abdômen supra","Abdômen","Supra","Peso corporal","iniciante"),
-  E("Abdômen supra declinado","Abdômen","Supra","Peso corporal","avançado"),
-  E("Abdômen infra na Paralela","Abdômen","Infra","Peso corporal","avançado"),
-  E("Prancha isométrica","Abdômen","Estático","Peso corporal","iniciante"),
-
-  // Antebraço
+  E("Tríceps pulley polia","Tríceps","Cabeça Longa","Cabo/Crossover"),
+  E("Tríceps testa barra W","Tríceps","Cabeça Longa","Barra"),
+  E("Tríceps testa halteres","Tríceps","Cabeça Longa","Halteres"),
+  // ── ANTEBRAÇO ─────────────────────────────────────────────────────────────
   E("Rosca inversa barra","Antebraço","Extensores","Barra","iniciante"),
   E("Rosca punho barra","Antebraço","Flexores","Barra","iniciante"),
+  // ── LOMBAR ────────────────────────────────────────────────────────────────
+  E("Extensão lombar máquina","Lombar","Lombar","Máquina","iniciante"),
+  // ── QUADRÍCEPS ────────────────────────────────────────────────────────────
+  E("Afundo com barra","Quadríceps","","Barra","avançado"),
+  E("Afundo com halteres","Quadríceps","","Halteres"),
+  E("Agachamento búlgaro halteres","Quadríceps","","Halteres","avançado"),
+  E("Agachamento hack máquina","Quadríceps","","Máquina","iniciante"),
+  E("Agachamento livre","Quadríceps","","Barra","avançado"),
+  E("Agachamento sumô barra","Quadríceps","","Barra"),
+  E("Agachamento sumô halteres","Quadríceps","","Halteres"),
+  E("Cadeira extensora","Quadríceps","","Máquina","iniciante"),
+  E("Cadeira extensora unilateral","Quadríceps","","Máquina","iniciante"),
+  E("Leg press 180° unilateral","Quadríceps","","Máquina"),
+  E("Leg press 45°","Quadríceps","","Máquina"),
+  E("Passada avançada halteres","Quadríceps","","Halteres"),
+  // ── POSTERIOR DE COXA ─────────────────────────────────────────────────────
+  E("Cadeira flexora","Posterior de Coxa","","Máquina","iniciante"),
+  E("Cadeira flexora unilateral","Posterior de Coxa","","Máquina"),
+  E("Flexora unilateral em pé","Posterior de Coxa","","Máquina"),
+  E("Levantamento terra","Posterior de Coxa","","Barra"),
+  E("Mesa flexora","Posterior de Coxa","","Máquina","iniciante"),
+  E("Mesa flexora deitada","Posterior de Coxa","","Máquina","iniciante"),
+  E("Stiff","Posterior de Coxa","","Barra"),
+  E("Stiff com halteres","Posterior de Coxa","","Halteres"),
+  E("Stiff unilateral halteres","Posterior de Coxa","","Halteres"),
+  // ── GLÚTEO ────────────────────────────────────────────────────────────────
+  E("Abdução em pé polia","Glúteo","Glúteo Médio","Cabo/Crossover","iniciante"),
+  E("Elevação pélvica com barra","Glúteo","Glúteo Máximo","Barra"),
+  E("Glúteo 4 apoios cabo","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
+  E("Hip thrust barra","Glúteo","Glúteo Máximo","Barra"),
+  E("Hip thrust máquina","Glúteo","Glúteo Máximo","Máquina","iniciante"),
+  // ── ABDUTORES / ADUTORES ──────────────────────────────────────────────────
+  E("Cadeira abdutora","Abdutores","Geral","Máquina","iniciante"),
+  E("Cadeira adutora","Adutores","Geral","Máquina","iniciante"),
+  // ── PANTURRILHA ───────────────────────────────────────────────────────────
+  E("Panturrilha em pé barra livre","Panturrilha","Gastrocnêmio","Barra","iniciante"),
+  E("Panturrilha em pé máquina","Panturrilha","Gastrocnêmio","Máquina","iniciante"),
+  E("Panturrilha sentado máquina","Panturrilha","Sóleo","Máquina","iniciante"),
+  // ── ABDÔMEN ───────────────────────────────────────────────────────────────
+  E("Abdômen infra","Abdômen","Infra","Peso corporal","iniciante"),
+  E("Abdômen infra na paralela","Abdômen","Infra","Peso corporal","avançado"),
+  E("Abdômen supra","Abdômen","Supra","Peso corporal","iniciante"),
+  E("Abdômen supra declinado","Abdômen","Supra","Peso corporal","avançado"),
+  E("Prancha isométrica","Abdômen","Estático","Peso corporal","iniciante"),
 ];
 // --- Demo media for 3 exercises (GIF-only) ---
 (()=>{
@@ -452,6 +498,133 @@ const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
 const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.primary===m && e.subgroup).map(e=>e.subgroup))];return acc;},{});
 const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
 const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
+
+// ── Helper to build byDay from named days ─────────────────────────────────
+function exId(name){ return EXS.find(e=>e.name===name)?.id||null; }
+function ex(name,sets=4){ const id=exId(name); return id?{exId:id,name,setsPlanned:sets}:null; }
+function day(...exs){ return exs.filter(Boolean); }
+
+// ── PRESET PLANS ──────────────────────────────────────────────────────────
+const PRESET_PLANS = [
+  // ══════════ 3 DIAS ═══════════════════════════════════════════════════════
+  {
+    id:'preset_fb3_ini', name:'Full Body 3x — Iniciante', level:'iniciante', days:3,
+    description:'Treino completo do corpo 3x por semana. Ideal para quem está começando.',
+    byDay:{
+      'Segunda':[ex('Agachamento livre',3),ex('Supino reto barra',3),ex('Remada curvada barra',3),ex('Desenvolvimento máquina',3),ex('Rosca direta halteres',3),ex('Tríceps pulley corda',3),ex('Prancha isométrica',3)],
+      'Quarta':[ex('Leg press 45°',3),ex('Supino inclinado máquina',3),ex('Puxada alta aberta',3),ex('Desenvolvimento halteres',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3),ex('Abdômen supra',3)],
+      'Sexta':[ex('Agachamento sumô halteres',3),ex('Crucifixo Máquina',3),ex('Remada baixa polia',3),ex('Elevação lateral halteres',3),ex('Rosca Scott máquina',3),ex('Mergulho no banco',3),ex('Abdômen infra',3)],
+      'Terça':[],'Quinta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_abc_ini', name:'ABC Iniciante — 3 dias', level:'iniciante', days:3,
+    description:'A = Peito+Tríceps, B = Costas+Bíceps, C = Pernas+Ombro.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado máquina',3),ex('Crucifixo Máquina',3),ex('Tríceps pulley corda',4),ex('Tríceps pulley barra reta',3),ex('Mergulho no banco',3)],
+      'Quarta':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Pulldown',3),ex('Rosca direta halteres',4),ex('Rosca martelo halteres',3)],
+      'Sexta':[ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Mesa flexora',3),ex('Desenvolvimento máquina',3),ex('Elevação lateral halteres',4),ex('Panturrilha em pé máquina',3)],
+      'Terça':[],'Quinta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  // ══════════ 4 DIAS ═══════════════════════════════════════════════════════
+  {
+    id:'preset_ul4_ini', name:'Upper/Lower — Iniciante 4 dias', level:'iniciante', days:4,
+    description:'A = Superior, B = Inferior. Alternado 2x por semana cada.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Remada curvada barra',4),ex('Desenvolvimento máquina',3),ex('Puxada alta aberta',3),ex('Rosca direta halteres',3),ex('Tríceps pulley corda',3)],
+      'Terça':[ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Mesa flexora',3),ex('Stiff',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta':[ex('Supino inclinado halteres',4),ex('Remada unilateral halteres',4),ex('Desenvolvimento halteres',3),ex('Puxada triângulo',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3)],
+      'Sexta':[ex('Agachamento sumô halteres',4),ex('Hip thrust máquina',4),ex('Cadeira extensora',3),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',3),ex('Cadeira abdutora',4)],
+      'Quarta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_ppl4_int', name:'PPL 4 dias — Intermediário', level:'intermediário', days:4,
+    description:'Push, Pull, Legs + Full. Bom volume com 4 sessões semanais.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo reto halteres',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Pulldown',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Face Pull (corda)',3)],
+      'Quinta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',4)],
+      'Sábado':[ex('Supino reto barra',3),ex('Remada articulada',4),ex('Desenvolvimento máquina',3),ex('Puxada alta aberta',3),ex('Rosca direta halteres',3),ex('Tríceps pulley barra reta',3),ex('Elevação lateral halteres',3)],
+      'Quarta':[],'Sexta':[],'Domingo':[]
+    }
+  },
+  // ══════════ 5 DIAS ═══════════════════════════════════════════════════════
+  {
+    id:'preset_ppl5_int', name:'PPL Clássico — Intermediário 5 dias', level:'intermediário', days:5,
+    description:'Push/Pull/Legs com 5 sessões. Volume ideal para ganho muscular.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crossover polia alta',3),ex('Crucifixo reto halteres',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Pulldown',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Rosca concentrada halteres',3)],
+      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Agachamento búlgaro halteres',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',5)],
+      'Quinta':[ex('Supino inclinado máquina',4),ex('Peck deck',4),ex('Supino declinado halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Tríceps francês halteres',4),ex('Kick back tríceps halteres',3)],
+      'Sexta':[ex('Barra fixa',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Remada unilateral halteres',4),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca 21',3),ex('Rosca Scott máquina',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_abcde_av', name:'ABCDE — Avançado 5 dias', level:'avançado', days:5,
+    description:'Um grupo muscular por dia. Alto volume e especialização.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Supino declinado barra',4),ex('Crucifixo reto halteres',4),ex('Crossover polia alta',3),ex('Peck deck',3),ex('Pullover halteres',3)],
+      'Terça':[ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Puxada triângulo',4),ex('Remada cavalinho',4),ex('Hiperextensão lombar',3),ex('Extensão lombar máquina',3)],
+      'Quarta':[ex('Desenvolvimento barra',5),ex('Desenvolvimento halteres',4),ex('Arnold press halteres',4),ex('Elevação lateral halteres',5),ex('Elevação frontal barra',4),ex('Crucifixo inverso máquina',4),ex('Face Pull (corda)',4),ex('Encolhimento barra',4)],
+      'Quinta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Agachamento hack máquina',4),ex('Cadeira extensora',4),ex('Stiff',5),ex('Mesa flexora',4),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',5),ex('Panturrilha sentado máquina',4)],
+      'Sexta':[ex('Rosca direta barra',5),ex('Rosca inclinada halteres',4),ex('Rosca Scott máquina',4),ex('Rosca martelo halteres',4),ex('Tríceps testa barra W',5),ex('Tríceps francês barra',4),ex('Tríceps pulley corda',4),ex('Tríceps pulley barra reta',3),ex('Mergulho no banco',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  // ══════════ 6 DIAS ═══════════════════════════════════════════════════════
+  {
+    id:'preset_ppl6_av', name:'PPL×2 — Avançado 6 dias', level:'avançado', days:6,
+    description:'Push/Pull/Legs duas vezes por semana. Máximo volume.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Crossover polia alta',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':[ex('Puxada alta aberta',5),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca concentrada halteres',3)],
+      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Hip thrust barra',4),ex('Panturrilha em pé máquina',5)],
+      'Quinta':[ex('Supino inclinado barra',5),ex('Peck deck',4),ex('Supino declinado halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Arnold press halteres',3),ex('Tríceps francês halteres',4),ex('Tríceps pulley barra reta',3)],
+      'Sexta':[ex('Barra fixa',5),ex('Remada articulada',4),ex('Puxada triângulo',4),ex('Remada unilateral halteres',3),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca 21',3)],
+      'Sábado':[ex('Agachamento sumô barra',5),ex('Agachamento hack máquina',4),ex('Cadeira extensora',3),ex('Stiff com halteres',4),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',4),ex('Cadeira abdutora',4),ex('Panturrilha sentado máquina',5)],
+      'Domingo':[]
+    }
+  },
+  // ══════════ FOCO ══════════════════════════════════════════════════════════
+  {
+    id:'preset_gluteo_foco', name:'Foco Glúteo — 4 dias', level:'intermediário', days:4,
+    description:'Programa especializado em glúteo com treinos de pernas e posterior.',
+    byDay:{
+      'Segunda':[ex('Hip thrust barra',5),ex('Elevação pélvica com barra',4),ex('Agachamento sumô barra',4),ex('Cadeira abdutora',4),ex('Glúteo 4 apoios cabo',4),ex('Stiff',4),ex('Abdução em pé polia',3)],
+      'Terça':[ex('Leg press 45°',5),ex('Cadeira extensora',4),ex('Agachamento hack máquina',4),ex('Mesa flexora',4),ex('Cadeira flexora',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta':[ex('Hip thrust máquina',5),ex('Agachamento búlgaro halteres',4),ex('Afundo com halteres',4),ex('Cadeira abdutora',4),ex('Stiff unilateral halteres',4),ex('Elevação pélvica com barra',3),ex('Abdução em pé polia',3)],
+      'Sexta':[ex('Agachamento sumô halteres',4),ex('Leg press 45°',4),ex('Passada avançada halteres',4),ex('Mesa flexora deitada',4),ex('Extensão lombar máquina',3),ex('Panturrilha sentado máquina',4)],
+      'Quarta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_upper_foco', name:'Foco Superior — 4 dias', level:'intermediário', days:4,
+    description:'Foco em peito, costas e ombros com volume elevado.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Crossover polia alta',4),ex('Peck deck',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',5),ex('Crucifixo inverso máquina',3)],
+      'Quarta':[ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Puxada triângulo',3),ex('Face Pull (corda)',4),ex('Encolhimento halteres',3),ex('Hiperextensão lombar',3)],
+      'Quinta':[ex('Supino declinado barra',4),ex('Crucifixo reto halteres',4),ex('Pullover halteres',3),ex('Arnold press halteres',4),ex('Elevação frontal halteres',3),ex('Elevação lateral unilateral polia',4)],
+      'Sexta':[ex('Barra fixa',4),ex('Remada articulada',4),ex('Remada unilateral halteres',4),ex('Desenvolvimento halteres',4),ex('Crucifixo inverso halteres',3),ex('Rosca direta barra',4),ex('Tríceps testa barra W',4)],
+      'Terça':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_bracos_foco', name:'Foco Braços — 5 dias', level:'intermediário', days:5,
+    description:'Volume extra para bíceps e tríceps, com base de peito/costas/pernas.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo Máquina',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca 21',3),ex('Rosca concentrada halteres',3)],
+      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Tríceps testa barra W',4),ex('Tríceps francês halteres',4),ex('Tríceps pulley corda',3),ex('Tríceps pulley barra reta',3)],
+      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta':[ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Face Pull (corda)',3),ex('Rosca direta halteres',4),ex('Rosca Scott máquina',4),ex('Rosca inversa barra',3)],
+      'Sexta':[ex('Supino declinado barra',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Tríceps francês barra',4),ex('Kick back tríceps halteres',3),ex('Mergulho no banco',4)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+];
 
 
 // ── Firestore sync ────────────────────────────────────────────────────────
@@ -602,13 +775,12 @@ const LockIcon=({className=""})=>(
 );
 
 const LogoRow=()=>(
-  <div className="flex items-center gap-2.5">
-    <img src="icons/icon-512.png" width="36" height="36" style={{borderRadius:'8px',filter:'drop-shadow(0 0 8px rgba(227,27,35,.5))'}}/>
-    <div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.35rem',letterSpacing:'.04em',textTransform:'uppercase',lineHeight:1}}>
-        <span style={{color:'#fff'}}>DARK</span><span style={{color:'var(--color-accent)'}}>SET</span>
+  <div className="flex items-center gap-2">
+    <div style={{lineHeight:1}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',letterSpacing:'.03em',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
+        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
       </div>
-      <div style={{fontSize:'.6rem',color:'#444',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'1px'}}>Seu treino · Sua evolução</div>
+      <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'1px'}}>Seu treino · Sua evolução</div>
     </div>
   </div>
 );
@@ -802,6 +974,27 @@ const Plans=({plans,setPlans,goto,setToast})=>{
   const [newName,setNewName]=useState("");
   const [renameId,setRenameId]=useState(null);
   const [sharePlan,setSharePlan]=useState(null);
+  const [tab,setTab]=useState('minhas'); // 'minhas' | 'prontas'
+  const [filterLevel,setFilterLevel]=useState('todos');
+  const [filterDays,setFilterDays]=useState('todos');
+  const [previewPlan,setPreviewPlan]=useState(null);
+
+  const importPreset=(preset)=>{
+    const id=Date.now();
+    const byDay={};
+    for(const d of DAYS){ byDay[d]=preset.byDay[d]||[]; }
+    setPlans(p=>({...p,list:[...p.list,{id,name:preset.name,byDay}],activeId:p.activeId||id}));
+    setToast("Ficha importada! 💪");
+    setTab('minhas');
+  };
+
+  const filteredPresets = PRESET_PLANS.filter(p=>{
+    if(filterLevel!=='todos' && p.level!==filterLevel) return false;
+    if(filterDays!=='todos' && p.days!==Number(filterDays)) return false;
+    return true;
+  });
+
+  const levelColor={'iniciante':'#4ade80','intermediário':'#facc15','avançado':'#e31b23'};
 
   const createPlan=()=>{
     if(!newName.trim()) return;
@@ -838,36 +1031,46 @@ const Plans=({plans,setPlans,goto,setToast})=>{
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
       <div className="ds-card" style={{padding:'.85rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Minhas Fichas</div>
-          <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px'}}>{plans.list.length} ficha(s)</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Fichas</div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{plans.list.length} ficha(s) salva(s)</div>
         </div>
       </div>
 
-      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
-        <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.6rem'}}>Nova Ficha</div>
-        <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
-          <input
-            style={{flex:1,minWidth:0,background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}}
-            placeholder="Nome da ficha…"
-            value={newName} onChange={e=>setNewName(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&createPlan()}
-          />
-          <button onClick={createPlan} style={{flexShrink:0,background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>+ Criar</button>
-        </div>
+      {/* Tab toggle */}
+      <div className="mode-toggle">
+        <button className={"mode-toggle-btn"+(tab==='minhas'?' active':'')} onClick={()=>setTab('minhas')}>Minhas Fichas</button>
+        <button className={"mode-toggle-btn"+(tab==='prontas'?' active':'')} onClick={()=>setTab('prontas')}>Fichas Prontas</button>
       </div>
 
-      {plans.list.length===0?(
-        <div style={{textAlign:'center',padding:'3rem 1rem',color:'#222'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'2.5rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.5rem'}}>Sem fichas</div>
-          <div style={{fontSize:'.85rem'}}>Crie sua primeira ficha acima</div>
+      {/* ── MINHAS FICHAS ── */}
+      {tab==='minhas'&&(<>
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.6rem'}}>Nova Ficha</div>
+          <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
+            <input
+              style={{flex:1,minWidth:0,background:'rgba(0,0,0,.45)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}}
+              placeholder="Nome da ficha…"
+              value={newName} onChange={e=>setNewName(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&createPlan()}
+            />
+            <button onClick={createPlan} style={{flexShrink:0,background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>+ Criar</button>
+          </div>
         </div>
-      ):(
-        <div style={{display:'grid',gap:'.6rem'}}>
-          {plans.list.map(pl=>{
-            const isActive=plans.activeId===pl.id;
-            const exTotal=totalExsByDay(pl);
+
+        {plans.list.length===0?(
+          <div style={{textAlign:'center',padding:'3rem 1rem',color:'var(--color-text-sub)'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'2rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.5rem'}}>Sem fichas</div>
+            <div style={{fontSize:'.85rem',marginBottom:'1rem'}}>Crie uma ficha ou importe uma pronta</div>
+            <button onClick={()=>setTab('prontas')} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.25rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>Ver fichas prontas</button>
+          </div>
+        ):(
+          <div style={{display:'grid',gap:'.6rem'}}>
+            {plans.list.map(pl=>{
+              const isActive=plans.activeId===pl.id;
+              const exTotal=totalExsByDay(pl);
             return (
               <div key={pl.id} className="ds-card" style={{padding:'1rem 1.1rem',borderLeft:isActive?'2px solid var(--color-accent)':'2px solid transparent'}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.65rem'}}>
@@ -907,6 +1110,84 @@ const Plans=({plans,setPlans,goto,setToast})=>{
           })}
         </div>
       )}
+      </>)}
+
+      {/* ── FICHAS PRONTAS ── */}
+      {tab==='prontas'&&(
+        <div style={{display:'grid',gap:'1rem'}}>
+          {/* Filtros */}
+          <div className="ds-card" style={{padding:'.85rem 1.1rem',display:'grid',gap:'.6rem'}}>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Filtrar</div>
+            <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
+              {['todos','iniciante','intermediário','avançado'].map(l=>(
+                <button key={l} onClick={()=>setFilterLevel(l)} style={{background:filterLevel===l?'var(--color-accent)':'rgba(255,255,255,.04)',border:filterLevel===l?'none':'1px solid #222',borderRadius:'7px',padding:'.35rem .75rem',color:filterLevel===l?'#fff':'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,textTransform:'capitalize',cursor:'pointer'}}>
+                  {l==='todos'?'Todos níveis':l}
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
+              {['todos','3','4','5','6'].map(d=>(
+                <button key={d} onClick={()=>setFilterDays(d)} style={{background:filterDays===d?'var(--color-accent)':'rgba(255,255,255,.04)',border:filterDays===d?'none':'1px solid #222',borderRadius:'7px',padding:'.35rem .75rem',color:filterDays===d?'#fff':'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>
+                  {d==='todos'?'Todos dias':`${d} dias`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>{filteredPresets.length} ficha(s) encontrada(s)</div>
+
+          {filteredPresets.map(preset=>(
+            <div key={preset.id} className="ds-card" style={{padding:'1rem 1.1rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.6rem'}}>
+                <div style={{flex:1,marginRight:'.75rem'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1}}>{preset.name}</div>
+                  <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'.25rem'}}>{preset.description}</div>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'.3rem',flexShrink:0}}>
+                  <span style={{background:levelColor[preset.level]+'22',border:`1px solid ${levelColor[preset.level]}44`,borderRadius:'5px',padding:'.2rem .5rem',fontSize:'.6rem',fontWeight:700,color:levelColor[preset.level],textTransform:'uppercase',letterSpacing:'.05em'}}>{preset.level}</span>
+                  <span style={{fontSize:'.6rem',color:'var(--color-text-sub)',fontWeight:600}}>{preset.days} dias/sem</span>
+                </div>
+              </div>
+
+              {/* Day pills */}
+              <div style={{display:'flex',flexWrap:'wrap',gap:'.35rem',marginBottom:'.75rem'}}>
+                {DAYS.filter(d=>preset.byDay[d]&&preset.byDay[d].length>0).map(d=>(
+                  <span key={d} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'5px',padding:'.2rem .5rem',fontSize:'.62rem',fontWeight:700,color:'var(--color-accent)',textTransform:'uppercase'}}>
+                    {d.slice(0,3)} · {preset.byDay[d].length}ex
+                  </span>
+                ))}
+              </div>
+
+              {/* Preview modal trigger + import */}
+              <div style={{display:'flex',gap:'.5rem'}}>
+                <button onClick={()=>setPreviewPlan(previewPlan?.id===preset.id?null:preset)} style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.5rem',color:'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
+                  {previewPlan?.id===preset.id?'▲ Fechar':'▼ Ver exercícios'}
+                </button>
+                <button onClick={()=>importPreset(preset)} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 12px rgba(227,27,35,.25)'}}>
+                  + Usar esta ficha
+                </button>
+              </div>
+
+              {/* Expandable preview */}
+              {previewPlan?.id===preset.id&&(
+                <div style={{marginTop:'.75rem',borderTop:'1px solid var(--color-border)',paddingTop:'.75rem',display:'grid',gap:'.5rem'}}>
+                  {DAYS.filter(d=>preset.byDay[d]&&preset.byDay[d].length>0).map(d=>(
+                    <div key={d}>
+                      <div style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.25rem'}}>{d}</div>
+                      {preset.byDay[d].map((e,i)=>(
+                        <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'.2rem 0',borderBottom:'1px solid rgba(255,255,255,.03)'}}>
+                          <span style={{fontSize:'.78rem',color:'var(--color-text)'}}>{e.name}</span>
+                          <span style={{fontSize:'.72rem',color:'var(--color-text-sub)',fontWeight:600}}>{e.setsPlanned}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {sharePlan&&(
         <Modal onClose={()=>setSharePlan(null)}>
@@ -936,14 +1217,23 @@ const Builder=({planId,plans,setPlans,setToast})=>{
 
   useEffect(()=>save(LS.filters,filters),[filters]);
 
-  const list=useMemo(()=>EXS.filter(ex=>{
-    const nameOk=ex.name.toLowerCase().includes(q.toLowerCase());
-    const mOk=!m||ex.primary===m;
-    const sOk=!s||ex.subgroup===s;
-    const eOk=!e||ex.equipment===e;
-    const dOk=!d||ex.difficulty===d;
-    return nameOk&&mOk&&sOk&&eOk&&dOk;
-  }),[q,m,s,e,d]);
+  const list=useMemo(()=>{
+    const filtered = EXS.filter(ex=>{
+      const nameOk=ex.name.toLowerCase().includes(q.toLowerCase());
+      const mOk=!m||ex.primary===m;
+      const sOk=!s||ex.subgroup===s;
+      const eOk=!e||ex.equipment===e;
+      const dOk=!d||ex.difficulty===d;
+      return nameOk&&mOk&&sOk&&eOk&&dOk;
+    });
+    // Sort: by group order then alphabetically within group
+    const GROUP_ORDER=["Peito","Ombro","Trapézio","Costas","Bíceps","Tríceps","Antebraço","Lombar","Quadríceps","Posterior de Coxa","Glúteo","Abdutores","Adutores","Panturrilha","Abdômen"];
+    return filtered.sort((a,b)=>{
+      const gi = GROUP_ORDER.indexOf(a.primary) - GROUP_ORDER.indexOf(b.primary);
+      if(gi!==0) return gi;
+      return a.name.localeCompare(b.name,'pt');
+    });
+  },[q,m,s,e,d]);
 
   const dayItems=plan?.byDay?.[day]||[];
   const canAdd=(ex)=>!dayItems.some(it=>it.exId===ex.id);
@@ -1113,52 +1403,65 @@ const Builder=({planId,plans,setPlans,setToast})=>{
           {/* Results count */}
           <div style={{fontSize:'.65rem',color:'#333',marginBottom:'.5rem',textTransform:'uppercase',letterSpacing:'.06em'}}>{list.length} exercício(s)</div>
 
-          {/* Exercise list */}
+          {/* Exercise list grouped by muscle */}
           <div style={{display:'grid',gap:'.4rem',maxHeight:'360px',overflowY:'auto',paddingRight:'2px'}}>
-            {list.map(ex=>{
-              const added=!canAdd(ex);
-              return (
-                <div key={ex.id} style={{
-                  display:'grid',gridTemplateColumns:'1fr auto auto',alignItems:'center',gap:'.6rem',
-                  background:added?'rgba(227,27,35,.04)':'rgba(0,0,0,.25)',
-                  border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
-                  borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
-                }}>
-                  <div>
-                    <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'#ddd'}}>{ex.name}</div>
-                    <div style={{fontSize:'.65rem',color:'#333',marginTop:'1px'}}>{ex.primary} · {ex.equipment} · {ex.difficulty}</div>
-                  </div>
-                  {!added && (
-                    <select
-                      defaultValue="3"
-                      id={"sets_"+ex.id}
-                      style={{width:'3.2rem',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.8rem',color:'#fff',textAlign:'center'}}
-                      onClick={e=>e.stopPropagation()}
-                    >
-                      {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}x</option>)}
-                    </select>
-                  )}
-                  <button
-                    onClick={()=>{
-                      if(added) return;
-                      const sel=document.getElementById("sets_"+ex.id);
-                      addEx(ex, sel?Number(sel.value):3);
-                    }}
-                    disabled={added}
-                    style={{
-                      background:added?'transparent':'var(--color-accent)',
-                      border:added?'1px solid #1a1a1a':'none',
-                      borderRadius:'7px',padding:'.4rem .65rem',
-                      color:added?'#333':'#fff',
-                      fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',
-                      textTransform:'uppercase',letterSpacing:'.04em',cursor:added?'default':'pointer',
-                      whiteSpace:'nowrap'
+            {(()=>{
+              const rows=[];
+              let lastGroup=null;
+              list.forEach(ex=>{
+                if(ex.primary!==lastGroup){
+                  lastGroup=ex.primary;
+                  rows.push(
+                    <div key={'g_'+ex.primary} style={{padding:'.25rem .5rem',fontSize:'.6rem',fontWeight:800,color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.1em',borderBottom:'1px solid rgba(227,27,35,.15)',marginTop:rows.length?'.3rem':0}}>
+                      {ex.primary}
+                    </div>
+                  );
+                }
+                const added=!canAdd(ex);
+                rows.push(
+                  <div key={ex.id} style={{
+                    display:'grid',gridTemplateColumns:'1fr auto auto',alignItems:'center',gap:'.6rem',
+                    background:added?'rgba(227,27,35,.04)':'rgba(0,0,0,.25)',
+                    border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
+                    borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
+                  }}>
+                    <div>
+                      <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'var(--color-text)'}}>{ex.name}</div>
+                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.equipment} · {ex.difficulty}</div>
+                    </div>
+                    {!added && (
+                      <select
+                        defaultValue="3"
+                        id={"sets_"+ex.id}
+                        style={{width:'3.2rem',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.8rem',color:'var(--color-text)',textAlign:'center'}}
+                        onClick={ev=>ev.stopPropagation()}
+                      >
+                        {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}x</option>)}
+                      </select>
+                    )}
+                    <button
+                      onClick={()=>{
+                        if(added) return;
+                        const sel=document.getElementById("sets_"+ex.id);
+                        addEx(ex, sel?Number(sel.value):3);
+                      }}
+                      disabled={added}
+                      style={{
+                        background:added?'transparent':'var(--color-accent)',
+                        border:added?'1px solid #1a1a1a':'none',
+                        borderRadius:'7px',padding:'.4rem .65rem',
+                        color:added?'#333':'#fff',
+                        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',
+                        textTransform:'uppercase',letterSpacing:'.04em',cursor:added?'default':'pointer',
+                        whiteSpace:'nowrap'
                     }}
                   >{added?'✓ Na ficha':'+ Add'}</button>
-                </div>
-              );
-            })}
-            {list.length===0&&<div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.85rem'}}>Nenhum exercício encontrado</div>}
+                  </div>
+                );
+              });
+              if(list.length===0) rows.push(<div key="empty" style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)',fontSize:'.85rem'}}>Nenhum exercício encontrado</div>);
+              return rows;
+            })()}
           </div>
         </div>
       )}
@@ -1582,6 +1885,8 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
       )}
 
       {mode === 'free' && (
+        <div className="grid gap-3">
+        {prefs.showTimer && <DarkTimer prefs={prefs}/>}
         <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
           <div style={{fontSize:'.75rem',color:'#555',marginBottom:'1rem',textTransform:'uppercase',letterSpacing:'.05em'}}>Adicione exercícios conforme vai treinando</div>
 
@@ -1644,6 +1949,7 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
               <Button variant="accent" onClick={freeSaveSession} full>Salvar Treino</Button>
             </div>
           )}
+        </div>
         </div>
       )}
     </div>
@@ -1950,27 +2256,7 @@ const Profile=({prefs,setPrefs,history})=>{
   const photoRef=useRef(null);
   const fileRef=useRef(null);
 
-  useEffect(()=>{
-    if(theme==='light'){
-      document.documentElement.style.setProperty('--color-bg','#f2f2f2');
-      document.documentElement.style.setProperty('--color-card','#fff');
-      document.documentElement.style.setProperty('--color-card-soft','#fafafa');
-      document.documentElement.style.setProperty('--color-border','#ddd');
-      document.documentElement.style.setProperty('--color-text','#111');
-      document.documentElement.style.setProperty('--color-text-sub','#666');
-      document.body.style.background='#f2f2f2';
-      document.body.style.color='#111';
-    } else {
-      document.documentElement.style.setProperty('--color-bg','#080808');
-      document.documentElement.style.setProperty('--color-card','#0f0f0f');
-      document.documentElement.style.setProperty('--color-card-soft','#141414');
-      document.documentElement.style.setProperty('--color-border','#1e1e1e');
-      document.documentElement.style.setProperty('--color-text','#f0f0f0');
-      document.documentElement.style.setProperty('--color-text-sub','#888');
-      document.body.style.background='#080808';
-      document.body.style.color='#f0f0f0';
-    }
-  },[theme]);
+  // Theme is managed by App component
 
   const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==prefs.vibrate)||(goal!==prefs.weeklyGoal)||((showTimer)!==(prefs.showTimer!==false))||((Number(timerPreset||0))!==(Number(prefs.timerPreset||60)))||((Number(rir))!==(Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2)))||(chartsPremium!==!!prefs.chartsPremium)||(theme!==(prefs.theme||'dark'));
 
@@ -2053,10 +2339,10 @@ const Profile=({prefs,setPrefs,history})=>{
           </div>
 
           <div>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tema</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tema</div>
             <div className="mode-toggle">
-              <button className={"mode-toggle-btn"+(theme==='dark'?' active':'')} onClick={()=>setTheme('dark')}>Dark</button>
-              <button className={"mode-toggle-btn"+(theme==='light'?' active':'')} onClick={()=>setTheme('light')}>Light</button>
+              <button className={"mode-toggle-btn"+(theme==='dark'?' active':'')} onClick={()=>{setTheme('dark');setPrefs(p=>({...p,theme:'dark'}));}}>Dark</button>
+              <button className={"mode-toggle-btn"+(theme==='light'?' active':'')} onClick={()=>{setTheme('light');setPrefs(p=>({...p,theme:'light'}));}}>Light</button>
             </div>
           </div>
 
@@ -2156,19 +2442,27 @@ const Profile=({prefs,setPrefs,history})=>{
               </div>
             );
           })()}
+
+          {/* Tutorial reset */}
+          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Tutorial</div>
+            <button onClick={()=>{localStorage.removeItem('darkset.launched');window.location.reload();}} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
+              Ver novamente
+            </button>
+          </div>
         </div>
       )}
 
       {tab==='progresso'&&(
-        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Fotos de Progresso</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Fotos de Progresso</div>
             <button onClick={()=>photoRef.current&&photoRef.current.click()} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
             <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProgressPhoto}/>
           </div>
 
           {progressPhotos.length===0&&!addingPhoto&&(
-            <div style={{textAlign:'center',padding:'1.5rem 0',color:'#222',fontSize:'.85rem'}}>Nenhuma foto adicionada ainda</div>
+            <div style={{textAlign:'center',padding:'1.5rem 0',color:'var(--color-text-sub)',fontSize:'.85rem'}}>Nenhuma foto adicionada ainda</div>
           )}
 
           {progressPhotos.length>0&&(
@@ -2187,7 +2481,7 @@ const Profile=({prefs,setPrefs,history})=>{
           )}
 
           {addingPhoto&&(
-            <div style={{background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'8px',padding:'.75rem',display:'grid',gap:'.5rem'}}>
+            <div style={{background:'var(--color-card-soft)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.75rem',display:'grid',gap:'.5rem'}}>
               {pendingPhotoData&&<img src={pendingPhotoData} style={{width:'100%',maxHeight:'160px',objectFit:'cover',borderRadius:'6px'}} alt="preview"/>}
               <input type="date" value={photoDate} onChange={e=>setPhotoDate(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
               <input placeholder="Descricao (ex: Inicio, Mes 1...)" value={photoLabel} onChange={e=>setPhotoLabel(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
@@ -2206,6 +2500,28 @@ const Profile=({prefs,setPrefs,history})=>{
 
 function App(){
   const [screen,setScreen]=useState("home");
+  // Apply saved theme immediately on load
+  useEffect(()=>{
+    try{
+      const p=JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
+      if(p.theme==='light') document.documentElement.setAttribute('data-theme','light');
+    }catch(_){}
+  },[]);
+  const [showSplash,setShowSplash]=useState(()=>!localStorage.getItem('darkset.launched'));
+  const [tutStep,setTutStep]=useState(0);
+  const tutorialSteps=[
+    {title:"Bem-vindo ao DarkSet",body:"Seu app de treino pessoal. Vamos te mostrar as principais funcionalidades em 4 passos rápidos.",icon:"💪"},
+    {title:"Monte sua ficha",body:"Na aba MONTAR você adiciona exercícios, define séries e organiza os dias da semana do seu jeito.",icon:"📋"},
+    {title:"Registre seus treinos",body:"Na aba TREINO você executa a ficha série por série. Seus dados ficam salvos no histórico automaticamente.",icon:"⚡"},
+    {title:"Acompanhe seu progresso",body:"No HISTÓRICO você vê todos os treinos, volume total e detectamos seus recordes pessoais (PR) automaticamente.",icon:"📈"},
+    {title:"Sincronize entre devices",body:"Faça login no PERFIL para salvar seus dados na nuvem e acessar de qualquer celular.",icon:"☁️"},
+  ];
+
+  // Dismiss splash after first open
+  const finishSplash=()=>{
+    localStorage.setItem('darkset.launched','1');
+    setShowSplash(false);
+  };
   const [plans,setPlans]=usePlans();
   const [history,setHistory]=useHistory();
   const [prefs,setPrefs]=usePrefs();
@@ -2214,6 +2530,14 @@ function App(){
   const [viewerPlanId,setViewerPlanId]=useState(null);
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
+
+  // Sync theme with prefs — runs whenever prefs.theme changes
+  useEffect(()=>{
+    const t = prefs.theme||'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    document.body.style.background = t==='light'?'#f0f0f0':'';
+    document.body.style.color = t==='light'?'#111':'';
+  },[prefs.theme]);
 
   // Import via ?import= na URL
   useEffect(()=>{
@@ -2256,6 +2580,47 @@ function App(){
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
+      {/* Splash screen */}
+      {showSplash&&(
+        <div style={{position:'fixed',inset:0,background:'#080808',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
+          {tutStep===0&&(
+            <div style={{textAlign:'center',animation:'fadeIn .5s ease'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'4rem',textTransform:'uppercase',lineHeight:1,marginBottom:'.25rem',letterSpacing:'.02em'}}>
+                DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+              </div>
+              <div style={{fontSize:'.75rem',color:'#333',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:'3rem'}}>Seu treino · Sua evolução</div>
+              <button onClick={()=>setTutStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'1rem 2.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',boxShadow:'0 0 30px rgba(227,27,35,.4)'}}>
+                Começar
+              </button>
+              <div style={{marginTop:'1.5rem'}}>
+                <button onClick={finishSplash} style={{background:'none',border:'none',color:'#333',fontSize:'.75rem',cursor:'pointer',textDecoration:'underline'}}>Já conheço o app</button>
+              </div>
+            </div>
+          )}
+          {tutStep>0&&tutStep<=tutorialSteps.length&&(()=>{
+            const step=tutorialSteps[tutStep-1];
+            const total=tutorialSteps.length;
+            return (
+              <div style={{maxWidth:'340px',width:'100%',textAlign:'center'}}>
+                <div style={{fontSize:'3.5rem',marginBottom:'1.5rem'}}>{step.icon}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:'.75rem',color:'#fff'}}>{step.title}</div>
+                <div style={{fontSize:'.9rem',color:'#888',lineHeight:1.6,marginBottom:'2.5rem'}}>{step.body}</div>
+                <div style={{display:'flex',gap:'.4rem',justifyContent:'center',marginBottom:'2rem'}}>
+                  {tutorialSteps.map((_,i)=>(
+                    <div key={i} style={{width:i===tutStep-1?'20px':'6px',height:'6px',borderRadius:'3px',background:i===tutStep-1?'var(--color-accent)':'#222',transition:'all .3s'}}></div>
+                  ))}
+                </div>
+                <div style={{display:'flex',gap:'.75rem',justifyContent:'center'}}>
+                  {tutStep>1&&<button onClick={()=>setTutStep(tutStep-1)} style={{background:'rgba(255,255,255,.06)',border:'1px solid #222',borderRadius:'9px',padding:'.75rem 1.5rem',color:'#777',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>Voltar</button>}
+                  <button onClick={()=>tutStep<total?setTutStep(tutStep+1):finishSplash()} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.75rem 1.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 20px rgba(227,27,35,.3)'}}>
+                    {tutStep<total?'Próximo':'Entrar no app'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
       <header className="ds-hdr">
         <LogoRow/>
         <nav className="ds-nav flex gap-2">
