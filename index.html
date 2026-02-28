@@ -290,6 +290,10 @@
     [data-theme="light"] body { background-color: var(--color-bg) !important; color: var(--color-text) !important; }
     [data-theme="light"] #root { background-color: var(--color-bg); }
     [data-theme="light"] body::before { opacity: 0.05; }
+    [data-theme="light"] .ds-card { background: #ffffff !important; border-color: #e0e0e0 !important; }
+    [data-theme="light"] .ds-card-soft { background: #f8f8f8 !important; }
+    [data-theme="light"] .ds-section-title { color: #111 !important; }
+    [data-theme="light"] .set-row input, [data-theme="light"] .set-row select { background: rgba(0,0,0,.06) !important; color: #111 !important; border-color: #ddd !important; }
     [data-theme="light"] input, [data-theme="light"] select, [data-theme="light"] textarea {
       background-color: rgba(0,0,0,.06) !important;
       color: var(--color-text) !important;
@@ -1469,6 +1473,302 @@ const Builder=({planId,plans,setPlans,setToast})=>{
   );
 };
 
+// ═══════════════════════════════════════════════════════
+// PREMIUM SYSTEM
+// ═══════════════════════════════════════════════════════
+const PREMIUM_KEY = 'darkset.premium';
+const isPremium = () => {
+  try { return JSON.parse(localStorage.getItem(PREMIUM_KEY)||'false'); } catch(_){ return false; }
+};
+const setPremiumUnlocked = (v) => localStorage.setItem(PREMIUM_KEY, JSON.stringify(v));
+
+// Locked overlay shown over premium features
+const PremiumLock = ({feature, onUnlock}) => (
+  <div style={{position:'relative',overflow:'hidden',borderRadius:'12px'}}>
+    <div style={{filter:'blur(4px)',pointerEvents:'none',userSelect:'none',opacity:.4}}>
+      <div style={{height:'160px',background:'var(--color-card)',borderRadius:'12px'}}/>
+    </div>
+    <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'.75rem',background:'rgba(8,8,8,.85)',borderRadius:'12px',border:'1px solid rgba(227,27,35,.3)'}}>
+      <div style={{fontSize:'2rem'}}>🔒</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'#fff',textAlign:'center',letterSpacing:'.04em'}}>{feature}</div>
+      <div style={{fontSize:'.72rem',color:'#888',textAlign:'center',maxWidth:'220px'}}>Disponível no DarkSet Premium</div>
+      <button onClick={onUnlock} style={{background:'linear-gradient(135deg,#e31b23,#a81018)',border:'none',borderRadius:'8px',padding:'.6rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 20px rgba(227,27,35,.4)'}}>
+        Desbloquear Premium
+      </button>
+    </div>
+  </div>
+);
+
+// Premium modal / upsell
+const PremiumModal = ({onClose, onUnlock}) => (
+  <Modal onClose={onClose}>
+    <div style={{textAlign:'center',padding:'.5rem 0'}}>
+      <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>⚡</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:'.25rem'}}>DARK<span style={{color:'var(--color-accent)'}}>SET</span> PREMIUM</div>
+      <div style={{fontSize:'.8rem',color:'var(--color-text-sub)',marginBottom:'1.5rem'}}>Desbloqueie tudo e evolua mais rápido</div>
+
+      {[
+        {icon:'📊',title:'Gráficos de evolução',desc:'Veja seus PRs e volume ao longo do tempo'},
+        {icon:'📋',title:'Fichas Premium',desc:'Acesso a fichas avançadas exclusivas'},
+        {icon:'🏃',title:'Módulo Cardio',desc:'Registre corrida, bike, HIIT e mais'},
+        {icon:'☁️',title:'Backup na nuvem',desc:'Seus dados sempre seguros e sincronizados'},
+      ].map((f,i)=>(
+        <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.6rem 0',borderBottom:'1px solid var(--color-border)',textAlign:'left'}}>
+          <span style={{fontSize:'1.3rem',flexShrink:0}}>{f.icon}</span>
+          <div>
+            <div style={{fontSize:'.85rem',fontWeight:700,color:'var(--color-text)'}}>{f.title}</div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{f.desc}</div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{marginTop:'1.25rem',padding:'.85rem',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',marginBottom:'1rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:'var(--color-accent)'}}>R$ 14,90/mês</div>
+        <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>ou R$ 99,90/ano · Cancele quando quiser</div>
+      </div>
+
+      <button onClick={onUnlock} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#a81018)',border:'none',borderRadius:'10px',padding:'.85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 24px rgba(227,27,35,.35)',marginBottom:'.5rem'}}>
+        Assinar Premium
+      </button>
+      <button onClick={onClose} style={{width:'100%',background:'none',border:'none',color:'var(--color-text-sub)',fontSize:'.75rem',cursor:'pointer',padding:'.4rem'}}>
+        Continuar grátis
+      </button>
+    </div>
+  </Modal>
+);
+
+// ═══════════════════════════════════════════════════════
+// CARDIO MODULE
+// ═══════════════════════════════════════════════════════
+const CARDIO_TYPES = [
+  {id:'corrida',    name:'Corrida',      icon:'🏃', metrics:['distancia','tempo','pace']},
+  {id:'bike',       name:'Bike',         icon:'🚴', metrics:['distancia','tempo','velocidade']},
+  {id:'hiit',       name:'HIIT',         icon:'⚡', metrics:['tempo','rounds']},
+  {id:'eliptico',   name:'Elíptico',     icon:'🔄', metrics:['tempo','calorias']},
+  {id:'corda',      name:'Corda',        icon:'🪢', metrics:['tempo','rounds']},
+  {id:'natacao',    name:'Natação',       icon:'🏊', metrics:['distancia','tempo']},
+  {id:'caminhada',  name:'Caminhada',    icon:'🚶', metrics:['distancia','tempo']},
+  {id:'escada',     name:'Escada',       icon:'🪜', metrics:['tempo','andares']},
+  {id:'livre',      name:'Livre',        icon:'💪', metrics:['tempo','calorias']},
+];
+
+const CARDIO_HISTORY_KEY = 'darkset.cardio.history';
+const loadCardioHistory = () => {
+  try { return JSON.parse(localStorage.getItem(CARDIO_HISTORY_KEY)||'[]'); } catch(_){ return []; }
+};
+const saveCardioHistory = (data) => {
+  try { localStorage.setItem(CARDIO_HISTORY_KEY, JSON.stringify(data)); } catch(_){}
+};
+
+const Cardio = ({goto, setToast}) => {
+  const [view, setView] = useState('home'); // 'home' | 'session' | 'history'
+  const [selectedType, setSelectedType] = useState(null);
+  const [history, setHistory] = useState(loadCardioHistory);
+
+  // Session state
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [startTs, setStartTs] = useState(null);
+  const [metrics, setMetrics] = useState({distancia:'', calorias:'', rounds:'', andares:'', pace:'', velocidade:''});
+  const [notes, setNotes] = useState('');
+  const timerRef = useRef(null);
+
+  useEffect(()=>{
+    if(running){
+      timerRef.current = setInterval(()=>setElapsed(e=>e+1),1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return ()=>clearInterval(timerRef.current);
+  },[running]);
+
+  const startSession = (type) => {
+    setSelectedType(type);
+    setElapsed(0); setRunning(false); setMetrics({distancia:'',calorias:'',rounds:'',andares:'',pace:'',velocidade:''});
+    setNotes(''); setStartTs(new Date().toISOString());
+    setView('session');
+  };
+
+  const toggleTimer = () => setRunning(r=>!r);
+
+  const resetTimer = () => { setRunning(false); setElapsed(0); };
+
+  const saveSession = () => {
+    const entry = {
+      id: Date.now(),
+      date: startTs||new Date().toISOString(),
+      type: selectedType.id,
+      typeName: selectedType.name,
+      typeIcon: selectedType.icon,
+      tempo: elapsed,
+      metrics: {...metrics},
+      notes,
+    };
+    const updated = [entry, ...history];
+    setHistory(updated);
+    saveCardioHistory(updated);
+    setToast('Cardio salvo! 🏃');
+    setView('home');
+    setRunning(false); setElapsed(0);
+  };
+
+  const deleteEntry = (id) => {
+    const updated = history.filter(h=>h.id!==id);
+    setHistory(updated);
+    saveCardioHistory(updated);
+  };
+
+  const fmt = (s) => {
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+    return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  };
+
+  const toDate = (iso) => { try{ const d=new Date(iso); return d.toLocaleDateString('pt-BR'); }catch(_){return '';} };
+
+  if(view==='session' && selectedType){
+    const hasMetric = (m) => selectedType.metrics.includes(m);
+    return (
+      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.04em'}}>
+              {selectedType.icon} {selectedType.name}
+            </div>
+            <button onClick={()=>{setView('home');setRunning(false);setElapsed(0);}} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.3rem .75rem',color:'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
+          </div>
+
+          {/* Big timer */}
+          <div style={{textAlign:'center',padding:'1.5rem 0'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'4.5rem',letterSpacing:'.04em',lineHeight:1,color:running?'var(--color-accent)':'var(--color-text)'}}>{fmt(elapsed)}</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginTop:'.25rem'}}>tempo</div>
+          </div>
+
+          <div style={{display:'flex',gap:'.75rem',justifyContent:'center',marginBottom:'1rem'}}>
+            <button onClick={toggleTimer} style={{flex:1,background:running?'rgba(227,27,35,.15)':'var(--color-accent)',border:running?'1px solid rgba(227,27,35,.3)':'none',borderRadius:'10px',padding:'.85rem',color:running?'var(--color-accent)':'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer'}}>
+              {running?'⏸ Pausar':'▶ Iniciar'}
+            </button>
+            <button onClick={resetTimer} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.85rem 1rem',color:'var(--color-text-sub)',fontSize:'.85rem',cursor:'pointer'}}>↺</button>
+          </div>
+        </div>
+
+        {/* Metrics */}
+        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.75rem'}}>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Dados do treino</div>
+
+          {hasMetric('distancia')&&(
+            <div>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Distância (km)</div>
+              <input type="number" step="0.1" placeholder="0.0" value={metrics.distancia} onChange={e=>setMetrics(m=>({...m,distancia:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
+            </div>
+          )}
+          {hasMetric('calorias')&&(
+            <div>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Calorias (kcal)</div>
+              <input type="number" placeholder="0" value={metrics.calorias} onChange={e=>setMetrics(m=>({...m,calorias:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
+            </div>
+          )}
+          {hasMetric('rounds')&&(
+            <div>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Rounds</div>
+              <input type="number" placeholder="0" value={metrics.rounds} onChange={e=>setMetrics(m=>({...m,rounds:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
+            </div>
+          )}
+          {hasMetric('andares')&&(
+            <div>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Andares</div>
+              <input type="number" placeholder="0" value={metrics.andares} onChange={e=>setMetrics(m=>({...m,andares:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
+            </div>
+          )}
+
+          <div>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Observações</div>
+            <textarea placeholder="Como foi o treino?" value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.85rem',color:'var(--color-text)',resize:'none'}}/>
+          </div>
+
+          <button onClick={saveSession} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
+            Salvar Cardio ✓
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if(view==='history'){
+    return (
+      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase'}}>Histórico Cardio</div>
+          <button onClick={()=>setView('home')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.35rem .85rem',color:'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
+        </div>
+        {history.length===0&&(
+          <div style={{textAlign:'center',padding:'3rem',color:'var(--color-text-sub)'}}>
+            <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🏃</div>
+            <div>Nenhum cardio registrado ainda</div>
+          </div>
+        )}
+        {history.map(h=>(
+          <div key={h.id} className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase'}}>{h.typeIcon} {h.typeName}</div>
+                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{toDate(h.date)}</div>
+              </div>
+              <button onClick={()=>deleteEntry(h.id)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'.25rem .5rem',color:'#e31b23',fontSize:'.75rem',cursor:'pointer'}}>×</button>
+            </div>
+            <div style={{display:'flex',gap:'1rem',marginTop:'.6rem',flexWrap:'wrap'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',color:'var(--color-accent)'}}>{fmt(h.tempo||0)}</div>
+                <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>tempo</div>
+              </div>
+              {h.metrics.distancia&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.distancia}km</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>distância</div></div>}
+              {h.metrics.calorias&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.calorias}</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>kcal</div></div>}
+              {h.metrics.rounds&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.rounds}x</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>rounds</div></div>}
+              {h.metrics.andares&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.andares}</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>andares</div></div>}
+            </div>
+            {h.notes&&<div style={{marginTop:'.5rem',fontSize:'.75rem',color:'var(--color-text-sub)',fontStyle:'italic'}}>"{h.notes}"</div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Home view
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>CARDIO</span></div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Registre seu cardio</div>
+        </div>
+        {history.length>0&&(
+          <button onClick={()=>setView('history')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>Histórico ({history.length})</button>
+        )}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.6rem'}}>
+        {CARDIO_TYPES.map(type=>(
+          <button key={type.id} onClick={()=>startSession(type)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem .5rem',display:'flex',flexDirection:'column',alignItems:'center',gap:'.4rem',cursor:'pointer',transition:'all .15s'}}>
+            <span style={{fontSize:'1.8rem'}}>{type.icon}</span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',letterSpacing:'.04em',color:'var(--color-text)'}}>{type.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Last cardio */}
+      {history.length>0&&(
+        <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Último Cardio</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>{history[0].typeIcon} {history[0].typeName}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',color:'var(--color-accent)'}}>{fmt(history[0].tempo||0)}</div>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{toDate(history[0].date)}{history[0].metrics.distancia?' · '+history[0].metrics.distancia+'km':''}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
   const [day, setDay] = React.useState(DAYS[0]);
@@ -2234,18 +2534,19 @@ const History=({history,setHistory,prefs})=>{
 // Profile
 const Profile=({prefs,setPrefs,history})=>{
   const [tab,setTab]=useState('config');
-  const [name,setName]=useState(prefs.name);
+  const [name,setName]=useState(prefs.name||'');
   const [avatarUrl,setAvatarUrl]=useState(prefs.avatarUrl||null);
-  const [unit,setUnit]=useState(prefs.unit);
-  const [vibrate,setVibrate]=useState(prefs.vibrate);
-  const [goal,setGoal]=useState(prefs.weeklyGoal);
+  const [unit,setUnit]=useState(prefs.unit||'kg');
+  const [vibrate,setVibrate]=useState(prefs.vibrate!==false);
+  const [goal,setGoal]=useState(prefs.weeklyGoal||5);
   const [showTimer,setShowTimer]=useState(prefs.showTimer!==false);
   const [timerPreset,setTimerPreset]=useState(Number(prefs.timerPreset||60));
   const [rir,setRir]=useState(typeof prefs.rirDefault==='number'?prefs.rirDefault:2);
-  const [chartsPremium,setChartsPremium]=useState(!!prefs.chartsPremium);
   const [theme,setTheme]=useState(prefs.theme||'dark');
   const [uploading,setUploading]=useState(false);
   const [uploadErr,setUploadErr]=useState(null);
+  const [syncMsg,setSyncMsg]=useState('');
+  // Progresso
   const [progressPhotos,setProgressPhotos]=useState(()=>{
     try{return JSON.parse(localStorage.getItem('darkset.progress')||'[]');}catch(_){return [];}
   });
@@ -2256,28 +2557,24 @@ const Profile=({prefs,setPrefs,history})=>{
   const photoRef=useRef(null);
   const fileRef=useRef(null);
 
-  // Theme is managed by App component
+  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(goal!==prefs.weeklyGoal)||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2));
 
-  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==prefs.vibrate)||(goal!==prefs.weeklyGoal)||((showTimer)!==(prefs.showTimer!==false))||((Number(timerPreset||0))!==(Number(prefs.timerPreset||60)))||((Number(rir))!==(Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2)))||(chartsPremium!==!!prefs.chartsPremium)||(theme!==(prefs.theme||'dark'));
+  const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme});
+
+  const changeTheme=(t)=>{setTheme(t);setPrefs(p=>({...p,theme:t}));};
 
   const handlePhotoChange=async(e)=>{
     const file=e.target.files&&e.target.files[0];
     if(!file) return;
-    if(!file.type.startsWith('image/')){setUploadErr('Selecione uma imagem.');return;}
     if(file.size>5*1024*1024){setUploadErr('Imagem muito grande (max 5MB).');return;}
     setUploadErr(null); setUploading(true);
     try{
-      if(!window.firebase||!firebase.storage){setUploadErr('Firebase Storage nao disponivel.');setUploading(false);return;}
       const user=JSON.parse(localStorage.getItem('darkset.user')||'null');
       if(!user){setUploadErr('Faca login para enviar foto.');setUploading(false);return;}
-      const ext=file.name.split('.').pop()||'jpg';
-      const path='avatars/'+user.uid+'/avatar.'+ext;
-      const ref=firebase.storage().ref(path);
-      await ref.put(file);
-      const url=await ref.getDownloadURL();
-      setAvatarUrl(url);
-    }catch(err){setUploadErr('Erro: '+(err.message||''));}
-    finally{setUploading(false);}
+      const reader=new FileReader();
+      reader.onload=ev=>{ setAvatarUrl(ev.target.result); setUploading(false); };
+      reader.readAsDataURL(file);
+    }catch(err){setUploadErr('Erro: '+(err.message||''));setUploading(false);}
   };
 
   const handleProgressPhoto=(e)=>{
@@ -2286,8 +2583,8 @@ const Profile=({prefs,setPrefs,history})=>{
     const reader=new FileReader();
     reader.onload=ev=>{setPendingPhotoData(ev.target.result);setAddingPhoto(true);};
     reader.readAsDataURL(file);
+    e.target.value='';
   };
-
   const saveProgressPhoto=()=>{
     if(!pendingPhotoData) return;
     const newPhotos=[...progressPhotos,{date:photoDate,label:photoLabel||'Foto',data:pendingPhotoData,id:Date.now()}];
@@ -2295,59 +2592,77 @@ const Profile=({prefs,setPrefs,history})=>{
     try{localStorage.setItem('darkset.progress',JSON.stringify(newPhotos));}catch(_){}
     setAddingPhoto(false); setPendingPhotoData(null); setPhotoLabel('');
   };
-
   const deletePhoto=(id)=>{
     const updated=progressPhotos.filter(p=>p.id!==id);
     setProgressPhotos(updated);
     try{localStorage.setItem('darkset.progress',JSON.stringify(updated));}catch(_){}
   };
 
-  const displayImg=avatarUrl||(prefs.avatarUrl||null);
-  const toBR=(iso)=>{const [y,m,d]=iso.split('-');return d+'/'+m+'/'+y;};
+  const doSync=async()=>{
+    const uid=getUID();
+    if(!uid){setSyncMsg('Faca login primeiro.');return;}
+    if(!window._db){setSyncMsg('Firebase nao conectado.');return;}
+    window._DS_LAST_ERROR=null;
+    setSyncMsg('Sincronizando...');
+    try{
+      await window.DSSync.pull(uid);
+      setSyncMsg(window._DS_LAST_ERROR?'Erro: '+window._DS_LAST_ERROR:'Sincronizado!');
+      setTimeout(()=>setSyncMsg(''),3000);
+    }catch(e){setSyncMsg('Erro: '+e.message);}
+  };
+
+  const uid=getUID();
+  const displayImg=avatarUrl||null;
+  const toBR=(iso)=>{if(!iso)return '';const[y,m,d]=iso.split('-');return d+'/'+m+'/'+y;};
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+
+      {/* Header */}
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
         <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
           <div style={{position:'relative'}}>
             {displayImg
-              ?<img src={displayImg} style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid #222',objectFit:'cover'}} alt="avatar"/>
-              :<div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid #222',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.3rem',color:'#333'}}>{name?name.slice(0,2).toUpperCase():'DS'}</div>
+              ?<img src={displayImg} style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid var(--color-border)',objectFit:'cover'}} alt="avatar"/>
+              :<div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid var(--color-border)',background:'var(--color-card-soft)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.3rem',color:'var(--color-text-sub)'}}>{name?name.slice(0,2).toUpperCase():'DS'}</div>
             }
             <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{position:'absolute',bottom:'-2px',right:'-2px',width:'20px',height:'20px',borderRadius:'50%',background:'var(--color-accent)',border:'2px solid var(--color-bg)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.65rem',color:'#fff',fontWeight:700}}>e</button>
             <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhotoChange}/>
           </div>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>{name||'Sem nome'}</div>
-            <div style={{fontSize:'.7rem',color:'#444',marginTop:'2px'}}>Meta: {goal} treinos/semana</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,color:'var(--color-text)'}}>{name||'Sem nome'}</div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>Meta: {goal} treinos/semana</div>
           </div>
         </div>
-        {uploading&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'#555'}}>Enviando foto...</div>}
-        {uploadErr&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'#e31b23'}}>{uploadErr}</div>}
+        {uploading&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
+        {uploadErr&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'var(--color-accent)'}}>{uploadErr}</div>}
       </div>
 
+      {/* Tabs */}
       <div className="mode-toggle">
-        <button className={"mode-toggle-btn"+(tab==='config'?' active':'')} onClick={()=>setTab('config')}>Configuracoes</button>
+        <button className={"mode-toggle-btn"+(tab==='config'?' active':'')} onClick={()=>setTab('config')}>Configurações</button>
         <button className={"mode-toggle-btn"+(tab==='progresso'?' active':'')} onClick={()=>setTab('progresso')}>Progresso</button>
       </div>
 
+      {/* ── CONFIG ── */}
       {tab==='config'&&(
-        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'1rem'}}>
+        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'1rem',background:'var(--color-card)'}}>
+
           <div>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem'}}>Nome</div>
-            <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}} placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)}/>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem'}}>Nome</div>
+            <input style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}} placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)}/>
           </div>
 
           <div>
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tema</div>
             <div className="mode-toggle">
-              <button className={"mode-toggle-btn"+(theme==='dark'?' active':'')} onClick={()=>{setTheme('dark');setPrefs(p=>({...p,theme:'dark'}));}}>Dark</button>
-              <button className={"mode-toggle-btn"+(theme==='light'?' active':'')} onClick={()=>{setTheme('light');setPrefs(p=>({...p,theme:'light'}));}}>Light</button>
+              <button className={"mode-toggle-btn"+(theme==='dark'?' active':'')} onClick={()=>changeTheme('dark')}>🌑 Dark</button>
+              <button className={"mode-toggle-btn"+(theme==='light'?' active':'')} onClick={()=>changeTheme('light')}>☀️ Light</button>
             </div>
           </div>
 
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Unidade</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Unidade</div>
             <div className="mode-toggle" style={{width:'auto'}}>
               <button className={"mode-toggle-btn"+(unit==='kg'?' active':'')} onClick={()=>setUnit('kg')}>kg</button>
               <button className={"mode-toggle-btn"+(unit==='lb'?' active':'')} onClick={()=>setUnit('lb')}>lb</button>
@@ -2355,144 +2670,119 @@ const Profile=({prefs,setPrefs,history})=>{
           </div>
 
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Vibracao ao salvar</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Vibração ao salvar</div>
             <Switch checked={vibrate} onChange={setVibrate}/>
           </div>
 
           <div>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Meta semanal</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Meta semanal</div>
             <div style={{display:'flex',gap:'.4rem'}}>
               {[3,4,5,6,7].map(n=>(
-                <button key={n} onClick={()=>setGoal(n)} style={{flex:1,padding:'.4rem 0',borderRadius:'7px',background:goal===n?'var(--color-accent)':'rgba(0,0,0,.3)',border:goal===n?'none':'1px solid #1a1a1a',color:goal===n?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n}x</button>
+                <button key={n} onClick={()=>setGoal(n)} style={{flex:1,padding:'.4rem 0',borderRadius:'7px',background:goal===n?'var(--color-accent)':'rgba(0,0,0,.2)',border:goal===n?'none':'1px solid var(--color-border)',color:goal===n?'#fff':'var(--color-text-sub)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n}x</button>
               ))}
             </div>
           </div>
 
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>DarkTimer</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>DarkTimer</div>
             <Switch checked={showTimer} onChange={setShowTimer}/>
           </div>
 
-          {showTimer&&(
-            <div>
-              <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tempo padrao</div>
-              <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
-                {[30,60,90,120,150,180].map(t=>(
-                  <button key={t} onClick={()=>setTimerPreset(t)} style={{padding:'.35rem .65rem',borderRadius:'7px',background:timerPreset===t?'var(--color-accent)':'rgba(0,0,0,.3)',border:timerPreset===t?'none':'1px solid #1a1a1a',color:timerPreset===t?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>
-                    {t<60?t+'s':t===60?'1min':t===90?'1m30':t===120?'2min':t===150?'2m30':'3min'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>RIR padrao</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tempo padrão (s)</div>
             <div style={{display:'flex',gap:'.4rem'}}>
-              {[0,1,2,3,4].map(n=>(
-                <button key={n} onClick={()=>setRir(n)} style={{flex:1,padding:'.4rem 0',borderRadius:'7px',background:rir===n?'var(--color-accent)':'rgba(0,0,0,.3)',border:rir===n?'none':'1px solid #1a1a1a',color:rir===n?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n===0?'F':n}</button>
+              {[30,45,60,90,120].map(n=>(
+                <button key={n} onClick={()=>setTimerPreset(n)} style={{flex:1,padding:'.35rem 0',borderRadius:'7px',background:timerPreset===n?'var(--color-accent)':'rgba(0,0,0,.2)',border:timerPreset===n?'none':'1px solid var(--color-border)',color:timerPreset===n?'#fff':'var(--color-text-sub)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>{n}s</button>
               ))}
             </div>
           </div>
 
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div>
-              <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Graficos avancados</div>
-              <div style={{fontSize:'.65rem',color:'#333',marginTop:'1px'}}>Habilita analise IIE no Historico</div>
+          <div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>RIR padrão</div>
+            <div style={{display:'flex',gap:'.4rem'}}>
+              {[0,1,2,3,4].map(n=>(
+                <button key={n} onClick={()=>setRir(n)} style={{flex:1,padding:'.35rem 0',borderRadius:'7px',background:rir===n?'var(--color-accent)':'rgba(0,0,0,.2)',border:rir===n?'none':'1px solid var(--color-border)',color:rir===n?'#fff':'var(--color-text-sub)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n}</button>
+              ))}
             </div>
-            <Switch checked={chartsPremium} onChange={setChartsPremium}/>
           </div>
 
-          <button disabled={!dirty||uploading} onClick={()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium,theme})} style={{background:dirty&&!uploading?'var(--color-accent)':'rgba(255,255,255,.04)',border:'none',borderRadius:'8px',padding:'.65rem',color:dirty&&!uploading?'#fff':'#333',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:dirty&&!uploading?'pointer':'default',width:'100%',transition:'all .15s'}}>
-            {dirty?'Salvar alteracoes':'Sem alteracoes'}
+          <button disabled={!dirty||uploading} onClick={savePrefs} style={{background:dirty&&!uploading?'var(--color-accent)':'rgba(0,0,0,.15)',border:'none',borderRadius:'8px',padding:'.65rem',color:dirty&&!uploading?'#fff':'var(--color-text-sub)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:dirty&&!uploading?'pointer':'default',width:'100%',transition:'all .15s'}}>
+            {dirty?'Salvar alterações':'Sem alterações'}
           </button>
 
-          {/* Sync section */}
-          {(()=>{
-            const uid=getUID();
-            const [syncMsg,setSyncMsg]=useState('');
-            const doSync=async()=>{
-              if(!uid){setSyncMsg('Faca login primeiro.');return;}
-              if(!window._db){setSyncMsg('Firebase nao conectado. Recarregue o app.');return;}
-              window._DS_LAST_ERROR=null;
-              setSyncMsg('Sincronizando...');
-              try{
-                await window.DSSync.pull(uid);
-                const err=window._DS_LAST_ERROR;
-                if(err){
-                  setSyncMsg('Erro: '+err);
-                } else {
-                  setSyncMsg('Sincronizado com sucesso!');
-                  setTimeout(()=>setSyncMsg(''),3000);
-                }
-              }catch(e){setSyncMsg('Erro: '+e.message);}
-            };
-            return (
-              <div style={{borderTop:'1px solid #1a1a1a',paddingTop:'1rem',display:'grid',gap:'.5rem'}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <div>
-                    <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Sincronização</div>
-                    <div style={{fontSize:'.7rem',color:uid?'#4ade80':'#555',marginTop:'1px'}}>{uid?'Conta conectada':'Sem login'}</div>
-                  </div>
-                  <button onClick={doSync} disabled={!uid} style={{background:uid?'rgba(74,222,128,.1)':'rgba(255,255,255,.03)',border:uid?'1px solid rgba(74,222,128,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.4rem .85rem',color:uid?'#4ade80':'#333',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:uid?'pointer':'default'}}>
-                    Sincronizar agora
-                  </button>
-                </div>
-                {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
+          {/* Sync */}
+          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'1rem',display:'grid',gap:'.5rem'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Sincronização</div>
+                <div style={{fontSize:'.7rem',color:uid?'#4ade80':'var(--color-text-sub)',marginTop:'1px'}}>{uid?'Conectado':'Sem login'}</div>
               </div>
-            );
-          })()}
+              <button onClick={doSync} disabled={!uid} style={{background:uid?'rgba(74,222,128,.1)':'rgba(0,0,0,.15)',border:uid?'1px solid rgba(74,222,128,.25)':'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:uid?'#4ade80':'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:uid?'pointer':'default'}}>
+                Sincronizar
+              </button>
+            </div>
+            {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
+          </div>
 
-          {/* Tutorial reset */}
+          {/* Tutorial */}
           <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Tutorial</div>
-            <button onClick={()=>{localStorage.removeItem('darkset.launched');window.location.reload();}} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
+            <button onClick={()=>{localStorage.removeItem('darkset.launched');window.location.reload();}} style={{background:'rgba(0,0,0,.15)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
               Ver novamente
             </button>
           </div>
+
         </div>
       )}
 
+      {/* ── PROGRESSO ── */}
       {tab==='progresso'&&(
-        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Fotos de Progresso</div>
-            <button onClick={()=>photoRef.current&&photoRef.current.click()} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
-            <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProgressPhoto}/>
-          </div>
-
-          {progressPhotos.length===0&&!addingPhoto&&(
-            <div style={{textAlign:'center',padding:'1.5rem 0',color:'var(--color-text-sub)',fontSize:'.85rem'}}>Nenhuma foto adicionada ainda</div>
-          )}
-
-          {progressPhotos.length>0&&(
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>
-              {progressPhotos.map(p=>(
-                <div key={p.id} style={{position:'relative',borderRadius:'6px',overflow:'hidden',aspectRatio:'1',background:'#111'}}>
-                  <img src={p.data} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={p.label}/>
-                  <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,.85))',padding:'4px 5px'}}>
-                    <div style={{fontSize:'.6rem',color:'#ddd',fontWeight:600}}>{toBR(p.date)}</div>
-                    <div style={{fontSize:'.55rem',color:'#999'}}>{p.label}</div>
-                  </div>
-                  <button onClick={()=>deletePhoto(p.id)} style={{position:'absolute',top:'3px',right:'3px',background:'rgba(0,0,0,.75)',border:'none',borderRadius:'50%',width:'18px',height:'18px',color:'#e31b23',fontSize:'.7rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>x</button>
-                </div>
-              ))}
+        <div style={{display:'grid',gap:'1rem'}}>
+          <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'var(--color-text)'}}>Fotos de Progresso</div>
+              <button onClick={()=>photoRef.current&&photoRef.current.click()} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
+              <input ref={photoRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handleProgressPhoto}/>
             </div>
-          )}
 
-          {addingPhoto&&(
-            <div style={{background:'var(--color-card-soft)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.75rem',display:'grid',gap:'.5rem'}}>
-              {pendingPhotoData&&<img src={pendingPhotoData} style={{width:'100%',maxHeight:'160px',objectFit:'cover',borderRadius:'6px'}} alt="preview"/>}
-              <input type="date" value={photoDate} onChange={e=>setPhotoDate(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
-              <input placeholder="Descricao (ex: Inicio, Mes 1...)" value={photoLabel} onChange={e=>setPhotoLabel(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
-              <div style={{display:'flex',gap:'.4rem'}}>
-                <button onClick={saveProgressPhoto} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.45rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Salvar</button>
-                <button onClick={()=>{setAddingPhoto(false);setPendingPhotoData(null);}} style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.45rem',color:'#777',fontSize:'.82rem',cursor:'pointer'}}>Cancelar</button>
+            {progressPhotos.length===0&&!addingPhoto&&(
+              <div style={{textAlign:'center',padding:'2rem 1rem',color:'var(--color-text-sub)',fontSize:'.85rem'}}>
+                <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📸</div>
+                <div>Nenhuma foto ainda</div>
+                <div style={{fontSize:'.72rem',marginTop:'.25rem',color:'#333'}}>Registre sua evolução mês a mês</div>
               </div>
-            </div>
-          )}
+            )}
+
+            {progressPhotos.length>0&&(
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>
+                {progressPhotos.map(p=>(
+                  <div key={p.id} style={{position:'relative',borderRadius:'6px',overflow:'hidden',aspectRatio:'1',background:'var(--color-card-soft)'}}>
+                    <img src={p.data} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={p.label}/>
+                    <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,.85))',padding:'4px 5px'}}>
+                      <div style={{fontSize:'.58rem',color:'#ddd',fontWeight:600}}>{toBR(p.date)}</div>
+                      <div style={{fontSize:'.52rem',color:'#aaa'}}>{p.label}</div>
+                    </div>
+                    <button onClick={()=>deletePhoto(p.id)} style={{position:'absolute',top:'3px',right:'3px',background:'rgba(0,0,0,.75)',border:'none',borderRadius:'50%',width:'18px',height:'18px',color:'#e31b23',fontSize:'.7rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {addingPhoto&&(
+              <div style={{background:'var(--color-card-soft)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.75rem',display:'grid',gap:'.5rem'}}>
+                {pendingPhotoData&&<img src={pendingPhotoData} style={{width:'100%',maxHeight:'180px',objectFit:'cover',borderRadius:'6px'}} alt="preview"/>}
+                <input type="date" value={photoDate} onChange={e=>setPhotoDate(e.target.value)} style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+                <input placeholder="Descrição (ex: Início, Mês 1...)" value={photoLabel} onChange={e=>setPhotoLabel(e.target.value)} style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+                <div style={{display:'flex',gap:'.4rem'}}>
+                  <button onClick={saveProgressPhoto} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.45rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Salvar</button>
+                  <button onClick={()=>{setAddingPhoto(false);setPendingPhotoData(null);}} style={{flex:1,background:'rgba(0,0,0,.15)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.45rem',color:'var(--color-text-sub)',fontSize:'.82rem',cursor:'pointer'}}>Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
     </div>
   );
 };
@@ -2628,6 +2918,7 @@ function App(){
           <button className={"ds-nav-btn"+(screen==="plans"?" active":"")} onClick={()=>goto("plans")}>Fichas</button>
           <button className={"ds-nav-btn"+(screen==="builder"?" active":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar</button>
           <button className={"ds-nav-btn"+(screen==="session"?" active":"")} onClick={()=>goto("session")}>Treino</button>
+          <button className={"ds-nav-btn"+(screen==="cardio"?" active":"")} onClick={()=>goto("cardio")}>Cardio</button>
           <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
           <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
         </nav>
@@ -2644,10 +2935,11 @@ function App(){
       {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
+      {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V4.9.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.0.0</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
