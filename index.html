@@ -692,139 +692,156 @@ const Home=({goto,plans,history,prefs})=>{
 
 // Plans
 const Plans=({plans,setPlans,goto,setToast})=>{
-  const [renameId,setRenameId]=useState(null);
   const [newName,setNewName]=useState("");
+  const [renameId,setRenameId]=useState(null);
   const [sharePlan,setSharePlan]=useState(null);
 
-  const createPlan=()=>{ if(!newName.trim()) return; const id=Date.now(); const byDay={}; for(const d of DAYS){byDay[d]=[]} setPlans(p=>({...p,list:[...p.list,{id,name:newName.trim(),byDay}],activeId:p.activeId||id})); setNewName(""); };
-  const duplicatePlan=(id)=> setPlans(p=>{const src=p.list.find(x=>x.id===id);const clone=JSON.parse(JSON.stringify(src));clone.id=Date.now();clone.name=src.name+" (cópia)";return {...p,list:[...p.list,clone]};});
-  const removePlan=(id)=> setPlans(p=>({...p,list:p.list.filter(pl=>pl.id!==id),activeId:p.activeId===id?null:p.activeId}));
-  const activate=(id,val)=> setPlans(p=>({...p,activeId:val? id: (p.activeId===id? null:p.activeId)}));
-
-  const openShare=(pl)=> setSharePlan(pl);
-  const closeShare=()=> setSharePlan(null);
-
-  // generate import link
+  const createPlan=()=>{
+    if(!newName.trim()) return;
+    const id=Date.now(); const byDay={};
+    for(const d of DAYS){byDay[d]=[]}
+    setPlans(p=>({...p,list:[...p.list,{id,name:newName.trim(),byDay}],activeId:p.activeId||id}));
+    setNewName(""); setToast("Ficha criada");
+  };
+  const duplicatePlan=(id)=>setPlans(p=>{
+    const src=p.list.find(x=>x.id===id);
+    const clone=JSON.parse(JSON.stringify(src));
+    clone.id=Date.now(); clone.name=src.name+" (cópia)";
+    return {...p,list:[...p.list,clone]};
+  });
+  const removePlan=(id)=>{
+    if(!confirm("Excluir esta ficha?")) return;
+    setPlans(p=>({...p,list:p.list.filter(pl=>pl.id!==id),activeId:p.activeId===id?null:p.activeId}));
+    setToast("Ficha excluída");
+  };
+  const activate=(id,val)=>setPlans(p=>({...p,activeId:val?id:(p.activeId===id?null:p.activeId)}));
   const makeImportLink=(pl)=>{
-    const payload = { name: pl.name, byDay: pl.byDay };
-    const raw = encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(payload)).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode('0x'+p))));
+    const payload={name:pl.name,byDay:pl.byDay};
+    const raw=encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(payload)).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode('0x'+p))));
     return `${location.origin}${location.pathname}?import=${raw}`;
   };
-
   useEffect(()=>{
     if(!sharePlan) return;
-    // render QR
     setTimeout(()=>{
-      const el = document.getElementById("qr-box");
-      if(el){ el.innerHTML=""; new QRCode(el, { text: makeImportLink(sharePlan), width: 196, height: 196 }); }
+      const el=document.getElementById("qr-box");
+      if(el){el.innerHTML="";new QRCode(el,{text:makeImportLink(sharePlan),width:180,height:180});}
     },10);
   },[sharePlan]);
+  const totalExsByDay=(pl)=>DAYS.reduce((a,d)=>a+(pl.byDay?.[d]?.length||0),0);
 
   return (
-    <div className="grid gap-4">
-      <Card title="Minhas fichas">
-        <div className="space-y-2">
-          {plans.list.length===0 && <div className="text-sm text-textSub">Nenhuma ficha criada.</div>}
-          {plans.list.map(pl=>(
-            <div key={pl.id} className="flex flex-col md:flex-row md:items-center md:justify-between border border-borderDark rounded-xl p-3 gap-2">
-              <div className="flex items-center gap-3">
-                <Switch checked={plans.activeId===pl.id} onChange={(v)=>activate(pl.id,v)}/>
-                {renameId===pl.id? (
-                  <input className="border border-borderDark bg-black/30 rounded px-2 py-1" value={pl.name} onChange={e=> setPlans(p=>({...p,list:p.list.map(x=>x.id===pl.id? {...x,name:e.target.value}:x)}))}/>
-                ) : (<div className="font-medium">{pl.name}</div>)}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
-                {renameId===pl.id? <Button full variant="success" onClick={()=>setRenameId(null)}>Ok</Button> : <Button full variant="ghost" onClick={()=>setRenameId(pl.id)}>Renomear</Button>}
-                <Button full variant="ghost" onClick={()=>duplicatePlan(pl.id)}>Duplicar</Button>
-                <Button full variant="ghost" onClick={()=>openShare(pl)}>Compartilhar</Button>
-                <Button full variant="danger" onClick={()=>{ if(confirm("Excluir esta ficha? O histórico não será apagado.")) { removePlan(pl.id); setToast("Ficha excluída"); } }}>Excluir</Button>
-                <Button full onClick={()=>goto('viewer',pl.id)} variant="ghost">Visualizar</Button>
-                <Button full onClick={()=>goto('builder',pl.id)}>Editar</Button>
-              </div>
-            </div>
-          ))}
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div className="ds-card" style={{padding:'.85rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Minhas Fichas</div>
+          <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px'}}>{plans.list.length} ficha(s)</div>
         </div>
-      </Card>
-      <Card title="Criar nova ficha">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
-          <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 flex-1" placeholder="Ex.: Foco em Peito" value={newName} onChange={e=>setNewName(e.target.value)}/>
-          <Button full variant="accent" onClick={createPlan}>Criar</Button>
-        </div>
-      </Card>
+      </div>
 
-      {sharePlan && (
-        <Modal onClose={closeShare}>
-          <div className="font-semibold text-lg mb-2">Compartilhar: {sharePlan.name}</div>
-          <div id="qr-box" className="mx-auto my-2 w-[196px] h-[196px] border border-borderDark rounded-xl"></div>
-          <div className="text-xs text-textSub mb-2">Escaneie o QR ou copie o link abaixo:</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
-            <input id="share-link" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full text-xs" readOnly value={makeImportLink(sharePlan)}/>
-            <Button full variant="ghost" onClick={()=>{ const el=document.getElementById('share-link'); el.select(); document.execCommand('copy'); setToast("Link copiado"); }}>Copiar</Button>
+      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.6rem'}}>Nova Ficha</div>
+        <div style={{display:'flex',gap:'.5rem'}}>
+          <input
+            style={{flex:1,background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}}
+            placeholder="Nome da ficha…"
+            value={newName} onChange={e=>setNewName(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&createPlan()}
+          />
+          <button onClick={createPlan} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',whiteSpace:'nowrap'}}>+ Criar</button>
+        </div>
+      </div>
+
+      {plans.list.length===0?(
+        <div style={{textAlign:'center',padding:'3rem 1rem',color:'#222'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'2.5rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.5rem'}}>Sem fichas</div>
+          <div style={{fontSize:'.85rem'}}>Crie sua primeira ficha acima</div>
+        </div>
+      ):(
+        <div style={{display:'grid',gap:'.6rem'}}>
+          {plans.list.map(pl=>{
+            const isActive=plans.activeId===pl.id;
+            const exTotal=totalExsByDay(pl);
+            return (
+              <div key={pl.id} className="ds-card" style={{padding:'1rem 1.1rem',borderLeft:isActive?'2px solid var(--color-accent)':'2px solid transparent'}}>
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.65rem'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'.75rem',flex:1,minWidth:0}}>
+                    <button onClick={()=>activate(pl.id,!isActive)} style={{width:'20px',height:'20px',borderRadius:'50%',flexShrink:0,cursor:'pointer',background:isActive?'var(--color-accent)':'transparent',border:isActive?'2px solid var(--color-accent)':'2px solid #333',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isActive?'0 0 8px rgba(227,27,35,.4)':''}}>
+                      {isActive&&<div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#fff'}}></div>}
+                    </button>
+                    {renameId===pl.id?(
+                      <input autoFocus style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid var(--color-accent)',borderRadius:'6px',padding:'.35rem .6rem',fontSize:'.95rem',color:'var(--color-text)',fontWeight:600}} value={pl.name} onChange={e=>setPlans(p=>({...p,list:p.list.map(x=>x.id===pl.id?{...x,name:e.target.value}:x)}))} onBlur={()=>setRenameId(null)}/>
+                    ):(
+                      <div style={{minWidth:0}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.15rem',textTransform:'uppercase',letterSpacing:'.03em',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {pl.name}
+                          {isActive&&<span style={{marginLeft:'.5rem',fontSize:'.6rem',color:'var(--color-accent)',fontFamily:"'Inter',sans-serif",fontWeight:700,letterSpacing:'.06em',verticalAlign:'middle'}}>ATIVA</span>}
+                        </div>
+                        <div style={{fontSize:'.7rem',color:'#444',marginTop:'1px'}}>{exTotal} exercício(s)</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
+                  {DAYS.map(d=>{const n=pl.byDay?.[d]?.length||0;return n>0?(
+                    <span key={d} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'5px',padding:'2px 7px',fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700}}>{d.slice(0,3)} {n}</span>
+                  ):(
+                    <span key={d} style={{background:'rgba(0,0,0,.2)',border:'1px solid #1a1a1a',borderRadius:'5px',padding:'2px 7px',fontSize:'.65rem',color:'#222'}}>{d.slice(0,3)}</span>
+                  );})}
+                </div>
+                <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+                  <button onClick={()=>goto('builder',pl.id)} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.4rem .85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>Editar</button>
+                  <button onClick={()=>setRenameId(renameId===pl.id?null:pl.id)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Renomear</button>
+                  <button onClick={()=>duplicatePlan(pl.id)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Duplicar</button>
+                  <button onClick={()=>setSharePlan(pl)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Compartilhar</button>
+                  <button onClick={()=>removePlan(pl.id)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.4rem .6rem',color:'#e31b23',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>X</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {sharePlan&&(
+        <Modal onClose={()=>setSharePlan(null)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',marginBottom:'1rem'}}>{sharePlan.name}</div>
+          <div id="qr-box" style={{margin:'0 auto .75rem',width:'180px',height:'180px',border:'1px solid #1e1e1e',borderRadius:'8px',overflow:'hidden'}}></div>
+          <div style={{fontSize:'.7rem',color:'#444',marginBottom:'.5rem'}}>Escaneie o QR ou copie o link:</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input id="share-link" readOnly value={makeImportLink(sharePlan)} style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.4rem .65rem',fontSize:'.72rem',color:'#888'}}/>
+            <button onClick={()=>{document.getElementById('share-link').select();document.execCommand('copy');setToast("Link copiado");}} style={{background:'rgba(255,255,255,.06)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#ccc',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>Copiar</button>
           </div>
-          <div className="text-xs text-textSub mt-2">O link contém somente a estrutura da ficha. Histórico e dados pessoais não são enviados.</div>
-          <div className="mt-3 text-right"><Button full variant="ghost" onClick={closeShare}>Fechar</Button></div>
+          <div style={{fontSize:'.65rem',color:'#333',marginTop:'.5rem'}}>Apenas a estrutura da ficha. Sem dados pessoais.</div>
+          <div style={{marginTop:'1rem',textAlign:'right'}}><button onClick={()=>setSharePlan(null)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .85rem',color:'#777',fontSize:'.78rem',cursor:'pointer'}}>Fechar</button></div>
         </Modal>
       )}
     </div>
   );
 };
 
+
 // Builder
-const BuilderExRow = ({ex, canAdd, onAdd, openInline, onToggleInline}) => {
-  const [setsCount, setSetsCount] = useState(3);
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-3 border border-borderDark rounded-xl p-3">
-      <div className="w-full sm:w-28">
-        {ex.media?.srcGif ? (
-          <div className="relative w-full rounded-2xl overflow-hidden border border-borderDark bg-black">
-            <img src={ex.media.srcGif} alt={ex.name} className="w-full h-auto"/>
-          </div>
-        ) : (
-          <div className="relative w-full rounded-2xl border border-borderDark overflow-hidden">
-            <div className="pt-[56.25%] bg-black/30"></div>
-            <div className="absolute inset-0 flex items-center justify-center text-textSub text-xs">Prévia</div>
-          </div>
-        )}
-      </div>
-      <div className="flex-1 w-full">
-        <div className="font-medium break-words">{ex.name}</div>
-        <div className="text-xs text-textSub">{ex.primary} • {ex.subgroup||"—"} • {ex.equipment} • {ex.difficulty}</div>
-      </div>
-      <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-        <label className="text-xs text-textSub">Séries</label>
-        <input type="number" min="1" max="10" value={setsCount} onChange={e=>setSetsCount(Math.max(1,Math.min(10,Number(e.target.value)||1)))} className="border border-borderDark bg-black/30 rounded-xl w-16 px-2 py-1 text-sm"/>
-        <Button variant="ghost" onClick={()=>{ if(canAdd){ onAdd(ex, setsCount); } }} disabled={!canAdd}>Adicionar</Button>
-      </div>
-    </div>
-  );
-};
 const Builder=({planId,plans,setPlans,setToast})=>{
   const plan=plans.list.find(p=>p.id===planId)||plans.list[0];
   const [day,setDay]=useState(DAYS[0]);
   const [filters,setFilters]=useState(()=>load(LS.filters,{q:"",m:"",s:"",e:"",d:""}));
-  const {q,m,s,e,d} = filters;
-  const [videoEx,setVideoEx] = useState(null); // (não usado neste modo)
-  const [openInline, setOpenInline] = useState({}); // exId => bool
-  const openVideo=(exMeta)=>{
-    if(!exMeta) return;
-    setOpenInline(prev=> ({...prev, [exMeta.id]: !prev[exMeta.id]}));
-  };
-
+  const [tab,setTab]=useState('ficha'); // 'ficha' | 'buscar'
+  const {q,m,s,e,d}=filters;
 
   useEffect(()=>save(LS.filters,filters),[filters]);
 
-  const list=useMemo(()=> EXS.filter(ex=>{
+  const list=useMemo(()=>EXS.filter(ex=>{
     const nameOk=ex.name.toLowerCase().includes(q.toLowerCase());
     const mOk=!m||ex.primary===m;
     const sOk=!s||ex.subgroup===s;
     const eOk=!e||ex.equipment===e;
     const dOk=!d||ex.difficulty===d;
-    return nameOk && mOk && sOk && eOk && dOk;
+    return nameOk&&mOk&&sOk&&eOk&&dOk;
   }),[q,m,s,e,d]);
 
   const dayItems=plan?.byDay?.[day]||[];
-  const canAdd=(ex)=> !dayItems.some(it=>it.exId===ex.id);
-  const addEx=(ex,setsPlanned)=>{
+  const canAdd=(ex)=>!dayItems.some(it=>it.exId===ex.id);
+
+  const addEx=(ex,setsPlanned=3)=>{
     setPlans(p=>{
       const copy=JSON.parse(JSON.stringify(p));
       const pl=copy.list.find(x=>x.id===plan.id);
@@ -833,98 +850,215 @@ const Builder=({planId,plans,setPlans,setToast})=>{
       arr.push({exId:ex.id,name:ex.name,setsPlanned:Math.max(1,Number(setsPlanned)||3)});
       return copy;
     });
-    setToast("✅ Adicionado");
+    setToast("+ "+ex.name);
   };
-  const removeItem=(i)=> setPlans(p=>{const copy=JSON.parse(JSON.stringify(p));const arr=copy.list.find(x=>x.id===plan.id).byDay[day];arr.splice(i,1);return copy;});
-  const move=(i,dir)=> setPlans(p=>{const copy=JSON.parse(JSON.stringify(p));const arr=copy.list.find(x=>x.id===plan.id).byDay[day];const j=i+dir;if(j<0||j>=arr.length)return p;[arr[i],arr[j]]=[arr[j],arr[i]];return copy;});
+  const removeItem=(i)=>setPlans(p=>{const copy=JSON.parse(JSON.stringify(p));copy.list.find(x=>x.id===plan.id).byDay[day].splice(i,1);return copy;});
+  const move=(i,dir)=>setPlans(p=>{
+    const copy=JSON.parse(JSON.stringify(p));
+    const arr=copy.list.find(x=>x.id===plan.id).byDay[day];
+    const j=i+dir; if(j<0||j>=arr.length)return p;
+    [arr[i],arr[j]]=[arr[j],arr[i]]; return copy;
+  });
+  const updateSets=(i,val)=>setPlans(p=>{
+    const copy=JSON.parse(JSON.stringify(p));
+    copy.list.find(x=>x.id===plan.id).byDay[day][i].setsPlanned=Math.max(1,Math.min(10,Number(val)||1));
+    return copy;
+  });
 
   const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
-  const SUBS_BY = MUSCLES.reduce((acc,m)=>{acc[m]=[...new Set(EXS.filter(e=>e.primary===m && e.subgroup).map(e=>e.subgroup))];return acc;},{});
+  const SUBS_BY=MUSCLES.reduce((acc,mu)=>{acc[mu]=[...new Set(EXS.filter(e=>e.primary===mu&&e.subgroup).map(e=>e.subgroup))];return acc;},{});
   const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
   const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
 
+  const totalSets=dayItems.reduce((a,it)=>a+(it.setsPlanned||3),0);
+
+  if(!plan) return <div style={{padding:'2rem',color:'#555',textAlign:'center'}}>Nenhuma ficha encontrada.</div>;
+
   return (
-    <div className="grid gap-4">
-      <Card title={"Editando: "+(plan?.name||"Ficha")}>
-        <div className="flex gap-2 flex-wrap mb-3">{DAYS.map(dy=>(<button key={dy} onClick={()=>setDay(dy)} className={"px-3 py-1.5 rounded-full border border-borderDark "+(day===dy?"bg-white/10":"")}>{dy}</button>))}</div>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-borderDark p-3">
-            <div className="font-medium mb-2">Procurar</div>
-            <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full mb-2" placeholder="Buscar por nome…" value={q} onChange={e=>setFilters({...filters,q:e.target.value})}/>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={m} onChange={e=>{const v=e.target.value; setFilters({...filters,m:v,s:""});}}>
-                <option value="">Músculo</option>{MUSCLES.map(x=><option key={x}>{x}</option>)}
-              </select>
-              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={s} onChange={e=>setFilters({...filters,s:e.target.value})} disabled={!m || (SUBS_BY[m]||[]).length===0}>
-                <option value="">Subgrupo</option>{(m? SUBS_BY[m]:[]).map(x=><option key={x}>{x}</option>)}
-              </select>
-              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={e} onChange={e2=>setFilters({...filters,e:e2.target.value})}>
-                <option value="">Equipamento</option>{EQUIPS.map(x=><option key={x}>{x}</option>)}
-              </select>
-              <select className="border border-borderDark bg-black/30 rounded-xl px-2 py-2 text-sm" value={d} onChange={e3=>setFilters({...filters,d:e3.target.value})}>
-                <option value="">Dificuldade</option>{DIFFS.map(x=><option key={x}>{x}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2 max-h-80 overflow-auto pr-1">
-              {list.map(ex=>(
-                <BuilderExRow
-                  key={ex.id}
-                  ex={ex}
-                  canAdd={canAdd(ex)}
-                  onAdd={addEx}
-                  openInline={openInline[ex.id]}
-                  onToggleInline={()=>openVideo(ex)}
-                />
-              ))}
-              {list.length===0 && <div className="text-sm text-textSub">Nenhum exercício encontrado para os filtros.</div>}
-            </div>
+      {/* Topo: nome da ficha + seletor de dia */}
+      <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+        <div className="flex items-center justify-between" style={{marginBottom:'.85rem'}}>
+          <div>
+            <div style={{fontSize:'.6rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em'}}>Editando ficha</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>{plan.name}</div>
           </div>
-
-          <div className="rounded-2xl border border-borderDark p-3">
-            <div className="font-medium mb-2">Exercícios de {day}</div>
-            {dayItems.length===0 ? <div className="text-sm text-textSub">Nenhum exercício adicionado.</div> : (
-              <div className="space-y-2">
-                {dayItems.map((it,i)=>(
-                  <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border border-borderDark rounded-xl p-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium break-words">{it.name}</div>
-                      <div className="text-xs text-textSub">Séries: {it.setsPlanned}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                      <Button variant="ghost" onClick={()=>move(i,-1)}>↑</Button>
-                      <Button variant="ghost" onClick={()=>move(i,1)}>↓</Button>
-                      <Button variant="ghost" onClick={()=>removeItem(i)}>Remover</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{textAlign:'right'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.2rem',fontWeight:800,color:'var(--color-accent)',lineHeight:1}}>{dayItems.length}<span style={{fontSize:'.85rem',color:'#333'}}>ex</span></div>
+            <div style={{fontSize:'.65rem',color:'#333'}}>{totalSets} séries</div>
           </div>
         </div>
-      </Card>
-      {videoEx && (
-        <Modal onClose={()=>setVideoEx(null)}>
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <div className="text-sm text-textSub">Execução do exercício</div>
-              <div className="font-semibold">{videoEx.name}</div>
-            </div>
-            <Button variant="ghost" onClick={()=>setVideoEx(null)}>Fechar</Button>
-          </div>
-          {videoEx.media ? (
-            <div className="rounded-xl overflow-hidden border border-borderDark bg-black">
-              <img src={videoEx.media?.srcGif} alt={videoEx.name} className="w-full h-auto" />
+
+        {/* Day pills */}
+        <div style={{display:'flex',gap:'.4rem',overflowX:'auto',paddingBottom:'.2rem',scrollbarWidth:'none'}}>
+          {DAYS.map(dy=>{
+            const count=plan.byDay?.[dy]?.length||0;
+            const active=day===dy;
+            return (
+              <button key={dy} onClick={()=>setDay(dy)} style={{
+                flexShrink:0,padding:'.4rem .75rem',borderRadius:'8px',
+                background:active?'var(--color-accent)':'rgba(0,0,0,.4)',
+                border:active?'1px solid rgba(255,255,255,.08)':'1px solid #1a1a1a',
+                color:active?'#fff':'#555',
+                fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',
+                textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',
+                position:'relative'
+              }}>
+                {dy.slice(0,3)}
+                {count>0&&<span style={{position:'absolute',top:'-4px',right:'-4px',background:active?'#fff':'var(--color-accent)',color:active?'var(--color-accent)':'#fff',borderRadius:'50%',width:'16px',height:'16px',fontSize:'.6rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab toggle */}
+      <div className="mode-toggle">
+        <button className={"mode-toggle-btn"+(tab==="ficha"?" active":"")} onClick={()=>setTab("ficha")}>
+          Ficha de {day.slice(0,3)} ({dayItems.length})
+        </button>
+        <button className={"mode-toggle-btn"+(tab==="buscar"?" active":"")} onClick={()=>setTab("buscar")}>
+          + Adicionar Exercício
+        </button>
+      </div>
+
+      {/* TAB: FICHA */}
+      {tab==="ficha" && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          {dayItems.length===0 ? (
+            <div style={{textAlign:'center',padding:'2rem 0'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.8rem',fontWeight:900,color:'#1a1a1a',textTransform:'uppercase',marginBottom:'.5rem'}}>Vazio</div>
+              <div style={{color:'#333',fontSize:'.8rem',marginBottom:'1rem'}}>Nenhum exercício para {day}</div>
+              <button onClick={()=>setTab("buscar")} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',color:'#fff',padding:'.6rem 1.2rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer'}}>
+                + Adicionar Exercício
+              </button>
             </div>
           ) : (
-            <div className="text-sm text-textSub">Prévia ainda não disponível para este exercício.</div>
+            <div style={{display:'grid',gap:'.5rem'}}>
+              {dayItems.map((it,i)=>(
+                <div key={i} style={{display:'grid',gridTemplateColumns:'1.5rem 1fr auto auto auto',alignItems:'center',gap:'.6rem',background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.6rem .85rem'}}>
+                  {/* Número */}
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:900,color:'#222',lineHeight:1}}>{i+1}</div>
+                  {/* Nome */}
+                  <div>
+                    <div style={{fontWeight:600,fontSize:'.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.name}</div>
+                    <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>
+                      {EXS.find(e=>e.id===it.exId)?.primary||''} · {EXS.find(e=>e.id===it.exId)?.equipment||''}
+                    </div>
+                  </div>
+                  {/* Séries input */}
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
+                    <input type="number" min="1" max="10" value={it.setsPlanned||3}
+                      onChange={e=>updateSets(i,e.target.value)}
+                      style={{width:'2.8rem',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.85rem',color:'#fff'}}
+                    />
+                    <div style={{fontSize:'.55rem',color:'#333',textTransform:'uppercase',letterSpacing:'.05em'}}>séries</div>
+                  </div>
+                  {/* Move */}
+                  <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+                    <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===0?'#222':'#666',padding:'2px 6px',cursor:i===0?'default':'pointer',fontSize:'.75rem',lineHeight:1}}>↑</button>
+                    <button onClick={()=>move(i,1)} disabled={i===dayItems.length-1} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===dayItems.length-1?'#222':'#666',padding:'2px 6px',cursor:i===dayItems.length-1?'default':'pointer',fontSize:'.75rem',lineHeight:1}}>↓</button>
+                  </div>
+                  {/* Remove */}
+                  <button onClick={()=>removeItem(i)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',padding:'.35rem .5rem',cursor:'pointer',fontSize:'.75rem',fontWeight:700,lineHeight:1}}>✕</button>
+                </div>
+              ))}
+            </div>
           )}
-        </Modal>
+        </div>
+      )}
+
+      {/* TAB: BUSCAR */}
+      {tab==="buscar" && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          {/* Search input */}
+          <div style={{position:'relative',marginBottom:'.75rem'}}>
+            <input
+              style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.6rem .85rem .6rem 2.2rem',fontSize:'.88rem',color:'#fff'}}
+              placeholder="Buscar exercício por nome…"
+              value={q} onChange={e=>setFilters({...filters,q:e.target.value})}
+            />
+            <span style={{position:'absolute',left:'.7rem',top:'50%',transform:'translateY(-50%)',color:'#333',pointerEvents:'none',fontSize:'.9rem'}}>⌕</span>
+          </div>
+
+          {/* Filter chips */}
+          <div style={{display:'flex',gap:'.4rem',overflowX:'auto',marginBottom:'.75rem',scrollbarWidth:'none',paddingBottom:'.2rem'}}>
+            <select style={{flexShrink:0,background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.75rem',color:m?'#fff':'#555',cursor:'pointer'}}
+              value={m} onChange={e=>{const v=e.target.value;setFilters({...filters,m:v,s:""});}}>
+              <option value="">Músculo</option>{MUSCLES.map(x=><option key={x}>{x}</option>)}
+            </select>
+            <select style={{flexShrink:0,background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.75rem',color:s?'#fff':'#555',cursor:'pointer',opacity:(!m||(SUBS_BY[m]||[]).length===0)?0.4:1}}
+              value={s} onChange={e=>setFilters({...filters,s:e.target.value})} disabled={!m||(SUBS_BY[m]||[]).length===0}>
+              <option value="">Subgrupo</option>{(m?SUBS_BY[m]:[]).map(x=><option key={x}>{x}</option>)}
+            </select>
+            <select style={{flexShrink:0,background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.75rem',color:e?'#fff':'#555',cursor:'pointer'}}
+              value={e} onChange={e2=>setFilters({...filters,e:e2.target.value})}>
+              <option value="">Equipamento</option>{EQUIPS.map(x=><option key={x}>{x}</option>)}
+            </select>
+            <select style={{flexShrink:0,background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.75rem',color:d?'#fff':'#555',cursor:'pointer'}}
+              value={d} onChange={e3=>setFilters({...filters,d:e3.target.value})}>
+              <option value="">Nível</option>{DIFFS.map(x=><option key={x}>{x}</option>)}
+            </select>
+            {(q||m||s||e||d)&&<button onClick={()=>setFilters({q:"",m:"",s:"",e:"",d:""})} style={{flexShrink:0,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.35rem .65rem',fontSize:'.75rem',color:'#e31b23',cursor:'pointer',fontWeight:700}}>Limpar</button>}
+          </div>
+
+          {/* Results count */}
+          <div style={{fontSize:'.65rem',color:'#333',marginBottom:'.5rem',textTransform:'uppercase',letterSpacing:'.06em'}}>{list.length} exercício(s)</div>
+
+          {/* Exercise list */}
+          <div style={{display:'grid',gap:'.4rem',maxHeight:'360px',overflowY:'auto',paddingRight:'2px'}}>
+            {list.map(ex=>{
+              const added=!canAdd(ex);
+              return (
+                <div key={ex.id} style={{
+                  display:'grid',gridTemplateColumns:'1fr auto auto',alignItems:'center',gap:'.6rem',
+                  background:added?'rgba(227,27,35,.04)':'rgba(0,0,0,.25)',
+                  border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
+                  borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
+                }}>
+                  <div>
+                    <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'#ddd'}}>{ex.name}</div>
+                    <div style={{fontSize:'.65rem',color:'#333',marginTop:'1px'}}>{ex.primary} · {ex.equipment} · {ex.difficulty}</div>
+                  </div>
+                  {!added && (
+                    <select
+                      defaultValue="3"
+                      id={"sets_"+ex.id}
+                      style={{width:'3.2rem',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.8rem',color:'#fff',textAlign:'center'}}
+                      onClick={e=>e.stopPropagation()}
+                    >
+                      {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}x</option>)}
+                    </select>
+                  )}
+                  <button
+                    onClick={()=>{
+                      if(added) return;
+                      const sel=document.getElementById("sets_"+ex.id);
+                      addEx(ex, sel?Number(sel.value):3);
+                    }}
+                    disabled={added}
+                    style={{
+                      background:added?'transparent':'var(--color-accent)',
+                      border:added?'1px solid #1a1a1a':'none',
+                      borderRadius:'7px',padding:'.4rem .65rem',
+                      color:added?'#333':'#fff',
+                      fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',
+                      textTransform:'uppercase',letterSpacing:'.04em',cursor:added?'default':'pointer',
+                      whiteSpace:'nowrap'
+                    }}
+                  >{added?'✓ Na ficha':'+ Add'}</button>
+                </div>
+              );
+            })}
+            {list.length===0&&<div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.85rem'}}>Nenhum exercício encontrado</div>}
+          </div>
+        </div>
       )}
     </div>
   );
-}
-// Viewer (Visualizador de Ficha) — GIF-only popup
+};
+
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
   const [day, setDay] = React.useState(DAYS[0]);
@@ -1510,237 +1644,422 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
 
 
 // History (cards compact + modal details)
-const History=({history, setHistory, prefs})=>{
+const History=({history,setHistory,prefs})=>{
+  const [dateSearch,setDateSearch]=useState("");
   const [weekday,setWeekday]=useState("");
   const [planFilter,setPlanFilter]=useState("");
-  const [dateSearch,setDateSearch]=useState("");
   const [detail,setDetail]=useState(null);
-
-  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
-  const toBR=(iso)=>{const [y,m,d]=iso.split("-");return `${d}/${m}/${y}`;}
-
-  // Busca por data: aceita dd/mm/yyyy, dd/mm, ou yyyy-mm-dd
-  const matchesDate=(iso)=>{
-    if(!dateSearch) return true;
-    const q=dateSearch.trim().toLowerCase();
-    const br=toBR(iso).toLowerCase();
-    return br.includes(q) || iso.includes(q);
-  };
-
-  const filtered=entries.filter(([date,o])=>
-    (!weekday||o.day===weekday) &&
-    (!planFilter||o.planName===planFilter) &&
-    matchesDate(date)
-  );
-  const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
-  const chartsEnabled=!!prefs.chartsPremium;
-  const deleteEntry=(date)=>{
-    if(!confirm(`Excluir o treino de ${toBR(date)}?`)) return;
-    setHistory(prev=>{const copy={...prev};delete copy[date];return copy;});
-  };
+  const [exportMsg,setExportMsg]=useState(null);
 
   const parseNum=(v)=>{const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:0;};
   const volSets=(sets)=>sets.reduce((acc,s)=>acc+(parseNum(s.w)*parseNum(s.r)),0);
   const volSession=(obj)=>(obj.entries||[]).reduce((acc,en)=>acc+volSets(en.sets||[]),0);
+  const toBR=(iso)=>{const [y,m,d]=iso.split("-");return `${d}/${m}/${y}`;};
+
+  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
+
+  const prMap=useMemo(()=>{
+    const map={};
+    entries.forEach(([,obj])=>{
+      (obj.entries||[]).forEach(en=>{
+        (en.sets||[]).forEach(s=>{
+          const w=parseNum(s.w),r=parseNum(s.r);
+          if(!w||!r) return;
+          const est=w*(1+r/30);
+          if(!map[en.name]||est>map[en.name]) map[en.name]=est;
+        });
+      });
+    });
+    return map;
+  },[entries.length]);
+
+  const matchDate=(iso)=>{
+    if(!dateSearch) return true;
+    const q=dateSearch.trim().toLowerCase();
+    return toBR(iso).toLowerCase().includes(q)||iso.includes(q);
+  };
+  const filtered=entries.filter(([date,o])=>(!weekday||o.day===weekday)&&(!planFilter||o.planName===planFilter)&&matchDate(date));
+  const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
+  const chartsEnabled=!!prefs.chartsPremium;
+  const totalVol=Math.round(entries.reduce((_a,[,o])=>_a+volSession(o),0));
+
+  const exportCSV=()=>{
+    const rows=[['Data','Dia','Ficha','Exercicio','Serie','Carga','Reps','RIR']];
+    entries.forEach(([date,obj])=>{
+      (obj.entries||[]).forEach(en=>{
+        (en.sets||[]).forEach((s,i)=>{
+          rows.push([toBR(date),obj.day||'',obj.planName||'',en.name,i+1,s.w||'',s.r||'',s.rir||'']);
+        });
+      });
+    });
+    const csv=rows.map(r=>r.map(c=>'"'+c+'"').join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download='darkset_historico_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+    setExportMsg('CSV baixado!');
+    setTimeout(()=>setExportMsg(null),2000);
+  };
+
+  const deleteEntry=(date)=>{
+    if(!confirm('Excluir o treino de '+toBR(date)+'?')) return;
+    setHistory(prev=>{const copy={...prev};delete copy[date];return copy;});
+  };
 
   return (
-    <div className="grid gap-4">
-      <Card title="Histórico">
-        <div className="grid gap-2 mb-3">
-          {/* Busca por data */}
-          <input
-            className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm w-full"
-            placeholder="Buscar por data (ex: 25/02 ou 25/02/2025)…"
-            value={dateSearch}
-            onChange={e=>setDateSearch(e.target.value)}
-          />
-          <div className="flex items-center gap-2 flex-wrap">
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm" value={weekday} onChange={e=>setWeekday(e.target.value)}>
-              <option value="">Dia da semana</option>{DAYS.map(d=><option key={d}>{d}</option>)}
-            </select>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 text-sm" value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
-              <option value="">Ficha</option>{planOptions.map(n=><option key={n}>{n}</option>)}
-            </select>
-            <div className="ml-auto">
-              <Button variant="ghost" disabled={!chartsEnabled} onClick={()=>window.openChartsModal&&window.openChartsModal()}>
-                <span className="inline-flex items-center gap-1">{!chartsEnabled&&<LockIcon className="opacity-80"/>} Gráficos</span>
-              </Button>
-            </div>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.85rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Historico</div>
+          <div style={{display:'flex',gap:'.4rem'}}>
+            <button onClick={exportCSV} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.35rem .65rem',color:'#777',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>CSV</button>
+            <button disabled={!chartsEnabled} onClick={()=>window.openChartsModal&&window.openChartsModal()} style={{background:chartsEnabled?'rgba(227,27,35,.1)':'rgba(255,255,255,.02)',border:chartsEnabled?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .65rem',color:chartsEnabled?'#e31b23':'#333',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:chartsEnabled?'pointer':'default',display:'inline-flex',alignItems:'center',gap:'.3rem'}}>
+              {!chartsEnabled&&<LockIcon/>}Graficos
+            </button>
           </div>
         </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
+          <div className="ds-stat"><div className="ds-stat-val">{entries.length}</div><div className="ds-stat-label">Treinos</div></div>
+          <div className="ds-stat"><div className="ds-stat-val" style={{fontSize:'1.1rem'}}>{totalVol>=1000?(totalVol/1000).toFixed(1)+'t':totalVol+'kg'}</div><div className="ds-stat-label">Volume total</div></div>
+          <div className="ds-stat"><div className="ds-stat-val">{Object.keys(prMap).length}</div><div className="ds-stat-label">Exercicios</div></div>
+        </div>
+        {exportMsg&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'#4ade80'}}>{exportMsg}</div>}
+      </div>
 
-        {filtered.length===0?<div className="text-sm text-textSub">Sem registros.</div>:(
-          <div className="grid gap-3 md:grid-cols-2">
-            {filtered.map(([date,obj])=>{
-              const vol=Math.round(volSession(obj));
-              return (
-                <button key={date} onClick={()=>setDetail({date,obj})} className="text-left ds-card rounded-2xl p-3 border border-borderDark hover:bg-white/5 transition">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-sm text-textSub">{obj.day}</div>
-                      <div className="font-semibold">{toBR(date)} — {obj.planName||"Sem ficha"}</div>
-                      <div className="text-xs text-textSub">{obj.entries.length} exercício(s)</div>
+      <div className="ds-card" style={{padding:'.85rem 1.1rem',display:'grid',gap:'.5rem'}}>
+        <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .85rem',fontSize:'.85rem',color:'var(--color-text)'}} placeholder="Buscar por data (ex: 25/02)..." value={dateSearch} onChange={e=>setDateSearch(e.target.value)}/>
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+          <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.78rem',color:weekday?'var(--color-text)':'#555',flex:1,minWidth:'120px'}} value={weekday} onChange={e=>setWeekday(e.target.value)}>
+            <option value="">Dia da semana</option>{DAYS.map(d=><option key={d}>{d}</option>)}
+          </select>
+          <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .6rem',fontSize:'.78rem',color:planFilter?'var(--color-text)':'#555',flex:1,minWidth:'120px'}} value={planFilter} onChange={e=>setPlanFilter(e.target.value)}>
+            <option value="">Ficha</option>{planOptions.map(n=><option key={n}>{n}</option>)}
+          </select>
+          {(dateSearch||weekday||planFilter)&&<button onClick={()=>{setDateSearch('');setWeekday('');setPlanFilter('');}} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.35rem .65rem',color:'#e31b23',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>Limpar</button>}
+        </div>
+        <div style={{fontSize:'.65rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>{filtered.length} resultado(s)</div>
+      </div>
+
+      {filtered.length===0?(
+        <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#222'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'2rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.4rem'}}>Sem registros</div>
+          <div style={{fontSize:'.8rem',color:'#333'}}>Treine para ver o historico aqui</div>
+        </div>
+      ):(
+        <div style={{display:'grid',gap:'.5rem'}}>
+          {filtered.map(([date,obj])=>{
+            const vol=Math.round(volSession(obj));
+            const hasPR=(obj.entries||[]).some(en=>(en.sets||[]).some(s=>{
+              const w=parseNum(s.w),r=parseNum(s.r);
+              if(!w||!r) return false;
+              return Math.abs(w*(1+r/30)-(prMap[en.name]||0))<0.01;
+            }));
+            return (
+              <button key={date} onClick={()=>setDetail({date,obj})} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderLeft:hasPR?'2px solid var(--color-accent)':'2px solid transparent',borderRadius:'10px',padding:'.85rem 1rem',textAlign:'left',cursor:'pointer',width:'100%'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'2px'}}>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:700,color:'var(--color-text)',letterSpacing:'.02em'}}>{toBR(date)}</span>
+                      {hasPR&&<span style={{background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'4px',padding:'1px 6px',fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800}}>PR</span>}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="text-xs text-textSub">Vol: {vol}</div>
-                      <button onClick={e=>{e.stopPropagation();deleteEntry(date);}} className="text-xs text-red-500 hover:text-red-400 px-2 py-0.5 rounded-lg border border-red-900/40 hover:bg-red-900/20 transition">Excluir</button>
-                    </div>
+                    <div style={{fontSize:'.75rem',color:'#555'}}>{obj.day||''} · {obj.planName||'Treino Livre'}</div>
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'.3rem'}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1rem',fontWeight:700,color:'#555'}}>{vol>=1000?(vol/1000).toFixed(1)+'t':vol+'kg'}</div>
+                    <div style={{fontSize:'.65rem',color:'#333'}}>{(obj.entries||[]).length} ex</div>
+                    <button onClick={e=>{e.stopPropagation();deleteEntry(date);}} style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'5px',color:'#e31b23',padding:'2px 7px',fontSize:'.65rem',fontWeight:700,cursor:'pointer'}}>X</button>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {detail&&(
         <Modal onClose={()=>setDetail(null)}>
-          <div className="flex items-start justify-between mb-2">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1rem'}}>
             <div>
-              <div className="text-sm text-textSub">{detail.obj.day}</div>
-              <div className="font-semibold">{toBR(detail.date)} — {detail.obj.planName||"Sem ficha"}</div>
-              <div className="text-xs text-textSub">{detail.obj.entries.length} exercício(s)</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',lineHeight:1}}>{toBR(detail.date)}</div>
+              <div style={{fontSize:'.72rem',color:'#555',marginTop:'2px'}}>{detail.obj.day} · {detail.obj.planName||'Treino Livre'}</div>
             </div>
-            <Button variant="ghost" onClick={()=>setDetail(null)}>Fechar</Button>
+            <button onClick={()=>setDetail(null)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'6px',padding:'.3rem .65rem',color:'#777',fontSize:'.75rem',cursor:'pointer'}}>Fechar</button>
           </div>
-          <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
-            {detail.obj.entries.map((en,i)=>(
-              <div key={i} className="border border-borderDark rounded-xl p-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{en.name}</div>
-                  <div className="text-xs text-textSub">Vol: {Math.round(volSets(en.sets))}</div>
+          <div style={{display:'grid',gap:'.5rem',maxHeight:'60vh',overflowY:'auto',paddingRight:'2px'}}>
+            {detail.obj.entries.map((en,i)=>{
+              const isPR=(en.sets||[]).some(s=>{
+                const w=parseNum(s.w),r=parseNum(s.r);
+                if(!w||!r) return false;
+                return Math.abs(w*(1+r/30)-(prMap[en.name]||0))<0.01;
+              });
+              return (
+                <div key={i} style={{background:'rgba(0,0,0,.3)',border:isPR?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'8px',padding:'.65rem .85rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.4rem'}}>
+                    <div style={{fontWeight:600,fontSize:'.88rem'}}>{en.name}</div>
+                    <div style={{display:'flex',gap:'.4rem',alignItems:'center'}}>
+                      {isPR&&<span style={{background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'4px',padding:'1px 6px',fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800}}>PR</span>}
+                      <span style={{fontSize:'.65rem',color:'#333'}}>{Math.round(volSets(en.sets))}kg</span>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
+                    {en.sets.map((s,ix)=>(
+                      <span key={ix} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1a1a1a',borderRadius:'5px',padding:'3px 8px',fontSize:'.72rem',color:'#aaa'}}>
+                        S{ix+1}: {s.w||'-'}{prefs.unit==='kg'?'kg':'lb'} x {s.r||'-'}{s.rir?' RIR'+s.rir:''}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {en.sets.map((s,ix)=>(
-                    <span key={ix} className="inline-flex items-center rounded-full border border-borderDark px-2 py-0.5 text-xs">
-                      S{ix+1}: {s.w||"-"}{prefs.unit==="kg"?"kg":"lb"} × {s.r||"-"}{s.rir?` (RIR ${s.rir})`:""}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Modal>
       )}
     </div>
   );
 };
+
 // Profile
-const Profile=({prefs,setPrefs})=>{
+const Profile=({prefs,setPrefs,history})=>{
+  const [tab,setTab]=useState('config');
   const [name,setName]=useState(prefs.name);
-  const [avatar,setAvatar]=useState(prefs.avatar);
   const [avatarUrl,setAvatarUrl]=useState(prefs.avatarUrl||null);
   const [unit,setUnit]=useState(prefs.unit);
   const [vibrate,setVibrate]=useState(prefs.vibrate);
   const [goal,setGoal]=useState(prefs.weeklyGoal);
   const [showTimer,setShowTimer]=useState(prefs.showTimer!==false);
   const [timerPreset,setTimerPreset]=useState(Number(prefs.timerPreset||60));
-  const [rir,setRir]=useState(typeof prefs.rirDefault==="number"? prefs.rirDefault : 2);
+  const [rir,setRir]=useState(typeof prefs.rirDefault==='number'?prefs.rirDefault:2);
   const [chartsPremium,setChartsPremium]=useState(!!prefs.chartsPremium);
+  const [theme,setTheme]=useState(prefs.theme||'dark');
   const [uploading,setUploading]=useState(false);
   const [uploadErr,setUploadErr]=useState(null);
+  const [progressPhotos,setProgressPhotos]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('darkset.progress')||'[]');}catch(_){return [];}
+  });
+  const [addingPhoto,setAddingPhoto]=useState(false);
+  const [photoDate,setPhotoDate]=useState(new Date().toISOString().slice(0,10));
+  const [photoLabel,setPhotoLabel]=useState('');
+  const [pendingPhotoData,setPendingPhotoData]=useState(null);
+  const photoRef=useRef(null);
   const fileRef=useRef(null);
 
-  const dirty = (name!==prefs.name)||(avatar!==prefs.avatar)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==prefs.vibrate)||(goal!==prefs.weeklyGoal)||((showTimer)!==(prefs.showTimer!==false))||((Number(timerPreset||0))!==(Number(prefs.timerPreset||60)))||((Number(rir))!==(Number((typeof prefs.rirDefault==="number"? prefs.rirDefault : 2))))||(chartsPremium!==!!prefs.chartsPremium);
+  useEffect(()=>{
+    if(theme==='light'){
+      document.documentElement.style.setProperty('--color-bg','#f2f2f2');
+      document.documentElement.style.setProperty('--color-card','#fff');
+      document.documentElement.style.setProperty('--color-card-soft','#fafafa');
+      document.documentElement.style.setProperty('--color-border','#ddd');
+      document.documentElement.style.setProperty('--color-text','#111');
+      document.documentElement.style.setProperty('--color-text-sub','#666');
+      document.body.style.background='#f2f2f2';
+      document.body.style.color='#111';
+    } else {
+      document.documentElement.style.setProperty('--color-bg','#080808');
+      document.documentElement.style.setProperty('--color-card','#0f0f0f');
+      document.documentElement.style.setProperty('--color-card-soft','#141414');
+      document.documentElement.style.setProperty('--color-border','#1e1e1e');
+      document.documentElement.style.setProperty('--color-text','#f0f0f0');
+      document.documentElement.style.setProperty('--color-text-sub','#888');
+      document.body.style.background='#080808';
+      document.body.style.color='#f0f0f0';
+    }
+  },[theme]);
 
-  const handlePhotoChange = async (e) => {
-    const file = e.target.files && e.target.files[0];
+  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==prefs.vibrate)||(goal!==prefs.weeklyGoal)||((showTimer)!==(prefs.showTimer!==false))||((Number(timerPreset||0))!==(Number(prefs.timerPreset||60)))||((Number(rir))!==(Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2)))||(chartsPremium!==!!prefs.chartsPremium)||(theme!==(prefs.theme||'dark'));
+
+  const handlePhotoChange=async(e)=>{
+    const file=e.target.files&&e.target.files[0];
     if(!file) return;
-    if(!file.type.startsWith('image/')){ setUploadErr('Selecione uma imagem.'); return; }
-    if(file.size > 5*1024*1024){ setUploadErr('Imagem muito grande (máx 5MB).'); return; }
-    setUploadErr(null);
-    setUploading(true);
+    if(!file.type.startsWith('image/')){setUploadErr('Selecione uma imagem.');return;}
+    if(file.size>5*1024*1024){setUploadErr('Imagem muito grande (max 5MB).');return;}
+    setUploadErr(null); setUploading(true);
     try{
-      // Verifica se Firebase Storage está disponível
-      if(!window.firebase || !firebase.storage){
-        setUploadErr('Firebase Storage não disponível. Tente recarregar.');
-        setUploading(false); return;
-      }
-      const user = JSON.parse(localStorage.getItem('darkset.user')||'null');
-      if(!user){ setUploadErr('Faça login para enviar foto.'); setUploading(false); return; }
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `avatars/${user.uid}/avatar.${ext}`;
-      const ref = firebase.storage().ref(path);
+      if(!window.firebase||!firebase.storage){setUploadErr('Firebase Storage nao disponivel.');setUploading(false);return;}
+      const user=JSON.parse(localStorage.getItem('darkset.user')||'null');
+      if(!user){setUploadErr('Faca login para enviar foto.');setUploading(false);return;}
+      const ext=file.name.split('.').pop()||'jpg';
+      const path='avatars/'+user.uid+'/avatar.'+ext;
+      const ref=firebase.storage().ref(path);
       await ref.put(file);
-      const url = await ref.getDownloadURL();
+      const url=await ref.getDownloadURL();
       setAvatarUrl(url);
-      setAvatar(''); // limpa emoji ao usar foto
-    }catch(err){
-      setUploadErr('Erro ao enviar foto: ' + (err.message||''));
-    }finally{ setUploading(false); }
+    }catch(err){setUploadErr('Erro: '+(err.message||''));}
+    finally{setUploading(false);}
   };
 
-  const displayImg = avatarUrl || (prefs.avatarUrl||null);
+  const handleProgressPhoto=(e)=>{
+    const file=e.target.files&&e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{setPendingPhotoData(ev.target.result);setAddingPhoto(true);};
+    reader.readAsDataURL(file);
+  };
+
+  const saveProgressPhoto=()=>{
+    if(!pendingPhotoData) return;
+    const newPhotos=[...progressPhotos,{date:photoDate,label:photoLabel||'Foto',data:pendingPhotoData,id:Date.now()}];
+    setProgressPhotos(newPhotos);
+    try{localStorage.setItem('darkset.progress',JSON.stringify(newPhotos));}catch(_){}
+    setAddingPhoto(false); setPendingPhotoData(null); setPhotoLabel('');
+  };
+
+  const deletePhoto=(id)=>{
+    const updated=progressPhotos.filter(p=>p.id!==id);
+    setProgressPhotos(updated);
+    try{localStorage.setItem('darkset.progress',JSON.stringify(updated));}catch(_){}
+  };
+
+  const displayImg=avatarUrl||(prefs.avatarUrl||null);
+  const toBR=(iso)=>{const [y,m,d]=iso.split('-');return d+'/'+m+'/'+y;};
 
   return (
-    <div className="grid gap-4">
-      <Card title="Perfil">
-        <div className="grid gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Avatar: foto ou iniciais */}
-            <div className="relative">
-              {displayImg
-                ? <img src={displayImg} className="w-16 h-16 rounded-full border-2 border-borderDark object-cover" alt="avatar"/>
-                : <div className="w-16 h-16 rounded-full border-2 border-borderDark bg-black/30 flex items-center justify-center text-xl font-bold text-textSub">{name ? name.slice(0,2).toUpperCase() : 'DS'}</div>
-              }
-              <button
-                onClick={()=>fileRef.current && fileRef.current.click()}
-                className="absolute bottom-0 right-0 bg-accent rounded-full w-6 h-6 flex items-center justify-center text-white text-xs border-2 border-bgDark"
-                title="Trocar foto"
-              >✎</button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange}/>
-            </div>
-            <div className="flex-1 grid gap-2">
-              <input className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full" placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)}/>
-            </div>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
+          <div style={{position:'relative'}}>
+            {displayImg
+              ?<img src={displayImg} style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid #222',objectFit:'cover'}} alt="avatar"/>
+              :<div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid #222',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.3rem',color:'#333'}}>{name?name.slice(0,2).toUpperCase():'DS'}</div>
+            }
+            <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{position:'absolute',bottom:'-2px',right:'-2px',width:'20px',height:'20px',borderRadius:'50%',background:'var(--color-accent)',border:'2px solid var(--color-bg)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.65rem',color:'#fff',fontWeight:700}}>e</button>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhotoChange}/>
           </div>
-          {uploading && <div className="text-xs text-textSub">Enviando foto…</div>}
-          {uploadErr && <div className="text-xs text-red-400">{uploadErr}</div>}
-          <div className="flex flex-wrap items-center gap-3">
-            <label>Unidade:</label>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={unit} onChange={e=>setUnit(e.target.value)}>
-              <option value="kg">kg</option>
-              <option value="lb">lb</option>
-            </select>
-            <label className="ml-4">Vibração:</label>
-            <Switch checked={vibrate} onChange={setVibrate}/>
-            <label className="ml-4">Meta semanal:</label>
-            <input type="number" min="1" max="14" className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-20" value={goal} onChange={e=>setGoal(Number(e.target.value)||1)}/>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>{name||'Sem nome'}</div>
+            <div style={{fontSize:'.7rem',color:'#444',marginTop:'2px'}}>Meta: {goal} treinos/semana</div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label>DarkTimer</label>
-            <Switch checked={showTimer} onChange={setShowTimer}/>
-            <label className="ml-4">Tempo padrão:</label>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={timerPreset} onChange={e=>setTimerPreset(Number(e.target.value)||60)}>
-              <option value="30">30s</option>
-              <option value="60">1min</option>
-              <option value="90">1min30s</option>
-              <option value="120">2min</option>
-              <option value="150">2min30s</option>
-              <option value="180">3min</option>
-            </select>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label>RIR padrão:</label>
-            <select className="border border-borderDark bg-black/30 rounded-xl px-3 py-2 w-full sm:w-auto" value={rir} onChange={e=>setRir(Math.max(0, Math.min(4, Number(e.target.value)||0)))}>
-              <option value="0">0 (Falha)</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-            </select>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label>Gráficos (Premium):</label>
-            <Switch checked={chartsPremium} onChange={setChartsPremium}/>
-            <span className="text-xs text-textSub">Habilita o botão "Gráficos" no Histórico.</span>
-          </div>
-          <div><Button variant="accent" disabled={!dirty||uploading} onClick={()=>setPrefs({name,avatar,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium})}>Salvar perfil</Button></div>
         </div>
-      </Card>
+        {uploading&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'#555'}}>Enviando foto...</div>}
+        {uploadErr&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'#e31b23'}}>{uploadErr}</div>}
+      </div>
+
+      <div className="mode-toggle">
+        <button className={"mode-toggle-btn"+(tab==='config'?' active':'')} onClick={()=>setTab('config')}>Configuracoes</button>
+        <button className={"mode-toggle-btn"+(tab==='progresso'?' active':'')} onClick={()=>setTab('progresso')}>Progresso</button>
+      </div>
+
+      {tab==='config'&&(
+        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'1rem'}}>
+          <div>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem'}}>Nome</div>
+            <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)'}} placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)}/>
+          </div>
+
+          <div>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tema</div>
+            <div className="mode-toggle">
+              <button className={"mode-toggle-btn"+(theme==='dark'?' active':'')} onClick={()=>setTheme('dark')}>Dark</button>
+              <button className={"mode-toggle-btn"+(theme==='light'?' active':'')} onClick={()=>setTheme('light')}>Light</button>
+            </div>
+          </div>
+
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Unidade</div>
+            <div className="mode-toggle" style={{width:'auto'}}>
+              <button className={"mode-toggle-btn"+(unit==='kg'?' active':'')} onClick={()=>setUnit('kg')}>kg</button>
+              <button className={"mode-toggle-btn"+(unit==='lb'?' active':'')} onClick={()=>setUnit('lb')}>lb</button>
+            </div>
+          </div>
+
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Vibracao ao salvar</div>
+            <Switch checked={vibrate} onChange={setVibrate}/>
+          </div>
+
+          <div>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Meta semanal</div>
+            <div style={{display:'flex',gap:'.4rem'}}>
+              {[3,4,5,6,7].map(n=>(
+                <button key={n} onClick={()=>setGoal(n)} style={{flex:1,padding:'.4rem 0',borderRadius:'7px',background:goal===n?'var(--color-accent)':'rgba(0,0,0,.3)',border:goal===n?'none':'1px solid #1a1a1a',color:goal===n?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n}x</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>DarkTimer</div>
+            <Switch checked={showTimer} onChange={setShowTimer}/>
+          </div>
+
+          {showTimer&&(
+            <div>
+              <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Tempo padrao</div>
+              <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+                {[30,60,90,120,150,180].map(t=>(
+                  <button key={t} onClick={()=>setTimerPreset(t)} style={{padding:'.35rem .65rem',borderRadius:'7px',background:timerPreset===t?'var(--color-accent)':'rgba(0,0,0,.3)',border:timerPreset===t?'none':'1px solid #1a1a1a',color:timerPreset===t?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>
+                    {t<60?t+'s':t===60?'1min':t===90?'1m30':t===120?'2min':t===150?'2m30':'3min'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>RIR padrao</div>
+            <div style={{display:'flex',gap:'.4rem'}}>
+              {[0,1,2,3,4].map(n=>(
+                <button key={n} onClick={()=>setRir(n)} style={{flex:1,padding:'.4rem 0',borderRadius:'7px',background:rir===n?'var(--color-accent)':'rgba(0,0,0,.3)',border:rir===n?'none':'1px solid #1a1a1a',color:rir===n?'#fff':'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>{n===0?'F':n}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Graficos avancados</div>
+              <div style={{fontSize:'.65rem',color:'#333',marginTop:'1px'}}>Habilita analise IIE no Historico</div>
+            </div>
+            <Switch checked={chartsPremium} onChange={setChartsPremium}/>
+          </div>
+
+          <button disabled={!dirty||uploading} onClick={()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium,theme})} style={{background:dirty&&!uploading?'var(--color-accent)':'rgba(255,255,255,.04)',border:'none',borderRadius:'8px',padding:'.65rem',color:dirty&&!uploading?'#fff':'#333',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:dirty&&!uploading?'pointer':'default',width:'100%',transition:'all .15s'}}>
+            {dirty?'Salvar alteracoes':'Sem alteracoes'}
+          </button>
+        </div>
+      )}
+
+      {tab==='progresso'&&(
+        <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
+            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>Fotos de Progresso</div>
+            <button onClick={()=>photoRef.current&&photoRef.current.click()} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
+            <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProgressPhoto}/>
+          </div>
+
+          {progressPhotos.length===0&&!addingPhoto&&(
+            <div style={{textAlign:'center',padding:'1.5rem 0',color:'#222',fontSize:'.85rem'}}>Nenhuma foto adicionada ainda</div>
+          )}
+
+          {progressPhotos.length>0&&(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>
+              {progressPhotos.map(p=>(
+                <div key={p.id} style={{position:'relative',borderRadius:'6px',overflow:'hidden',aspectRatio:'1',background:'#111'}}>
+                  <img src={p.data} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={p.label}/>
+                  <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,.85))',padding:'4px 5px'}}>
+                    <div style={{fontSize:'.6rem',color:'#ddd',fontWeight:600}}>{toBR(p.date)}</div>
+                    <div style={{fontSize:'.55rem',color:'#999'}}>{p.label}</div>
+                  </div>
+                  <button onClick={()=>deletePhoto(p.id)} style={{position:'absolute',top:'3px',right:'3px',background:'rgba(0,0,0,.75)',border:'none',borderRadius:'50%',width:'18px',height:'18px',color:'#e31b23',fontSize:'.7rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>x</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {addingPhoto&&(
+            <div style={{background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'8px',padding:'.75rem',display:'grid',gap:'.5rem'}}>
+              {pendingPhotoData&&<img src={pendingPhotoData} style={{width:'100%',maxHeight:'160px',objectFit:'cover',borderRadius:'6px'}} alt="preview"/>}
+              <input type="date" value={photoDate} onChange={e=>setPhotoDate(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+              <input placeholder="Descricao (ex: Inicio, Mes 1...)" value={photoLabel} onChange={e=>setPhotoLabel(e.target.value)} style={{background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.4rem .65rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+              <div style={{display:'flex',gap:'.4rem'}}>
+                <button onClick={saveProgressPhoto} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.45rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Salvar</button>
+                <button onClick={()=>{setAddingPhoto(false);setPendingPhotoData(null);}} style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.45rem',color:'#777',fontSize:'.82rem',cursor:'pointer'}}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
 
 function App(){
   const [screen,setScreen]=useState("home");
@@ -1808,7 +2127,7 @@ function App(){
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
-      {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs}/>}
+      {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V4.9.0</footer>
       {toast && <Toast text={toast}/>}
