@@ -1036,7 +1036,7 @@ function useHistory(){
   return [history,setHistory];
 }
 function usePrefs(){
-  const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false,trainDays:[1,2,3,4,5,6],gymWifi:"",spotifyUrl:"",aiKey:"",onboarded:false,gymMode:false}));
+  const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
   useEffect(()=>{ window._DS_SETTERS.prefs=setPrefsState; return ()=>{window._DS_SETTERS.prefs=null;}; },[]);
   const setPrefs=(v)=>setPrefsState(prev=>{
     const next=typeof v==='function'?v(prev):v;
@@ -2388,556 +2388,6 @@ const Community = ({history, setToast, prefs}) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ONBOARDING — primeira vez no app
 // ═══════════════════════════════════════════════════════════════════════════
-const DAYS_FULL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-
-const Onboarding = ({prefs, setPrefs, onDone}) => {
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
-  const [goal, setGoal] = useState('hipertrofia');
-  const [trainDays, setTrainDays] = useState([1,2,3,4,5,6]);
-
-  const toggleDay = (d) => setTrainDays(prev =>
-    prev.includes(d) ? prev.filter(x=>x!==d) : [...prev,d].sort()
-  );
-
-  const finish = () => {
-    setPrefs(p => ({...p, name:name.trim()||p.name, trainDays, weeklyGoal:trainDays.length, onboarded:true, goal}));
-    onDone();
-  };
-
-  const steps = [
-    // Step 0: boas-vindas
-    <div style={{textAlign:'center',padding:'2rem 1rem',display:'grid',gap:'1.5rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',textTransform:'uppercase',lineHeight:.9,color:'var(--color-text)'}}>
-          BEM-VINDO<br/>AO <span style={{color:'var(--color-accent)'}}>DARKSET</span>
-        </div>
-        <div style={{fontSize:'.85rem',color:'var(--color-text-sub)',marginTop:'1rem',lineHeight:1.5}}>
-          Seu app de treino com histórico, evolução e comunidade. Vamos configurar em 3 passos rápidos.
-        </div>
-      </div>
-      <div style={{fontSize:'4rem'}}>💪</div>
-      <button onClick={()=>setStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 24px rgba(227,27,35,.4)'}}>
-        Começar →
-      </button>
-    </div>,
-
-    // Step 1: nome
-    <div style={{display:'grid',gap:'1.25rem',padding:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'var(--color-text)'}}>Como te chamamos?</div>
-        <div style={{fontSize:'.8rem',color:'var(--color-text-sub)',marginTop:'.35rem'}}>Aparece nas saudações e no Squad</div>
-      </div>
-      <input
-        autoFocus
-        placeholder="Seu nome ou apelido..."
-        value={name}
-        onChange={e=>setName(e.target.value)}
-        onKeyDown={e=>e.key==='Enter'&&name.trim()&&setStep(2)}
-        style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.85rem 1rem',fontSize:'1.1rem',color:'var(--color-text)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}
-      />
-      <div style={{display:'grid',gap:'.65rem'}}>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Seu objetivo principal</div>
-        {[
-          {k:'hipertrofia',l:'Hipertrofia 💪',d:'Ganhar massa muscular'},
-          {k:'forca',l:'Força 🏋️',d:'Aumentar carga e performance'},
-          {k:'emagrecimento',l:'Emagrecimento 🔥',d:'Perder gordura e definir'},
-          {k:'saude',l:'Saúde & Bem-estar 🌿',d:'Manter atividade física'},
-        ].map(({k,l,d})=>(
-          <button key={k} onClick={()=>setGoal(k)} style={{
-            background:goal===k?'rgba(227,27,35,.12)':'rgba(255,255,255,.03)',
-            border:goal===k?'1px solid rgba(227,27,35,.4)':'1px solid var(--color-border)',
-            borderRadius:'10px',padding:'.7rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',textAlign:'left'
-          }}>
-            <div style={{width:'16px',height:'16px',borderRadius:'50%',border:'2px solid',borderColor:goal===k?'var(--color-accent)':'#333',background:goal===k?'var(--color-accent)':'transparent',flexShrink:0}}/>
-            <div>
-              <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{l}</div>
-              <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{d}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-      <button disabled={!name.trim()} onClick={()=>setStep(2)} style={{background:name.trim()?'var(--color-accent)':'rgba(0,0,0,.2)',border:'none',borderRadius:'10px',padding:'.85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:name.trim()?'pointer':'default'}}>
-        Próximo →
-      </button>
-    </div>,
-
-    // Step 2: dias de treino
-    <div style={{display:'grid',gap:'1.25rem',padding:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'var(--color-text)'}}>Quando você treina?</div>
-        <div style={{fontSize:'.8rem',color:'var(--color-text-sub)',marginTop:'.35rem'}}>Dias de descanso não quebram seu streak</div>
-      </div>
-      <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',justifyContent:'center'}}>
-        {DAYS_FULL.map((day,i)=>{
-          const selected = trainDays.includes(i);
-          return (
-            <button key={i} onClick={()=>toggleDay(i)} style={{
-              width:'52px',height:'52px',borderRadius:'12px',border:'none',cursor:'pointer',
-              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',
-              background:selected?'var(--color-accent)':'rgba(255,255,255,.04)',
-              color:selected?'#fff':'var(--color-text-sub)',
-              boxShadow:selected?'0 0 12px rgba(227,27,35,.3)':'none',
-              textTransform:'uppercase'
-            }}>{day.slice(0,3)}</button>
-          );
-        })}
-      </div>
-      <div style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-text-sub)'}}>
-        {trainDays.length} dia{trainDays.length!==1?'s':''} de treino por semana
-      </div>
-      <button disabled={trainDays.length===0} onClick={finish} style={{background:trainDays.length?'var(--color-accent)':'rgba(0,0,0,.2)',border:'none',borderRadius:'10px',padding:'.85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:trainDays.length?'pointer':'default',boxShadow:trainDays.length?'0 0 24px rgba(227,27,35,.4)':'none'}}>
-        Começar a treinar 🔥
-      </button>
-    </div>,
-  ];
-
-  return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'var(--color-bg)',display:'flex',flexDirection:'column',justifyContent:'center',overflowY:'auto'}}>
-      {/* Progress dots */}
-      <div style={{display:'flex',justifyContent:'center',gap:'.4rem',padding:'1.5rem 0 0'}}>
-        {[0,1,2].map(i=>(
-          <div key={i} style={{width:i===step?'24px':'8px',height:'8px',borderRadius:'4px',background:i<=step?'var(--color-accent)':'#222',transition:'all .3s'}}/>
-        ))}
-      </div>
-      <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',maxWidth:'420px',width:'100%',margin:'0 auto'}}>
-        {steps[step]}
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PR CELEBRATION — animação ao bater recorde
-// ═══════════════════════════════════════════════════════════════════════════
-const PRCelebration = ({exName, newWeight, onClose}) => {
-  useEffect(()=>{
-    const t = setTimeout(onClose, 4500);
-    return ()=>clearTimeout(t);
-  },[]);
-  return (
-    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:99998,background:'rgba(0,0,0,.88)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1rem',padding:'2rem',cursor:'pointer'}}>
-      <div style={{fontSize:'4rem',animation:'pulse 0.6s ease infinite'}}>🏆</div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.5rem',textTransform:'uppercase',color:'#FFD700',textAlign:'center',lineHeight:1,textShadow:'0 0 40px rgba(255,215,0,.5)'}}>
-        NOVO RECORDE!
-      </div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)',textAlign:'center'}}>
-        {exName}
-      </div>
-      <div style={{display:'flex',alignItems:'baseline',gap:'.5rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',color:'var(--color-accent)',lineHeight:1}}>{newWeight}</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.5rem',color:'var(--color-text-sub)'}}>kg</div>
-      </div>
-      <div style={{fontSize:'.75rem',color:'#444',marginTop:'.5rem'}}>Toque para fechar</div>
-    </div>
-  );
-};
-
-// Helper: detectar PR ao salvar série
-function detectPR(exName, newSets, history) {
-  const best = Object.values(history).reduce((maxW, sess) => {
-    const entry = sess.entries?.find(e=>e.name===exName);
-    if(!entry) return maxW;
-    const w = Math.max(0,...(entry.sets||[]).map(s=>Number(s.w||0)));
-    return w > maxW ? w : maxW;
-  }, 0);
-  const newBest = Math.max(0,...newSets.map(s=>Number(s.w||0)));
-  if(newBest > 0 && newBest > best) return newBest;
-  return null;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DARKAI COACH — análise semanal com Claude API
-// ═══════════════════════════════════════════════════════════════════════════
-const DarkAICoach = ({history, prefs, setToast}) => {
-  const [analysis, setAnalysis] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const generateAnalysis = async () => {
-    const apiKey = localStorage.getItem('darkset.ai.key');
-    if(!apiKey) { setError('Configure sua API key da Anthropic no Perfil'); return; }
-
-    setLoading(true); setError(''); setAnalysis('');
-
-    // Montar resumo dos últimos 14 dias
-    const now = new Date();
-    const cutoff = new Date(now); cutoff.setDate(now.getDate()-14);
-    const recent = Object.entries(history)
-      .filter(([d])=>new Date(d)>=cutoff)
-      .sort((a,b)=>a[0]>b[0]?1:-1);
-
-    if(recent.length === 0) {
-      setError('Sem treinos nos últimos 14 dias para analisar.');
-      setLoading(false); return;
-    }
-
-    const summary = recent.map(([date,sess])=>{
-      const exs = (sess.entries||[]).map(e=>{
-        const best = Math.max(0,...(e.sets||[]).map(s=>Number(s.w||0)));
-        return `${e.name} (${e.sets?.length||0}x, melhor: ${best}kg)`;
-      }).join(', ');
-      return `${date}: ${sess.planName||'Livre'} — ${exs}`;
-    }).join('
-');
-
-    const prompt = `Você é o DarkCoach, coach pessoal do app DarkSet. Analise os treinos abaixo e dê um feedback em português brasileiro, direto e motivador (máximo 4 parágrafos curtos).
-
-Objetivo do atleta: ${prefs.goal||'hipertrofia'}
-Dias de treino por semana: ${(prefs.trainDays||[1,2,3,4,5,6]).length}
-
-Treinos dos últimos 14 dias:
-${summary}
-
-Responda com:
-1. O que foi bem esta semana (1 frase)
-2. O que precisa de atenção (1 frase)  
-3. Sugestão prática para a próxima semana (1-2 frases)
-4. Frase motivacional curta e intensa
-
-Seja direto, use linguagem de academia, sem enrolação.`;
-
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST',
-        headers:{
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          messages:[{role:'user', content:prompt}]
-        })
-      });
-      const data = await res.json();
-      if(data.content?.[0]?.text) {
-        setAnalysis(data.content[0].text);
-      } else if(data.error) {
-        setError('Erro da API: ' + data.error.message);
-      }
-    } catch(e) {
-      setError('Erro de conexão: ' + e.message);
-    }
-    setLoading(false);
-  };
-
-  const hasKey = !!localStorage.getItem('darkset.ai.key');
-  const daysSinceLastTrain = (() => {
-    const keys = Object.keys(history).sort();
-    if(!keys.length) return null;
-    const last = new Date(keys[keys.length-1]);
-    return Math.floor((new Date()-last)/(1000*60*60*24));
-  })();
-
-  return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      {/* Header */}
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-          DARK<span style={{color:'var(--color-accent)'}}>COACH</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Análise inteligente do seu treino</div>
-      </div>
-
-      {/* Stats rápidas */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
-        <div className="ds-card" style={{padding:'1rem',background:'var(--color-card)',textAlign:'center'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:'var(--color-accent)'}}>{Object.keys(history).length}</div>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Total de treinos</div>
-        </div>
-        <div className="ds-card" style={{padding:'1rem',background:'var(--color-card)',textAlign:'center'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:daysSinceLastTrain===0?'#4ade80':daysSinceLastTrain>2?'var(--color-accent)':'var(--color-text)'}}>{daysSinceLastTrain===null?'—':daysSinceLastTrain===0?'Hoje':daysSinceLastTrain+'d'}</div>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Último treino</div>
-        </div>
-      </div>
-
-      {/* AI Analysis */}
-      <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.85rem'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'var(--color-text)'}}>Análise da semana</div>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>Baseado nos últimos 14 dias</div>
-          </div>
-          <button onClick={generateAnalysis} disabled={loading||!hasKey} style={{
-            background:hasKey?'var(--color-accent)':'rgba(0,0,0,.2)',
-            border:'none',borderRadius:'8px',padding:'.5rem 1rem',
-            color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",
-            fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',
-            cursor:hasKey&&!loading?'pointer':'default',
-            opacity:loading?0.7:1
-          }}>
-            {loading?'Analisando...':'Analisar 🤖'}
-          </button>
-        </div>
-
-        {!hasKey&&(
-          <div style={{background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.75rem',fontSize:'.75rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
-            Configure sua <strong style={{color:'var(--color-accent)'}}>API key da Anthropic</strong> nas Configurações do Perfil para ativar o DarkCoach.{' '}
-            <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{color:'var(--color-accent)',fontWeight:700}}>Criar grátis →</a>
-          </div>
-        )}
-
-        {error&&(
-          <div style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.75rem',fontSize:'.78rem',color:'#e31b23'}}>{error}</div>
-        )}
-
-        {loading&&(
-          <div style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)'}}>
-            <div style={{fontSize:'2rem',marginBottom:'.5rem',animation:'pulse 1s infinite'}}>🤖</div>
-            <div style={{fontSize:'.82rem'}}>DarkCoach analisando seus treinos...</div>
-          </div>
-        )}
-
-        {analysis&&(
-          <div style={{background:'rgba(0,0,0,.2)',borderRadius:'10px',padding:'1rem',borderLeft:'3px solid var(--color-accent)'}}>
-            <div style={{fontSize:'.8rem',color:'var(--color-text)',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{analysis}</div>
-          </div>
-        )}
-      </div>
-
-      {/* API Key config */}
-      <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.6rem'}}>
-        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>API Key Anthropic (DarkCoach)</div>
-        <AIKeyInput setToast={setToast}/>
-        <div style={{fontSize:'.65rem',color:'#444'}}>Gratuito em console.anthropic.com — $5 créditos iniciais</div>
-      </div>
-    </div>
-  );
-};
-
-const AIKeyInput = ({setToast}) => {
-  const [key, setKey] = useState(()=>localStorage.getItem('darkset.ai.key')||'');
-  const [saved, setSaved] = useState(false);
-  const save = () => {
-    localStorage.setItem('darkset.ai.key', key.trim());
-    setSaved(true); setTimeout(()=>setSaved(false),2000);
-    if(setToast) setToast('API key salva ✓');
-  };
-  return (
-    <div style={{display:'flex',gap:'.4rem'}}>
-      <input type="password" placeholder="sk-ant-..." value={key}
-        onChange={e=>{setKey(e.target.value);setSaved(false);}}
-        style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.45rem .7rem',fontSize:'.78rem',color:'var(--color-text)',fontFamily:'monospace'}}/>
-      <button onClick={save} style={{background:saved?'rgba(74,222,128,.15)':'var(--color-accent)',border:saved?'1px solid rgba(74,222,128,.3)':'none',borderRadius:'7px',padding:'.45rem .85rem',color:saved?'#4ade80':'#fff',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>
-        {saved?'✓':'Salvar'}
-      </button>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PLAYLIST DE TREINO — links do Spotify por tipo de treino
-// ═══════════════════════════════════════════════════════════════════════════
-const PLAYLISTS = [
-  {name:'Push Day 🔥',url:'https://open.spotify.com/playlist/37i9dQZF1DX76Wlfdnj7AP',desc:'Peito, Ombro, Tríceps'},
-  {name:'Pull Day 💪',url:'https://open.spotify.com/playlist/37i9dQZF1DXdxcBWuJkbcy',desc:'Costas, Bíceps'},
-  {name:'Leg Day 🦵',url:'https://open.spotify.com/playlist/37i9dQZF1DWZUtWMZbGSMS',desc:'Pernas e Glúteo'},
-  {name:'HIIT & Cardio ⚡',url:'https://open.spotify.com/playlist/37i9dQZF1DXaXB8fQg7xof',desc:'Alta intensidade'},
-  {name:'Full Body 🏋️',url:'https://open.spotify.com/playlist/37i9dQZF1DX6VdMW310YC7',desc:'Corpo todo'},
-  {name:'Foco Total 🎯',url:'https://open.spotify.com/playlist/37i9dQZF1DWZeKCadgRdKQ',desc:'Sem letra, máximo foco'},
-];
-
-const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
-  const [custom, setCustom] = useState(prefs.spotifyUrl||'');
-
-  const openPlaylist = (url) => {
-    // Tenta abrir no app Spotify, senão abre no browser
-    window.open(url, '_blank');
-    setToast('Abrindo playlist... 🎵');
-  };
-
-  const saveCustom = () => {
-    setPrefs(p=>({...p, spotifyUrl:custom}));
-    setToast('Playlist salva!');
-  };
-
-  return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-          DARK<span style={{color:'#1DB954'}}>BEATS</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Playlists para cada treino</div>
-      </div>
-
-      {/* Playlist favorita */}
-      {prefs.spotifyUrl&&(
-        <button onClick={()=>openPlaylist(prefs.spotifyUrl)} style={{background:'rgba(29,185,84,.1)',border:'1px solid rgba(29,185,84,.3)',borderRadius:'12px',padding:'1rem',display:'flex',alignItems:'center',gap:.75+'rem',cursor:'pointer',textAlign:'left'}}>
-          <div style={{fontSize:'2rem'}}>⭐</div>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#1DB954',textTransform:'uppercase'}}>Minha playlist</div>
-            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px',wordBreak:'break-all'}}>{prefs.spotifyUrl.slice(0,50)}...</div>
-          </div>
-          <div style={{marginLeft:'auto',fontSize:'1.5rem'}}>▶</div>
-        </button>
-      )}
-
-      {/* Grid de playlists */}
-      <div style={{display:'grid',gap:'.6rem'}}>
-        {PLAYLISTS.map((pl,i)=>(
-          <button key={i} onClick={()=>openPlaylist(pl.url)} style={{
-            background:'rgba(255,255,255,.03)',border:'1px solid var(--color-border)',
-            borderRadius:'10px',padding:'.85rem 1rem',
-            display:'flex',alignItems:'center',gap:'.85rem',
-            cursor:'pointer',textAlign:'left',transition:'border-color .15s'
-          }}>
-            <div style={{width:'40px',height:'40px',borderRadius:'8px',background:'rgba(29,185,84,.15)',border:'1px solid rgba(29,185,84,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',flexShrink:0}}>
-              ♫
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{pl.name}</div>
-              <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{pl.desc}</div>
-            </div>
-            <div style={{color:'#1DB954',fontSize:'1.1rem',flexShrink:0}}>▶</div>
-          </button>
-        ))}
-      </div>
-
-      {/* Link personalizado */}
-      <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.6rem'}}>
-        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Sua playlist favorita</div>
-        <div style={{display:'flex',gap:'.5rem'}}>
-          <input placeholder="Link do Spotify..." value={custom} onChange={e=>setCustom(e.target.value)}
-            style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.8rem',color:'var(--color-text)'}}/>
-          <button onClick={saveCustom} style={{background:'#1DB954',border:'none',borderRadius:'8px',padding:'.5rem .9rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>
-            ♡ Salvar
-          </button>
-        </div>
-        <div style={{fontSize:'.65rem',color:'#444'}}>Cole o link de qualquer playlist do Spotify</div>
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MODO ACADEMIA — ativa automaticamente por Wi-Fi, GPS ou horário
-// ═══════════════════════════════════════════════════════════════════════════
-const GymMode = ({prefs, setPrefs, setToast, goto}) => {
-  const [gymMode, setGymMode] = useState(prefs.gymMode||false);
-  const [wifiName, setWifiName] = useState(prefs.gymWifi||'');
-  const [detecting, setDetecting] = useState(false);
-  const [location, setLocation] = useState(null);
-
-  // Ativa/desativa modo academia manualmente
-  const toggleGymMode = (val) => {
-    setGymMode(val);
-    setPrefs(p=>({...p, gymMode:val}));
-    if(val) {
-      setToast('🏋️ Modo Academia ativado!');
-      if(prefs.vibrate && navigator.vibrate) navigator.vibrate([50,30,100]);
-    } else {
-      setToast('Modo Academia desativado');
-    }
-  };
-
-  // Detectar localização para salvar como academia
-  const saveGymLocation = () => {
-    setDetecting(true);
-    navigator.geolocation?.getCurrentPosition(
-      pos => {
-        const loc = {lat:pos.coords.latitude, lng:pos.coords.longitude};
-        setLocation(loc);
-        setPrefs(p=>({...p, gymLocation:loc}));
-        setDetecting(false);
-        setToast('Localização da academia salva! 📍');
-      },
-      () => { setDetecting(false); setToast('GPS não disponível'); }
-    );
-  };
-
-  // Verificar se está na academia por GPS
-  const checkGPS = () => {
-    if(!prefs.gymLocation) { setToast('Salve a localização da academia primeiro'); return; }
-    navigator.geolocation?.getCurrentPosition(pos=>{
-      const R=6371000;
-      const dLat=(pos.coords.latitude-prefs.gymLocation.lat)*Math.PI/180;
-      const dLng=(pos.coords.longitude-prefs.gymLocation.lng)*Math.PI/180;
-      const a=Math.sin(dLat/2)**2+Math.cos(prefs.gymLocation.lat*Math.PI/180)*Math.cos(pos.coords.latitude*Math.PI/180)*Math.sin(dLng/2)**2;
-      const dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-      if(dist<200) { toggleGymMode(true); }
-      else { setToast(`Você está ${Math.round(dist)}m longe da academia`); }
-    });
-  };
-
-  const saveWifi = () => {
-    setPrefs(p=>({...p, gymWifi:wifiName}));
-    setToast('Nome do Wi-Fi salvo!');
-  };
-
-  return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-          MODO <span style={{color:'var(--color-accent)'}}>ACADEMIA</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Interface otimizada para treinar</div>
-      </div>
-
-      {/* Toggle principal */}
-      <div className="ds-card" style={{padding:'1.1rem',background:gymMode?'rgba(227,27,35,.06)':'var(--color-card)',border:gymMode?'1px solid rgba(227,27,35,.25)':'1px solid var(--color-border)',transition:'all .3s'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',color:gymMode?'var(--color-accent)':'var(--color-text)'}}>
-              {gymMode?'🏋️ NA ACADEMIA':'Modo desligado'}
-            </div>
-            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{gymMode?'Interface e timer otimizados':'Ative ao chegar na academia'}</div>
-          </div>
-          <Switch checked={gymMode} onChange={toggleGymMode}/>
-        </div>
-        {gymMode&&(
-          <button onClick={()=>goto('session')} style={{marginTop:'.85rem',width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 20px rgba(227,27,35,.3)'}}>
-            Iniciar treino agora →
-          </button>
-        )}
-      </div>
-
-      {/* Ativação automática */}
-      <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.85rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',color:'var(--color-text)'}}>Ativação automática</div>
-
-        {/* GPS */}
-        <div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>📍 Por GPS</div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <button onClick={saveGymLocation} disabled={detecting} style={{flex:1,background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem',color:prefs.gymLocation?'#4ade80':'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>
-              {detecting?'Detectando...':prefs.gymLocation?'✓ Local salvo':'Salvar local atual'}
-            </button>
-            {prefs.gymLocation&&(
-              <button onClick={checkGPS} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>
-                Verificar
-              </button>
-            )}
-          </div>
-          {prefs.gymLocation&&<div style={{fontSize:'.62rem',color:'#444',marginTop:'.25rem'}}>Ativa automaticamente quando estiver a menos de 200m</div>}
-        </div>
-
-        {/* Wi-Fi */}
-        <div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>📶 Por nome do Wi-Fi</div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <input placeholder="Nome da rede da academia..." value={wifiName} onChange={e=>setWifiName(e.target.value)}
-              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.8rem',color:'var(--color-text)'}}/>
-            <button onClick={saveWifi} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>OK</button>
-          </div>
-          <div style={{fontSize:'.62rem',color:'#444',marginTop:'.25rem'}}>Detecção de Wi-Fi requer app nativo (Play Store)</div>
-        </div>
-
-        {/* Horário */}
-        <div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>⏰ Ativação rápida pelo botão manual</div>
-          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
-            Clique no toggle acima quando chegar na academia. O app otimiza o DarkTimer e prioriza o modo treino.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
   const [day, setDay] = React.useState(DAYS[0]);
@@ -3199,7 +2649,7 @@ function triggerSmartRest(exName, prefs) {
   window.dispatchEvent(new CustomEvent('darkset:startRest', {detail: {endsAt, dur}}));
 }
 
-const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
+const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
   const activePlanId = plans.activeId || (plans.list[0]?.id ?? null);
   const activePlan = plans.list.find(p => p.id === activePlanId) || null;
   const [mode, setMode] = useState('plan'); // 'plan' | 'free'
@@ -3717,8 +3167,6 @@ const Profile=({prefs,setPrefs,history})=>{
   const [unit,setUnit]=useState(prefs.unit||'kg');
   const [vibrate,setVibrate]=useState(prefs.vibrate!==false);
   const [goal,setGoal]=useState(prefs.weeklyGoal||5);
-  const [trainDays,setTrainDays]=useState(prefs.trainDays||[1,2,3,4,5,6]);
-  const toggleTrainDay=(d)=>setTrainDays(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d].sort());
   const [showTimer,setShowTimer]=useState(prefs.showTimer!==false);
   const [timerPreset,setTimerPreset]=useState(Number(prefs.timerPreset||60));
   const [rir,setRir]=useState(typeof prefs.rirDefault==='number'?prefs.rirDefault:2);
@@ -3737,9 +3185,9 @@ const Profile=({prefs,setPrefs,history})=>{
   const photoRef=useRef(null);
   const fileRef=useRef(null);
 
-  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2))||JSON.stringify(trainDays)!==JSON.stringify(prefs.trainDays||[1,2,3,4,5,6]);
+  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(goal!==prefs.weeklyGoal)||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2));
 
-  const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:trainDays.length,trainDays,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme,gymMode:prefs.gymMode,gymLocation:prefs.gymLocation,gymWifi:prefs.gymWifi,spotifyUrl:prefs.spotifyUrl,goal:prefs.goal,onboarded:prefs.onboarded});
+  const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:goal,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme});
 
   const changeTheme=(t)=>{setTheme(t);setPrefs(p=>({...p,theme:t}));};
 
@@ -3907,18 +3355,6 @@ const Profile=({prefs,setPrefs,history})=>{
             {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
           </div>
 
-          {/* DarkCoach API */}
-          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'grid',gap:'.5rem'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div>
-                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>DarkCoach — IA</div>
-                <div style={{fontSize:'.62rem',color:'#444',marginTop:'1px'}}>API key Anthropic (sk-ant-...)</div>
-              </div>
-              <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700,textDecoration:'none'}}>Criar grátis →</a>
-            </div>
-            <AIKeyInput setToast={setToast}/>
-          </div>
-
           {/* Tutorial */}
           <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Tutorial</div>
@@ -3983,28 +3419,6 @@ const Profile=({prefs,setPrefs,history})=>{
 };
 
 
-// ErrorBoundary para mostrar erros em vez de tela preta
-class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = {error:null,info:null}; }
-  componentDidCatch(error, info) { this.setState({error,info}); }
-  render() {
-    if(this.state.error) {
-      return (
-        <div style={{padding:'2rem',fontFamily:'monospace',color:'#e31b23',background:'#0a0a0a',minHeight:'100vh'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:'#e31b23',marginBottom:'1rem'}}>ERRO NO APP</div>
-          <div style={{fontSize:'.85rem',marginBottom:'1rem',color:'#fff'}}>{String(this.state.error)}</div>
-          <div style={{fontSize:'.7rem',color:'#666',whiteSpace:'pre-wrap',overflow:'auto'}}>{this.state.info?.componentStack}</div>
-          <button onClick={()=>this.setState({error:null,info:null})} style={{marginTop:'1rem',background:'#e31b23',color:'#fff',border:'none',borderRadius:'8px',padding:'.75rem 1.5rem',cursor:'pointer',fontWeight:700}}>
-            Tentar novamente
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-
 function App(){
   const [screen,setScreen]=useState("home");
   // Apply saved theme immediately on load
@@ -4035,11 +3449,8 @@ function App(){
   const [toast,setToast]=useState(null);
   const [builderPlanId,setBuilderPlanId]=useState(null);
   const [viewerPlanId,setViewerPlanId]=useState(null);
-  const [prCelebration,setPrCelebration]=useState(null); // {exName, weight}
-  const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem('darkset.onboarded'));
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
-  const gymModeActive = prefs.gymMode||false;
 
   // Sync theme with prefs — runs whenever prefs.theme changes
   useEffect(()=>{
@@ -4090,8 +3501,6 @@ function App(){
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
-      {/* Onboarding — primeira vez */}
-      {showOnboarding&&<Onboarding prefs={prefs} setPrefs={setPrefs} onDone={()=>{localStorage.setItem('darkset.onboarded','1');setShowOnboarding(false);}}/>}
       {/* Splash screen */}
       {showSplash&&(
         <div style={{position:'fixed',inset:0,background:'#080808',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
@@ -4142,9 +3551,7 @@ function App(){
           <button className={"ds-nav-btn"+(screen==="session"?" active":"")} onClick={()=>goto("session")}>Treino</button>
           <button className={"ds-nav-btn"+(screen==="cardio"?" active":"")} onClick={()=>goto("cardio")}>Cardio</button>
           <button className={"ds-nav-btn"+(screen==="community"?" active":"")} onClick={()=>goto("community")}>Squad</button>
-          <button className={"ds-nav-btn"+(screen==="coach"?" active":"")} onClick={()=>goto("coach")}>Coach 🤖</button>
-          <button className={"ds-nav-btn"+(screen==="beats"?" active":"")} onClick={()=>goto("beats")}>Beats 🎵</button>
-          <button className={"ds-nav-btn"+(screen==="gym"?" active":"")} onClick={()=>goto("gym")} style={{color:gymModeActive?'var(--color-accent)':''}}>{gymModeActive?'🏋️ Gym':'Academia'}</button>
+
           <button className={"ds-nav-btn"+(screen==="measures"?" active":"")} onClick={()=>goto("measures")}>Medidas</button>
           <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
           <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
@@ -4160,24 +3567,21 @@ function App(){
       {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs}/>}
       {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
       {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
-      {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
+      {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
       {screen==="measures" && <Measures setToast={setToast}/>}
-      {screen==="coach" && <DarkAICoach history={history} prefs={prefs} setToast={setToast}/>}
-      {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
-      {screen==="gym" && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.3.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.2.1</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
 }
 const root=ReactDOM.createRoot(document.getElementById('root'));
-root.render(<ErrorBoundary><App/></ErrorBoundary>);
+root.render(<App/>);
 
 </script>
 
