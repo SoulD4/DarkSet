@@ -609,7 +609,12 @@ const EX_NAME_MAP = {
 // GIF cache in memory + localStorage
 const GIF_CACHE_KEY = 'darkset.gifcache';
 const GIF_CACHE = (() => {
-  try { return JSON.parse(localStorage.getItem(GIF_CACHE_KEY)||'{}'); } catch(_){ return {}; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(GIF_CACHE_KEY)||'{}');
+    // Remove entradas inválidas (strings vazias de tentativas falhas anteriores)
+    Object.keys(raw).forEach(k => { if(!raw[k] || !raw[k].startsWith('http')) delete raw[k]; });
+    return raw;
+  } catch(_){ return {}; }
 })();
 const saveGifCache = () => {
   try { localStorage.setItem(GIF_CACHE_KEY, JSON.stringify(GIF_CACHE)); } catch(_){}
@@ -626,76 +631,86 @@ async function fetchExGif(exName) {
   if (!engName) return null;
 
   const apiKey = getApiKey();
+  if (!apiKey) return null;
 
-  // ExerciseDB via RapidAPI (chave do usuário)
-  if (apiKey) {
-    try {
-      const q = encodeURIComponent(engName);
-      // Tenta endpoint /exercises/name/ primeiro
-      const res = await fetch(
-        `https://exercisedb.p.rapidapi.com/exercises/name/${q}?limit=1`,
-        { headers: {
-            'X-RapidAPI-Key': apiKey.trim(),
-            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
-          }
-        }
-      );
-      if(res.ok){
-        const data = await res.json();
-        const gif = Array.isArray(data) ? data[0]?.gifUrl : data?.gifUrl;
-        if(gif){
-          GIF_CACHE[exName] = gif;
-          saveGifCache();
-          return gif;
-        }
-      }
-    } catch(_){}
+  const key = apiKey.trim();
+  const headers = {
+    'X-RapidAPI-Key': key,
+    'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
+  };
 
-    // Fallback: busca mais ampla com /exercises?name=
-    try {
-      const q2 = encodeURIComponent(engName.split(' ').slice(0,2).join(' '));
-      const res2 = await fetch(
-        `https://exercisedb.p.rapidapi.com/exercises?limit=5`,
-        { headers: {
-            'X-RapidAPI-Key': apiKey.trim(),
-            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
-          }
-        }
-      );
-      if(res2.ok){
-        const data2 = await res2.json();
-        const match = Array.isArray(data2) && data2.find(e=>
-          e.name?.toLowerCase().includes(engName.split(' ')[0]) ||
-          e.name?.toLowerCase().includes(engName.split(' ')[1]||'')
-        );
-        if(match?.gifUrl){
-          GIF_CACHE[exName] = match.gifUrl;
-          saveGifCache();
-          return match.gifUrl;
-        }
+  // Endpoint 1: busca por nome exato
+  try {
+    const q = encodeURIComponent(engName);
+    const res = await fetch(
+      `https://exercisedb.p.rapidapi.com/exercises/name/${q}?limit=3&offset=0`,
+      { headers }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data?.data||[]);
+      if (items[0]?.gifUrl) {
+        GIF_CACHE[exName] = items[0].gifUrl;
+        saveGifCache();
+        return items[0].gifUrl;
       }
-    } catch(_){}
-  }
+    }
+  } catch(_){}
+
+  // Endpoint 2: busca pela primeira palavra (mais ampla)
+  try {
+    const word = encodeURIComponent(engName.split(' ')[0]);
+    const res2 = await fetch(
+      `https://exercisedb.p.rapidapi.com/exercises/name/${word}?limit=5&offset=0`,
+      { headers }
+    );
+    if (res2.ok) {
+      const data2 = await res2.json();
+      const items2 = Array.isArray(data2) ? data2 : (data2?.data||[]);
+      const match = items2.find(e => {
+        const n = (e.name||'').toLowerCase();
+        return engName.split(' ').every(w => n.includes(w));
+      }) || items2[0];
+      if (match?.gifUrl) {
+        GIF_CACHE[exName] = match.gifUrl;
+        saveGifCache();
+        return match.gifUrl;
+      }
+    }
+  } catch(_){}
 
   return null;
 }
 
 // React hook: load gif for an exercise
 function useExGif(exName) {
-  const [gifUrl, setGifUrl] = useState(GIF_CACHE[exName]||null);
+  // Só usa cache se tiver URL real (não string vazia)
+  const cached = GIF_CACHE[exName];
+  const [gifUrl, setGifUrl] = useState(cached && cached.startsWith('http') ? cached : null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(()=>{
-    if(!exName || gifUrl) return;
+    if(!exName) return;
+    // Limpa cache inválido (string vazia guardada de tentativas anteriores)
+    if(GIF_CACHE[exName] === '' || GIF_CACHE[exName] === null) {
+      delete GIF_CACHE[exName];
+    }
+    if(gifUrl) return; // já tem URL válida
     let cancelled = false;
     setLoading(true);
+    setError(false);
     fetchExGif(exName).then(url=>{
-      if(!cancelled){ setGifUrl(url||''); setLoading(false); }
+      if(!cancelled){
+        if(url) { setGifUrl(url); }
+        else { setError(true); }
+        setLoading(false);
+      }
     });
     return ()=>{ cancelled=true; };
   },[exName]);
 
-  return {gifUrl, loading};
+  return {gifUrl, loading, error};
 }
 
 
@@ -886,7 +901,7 @@ const ExGifModal = ({exName, onClose}) => {
           <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
             <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
             <div style={{fontSize:'.85rem',fontWeight:600,marginBottom:'.35rem'}}>GIF não encontrado</div>
-            <div style={{fontSize:'.72rem',color:'#444'}}>Configure sua API key no Perfil para acesso completo</div>
+            <div style={{fontSize:'.72rem',color:'#444'}}>{getApiKey()?'Exercício não encontrado na base de dados':'Configure sua API key no Perfil'}</div>
           </div>
         )}
       </div>
@@ -2631,13 +2646,13 @@ const Community = ({history, setToast, prefs}) => {
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'.5rem'}}>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
             DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
           </div>
           <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Comunidade de treino</div>
         </div>
         {groupCode&&(
-          <button onClick={()=>{setCheckingIn(true);}} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
+          <button onClick={()=>setCheckingIn(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
             Check-in 💪
           </button>
         )}
