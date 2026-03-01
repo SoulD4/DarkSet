@@ -490,317 +490,215 @@ const EXS=[
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Mapeamento: nome PT-BR → nome ExerciseDB (inglês)
-const EX_NAME_MAP = {
+// ═══════════════════════════════════════════════════════════════════════════
+// GIF SYSTEM — URLs diretas do repositório free-exercise-db (GitHub)
+// Sem API key, sem cadastro, funciona para todo mundo automaticamente
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Base URL do repositório público
+const GIF_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+
+// Mapeamento: nome PT-BR → slug do exercício no repositório
+const EX_GIF_MAP = {
   // PEITO
-  "Supino reto barra":             "barbell bench press",
-  "Supino reto halteres":          "dumbbell bench press",
-  "Supino reto máquina":           "lever chest press",
-  "Supino inclinado barra":        "barbell incline bench press",
-  "Supino inclinado halteres":     "dumbbell incline bench press",
-  "Supino inclinado máquina":      "lever incline chest press",
-  "Supino declinado barra":        "barbell decline bench press",
-  "Supino declinado halteres":     "dumbbell decline bench press",
-  "Crossover polia alta":          "cable fly",
-  "Crucifixo reto halteres":       "dumbbell fly",
-  "Crucifixo inclinado halteres":  "dumbbell incline fly",
-  "Crucifixo Máquina":             "lever pec deck fly",
-  "Peck deck":                     "lever pec deck fly",
-  "Flexão de braço":               "push-up",
-  "Pullover halteres":             "dumbbell pullover",
+  "Supino reto barra":             "Barbell_Bench_Press/0.gif",
+  "Supino reto halteres":          "Dumbbell_Bench_Press/0.gif",
+  "Supino inclinado barra":        "Barbell_Incline_Bench_Press/0.gif",
+  "Supino inclinado halteres":     "Dumbbell_Incline_Bench_Press/0.gif",
+  "Supino declinado barra":        "Barbell_Decline_Bench_Press/0.gif",
+  "Supino declinado halteres":     "Dumbbell_Decline_Bench_Press/0.gif",
+  "Crossover polia alta":          "Cable_Crossover/0.gif",
+  "Crucifixo reto halteres":       "Dumbbell_Flyes/0.gif",
+  "Crucifixo inclinado halteres":  "Dumbbell_Incline_Flyes/0.gif",
+  "Peck deck":                     "Pec_Deck_Fly/0.gif",
+  "Flexão de braço":               "Push-Up/0.gif",
+  "Pullover halteres":             "Dumbbell_Pullover/0.gif",
   // OMBRO
-  "Desenvolvimento barra":         "barbell shoulder press",
-  "Desenvolvimento halteres":      "dumbbell shoulder press",
-  "Desenvolvimento máquina":       "lever shoulder press",
-  "Arnold press halteres":         "dumbbell arnold press",
-  "Elevação lateral halteres":     "dumbbell lateral raise",
-  "Elevação lateral polia":        "cable lateral raise",
-  "Elevação lateral unilateral polia": "cable lateral raise",
-  "Elevação frontal barra":        "barbell front raise",
-  "Elevação frontal halteres":     "dumbbell front raise",
-  "Face Pull (corda)":             "cable face pull",
-  "Crucifixo inverso máquina":     "lever reverse fly",
-  "Crucifixo inverso halteres":    "dumbbell reverse fly",
-  "Crucifixo inverso polia":       "cable reverse fly",
+  "Desenvolvimento barra":         "Barbell_Shoulder_Press/0.gif",
+  "Desenvolvimento halteres":      "Dumbbell_Shoulder_Press/0.gif",
+  "Arnold press halteres":         "Arnold_Dumbbell_Press/0.gif",
+  "Elevação lateral halteres":     "Dumbbell_Lateral_Raise/0.gif",
+  "Elevação lateral polia":        "Cable_Lateral_Raise/0.gif",
+  "Elevação frontal barra":        "Barbell_Front_Raise/0.gif",
+  "Elevação frontal halteres":     "Dumbbell_Front_Raise/0.gif",
+  "Face Pull (corda)":             "Cable_Face_Pull/0.gif",
+  "Crucifixo inverso halteres":    "Dumbbell_Bent_Over_Lateral_Raise/0.gif",
+  "Crucifixo inverso máquina":     "Reverse_Fly/0.gif",
   // TRAPÉZIO
-  "Encolhimento barra":            "barbell shrug",
-  "Encolhimento halteres":         "dumbbell shrug",
-  "Remada alta barra":             "barbell upright row",
+  "Encolhimento barra":            "Barbell_Shrug/0.gif",
+  "Encolhimento halteres":         "Dumbbell_Shrug/0.gif",
+  "Remada alta barra":             "Barbell_Upright_Row/0.gif",
   // COSTAS
-  "Barra fixa":                    "pull-up",
-  "Puxada alta aberta":            "cable pulldown",
-  "Puxada triângulo":              "cable close grip pull down",
-  "Puxada fechada":                "cable close grip pull down",
-  "Pulldown":                      "cable pulldown",
-  "Puxada alta unilateral":        "cable pulldown",
-  "Remada curvada barra":          "barbell bent over row",
-  "Remada curvada halteres":       "dumbbell bent over row",
-  "Remada unilateral halteres":    "dumbbell one arm row",
-  "Remada serrote halteres":       "dumbbell one arm row",
-  "Remada articulada":             "lever seated row",
-  "Remada baixa polia":            "cable seated row",
-  "Remada baixa aberta polia":     "cable seated row",
-  "Remada cavalinho":              "barbell pendlay row",
-  "Hiperextensão lombar":          "hyperextension",
-  "Extensão lombar máquina":       "lever back extension",
+  "Barra fixa":                    "Pull-up/0.gif",
+  "Puxada alta aberta":            "Wide-Grip_Lat_Pulldown/0.gif",
+  "Puxada fechada":                "Close-Grip_Front_Lat_Pulldown/0.gif",
+  "Pulldown":                      "Wide-Grip_Lat_Pulldown/0.gif",
+  "Puxada triângulo":              "Close-Grip_Front_Lat_Pulldown/0.gif",
+  "Remada curvada barra":          "Barbell_Bent_Over_Row/0.gif",
+  "Remada curvada halteres":       "Dumbbell_Bent_Over_Row/0.gif",
+  "Remada unilateral halteres":    "Dumbbell_One-Arm_Row/0.gif",
+  "Remada serrote halteres":       "Dumbbell_One-Arm_Row/0.gif",
+  "Remada articulada":             "Seated_Cable_Row/0.gif",
+  "Remada baixa polia":            "Seated_Cable_Row/0.gif",
+  "Remada cavalinho":              "Barbell_Bent_Over_Row/0.gif",
+  "Hiperextensão lombar":          "Hyperextensions_Back_Extensions/0.gif",
+  "Extensão lombar máquina":       "Hyperextensions_Back_Extensions/0.gif",
   // BÍCEPS
-  "Rosca direta barra":            "barbell curl",
-  "Rosca direta halteres":         "dumbbell curl",
-  "Rosca direta polia":            "cable curl",
-  "Rosca alternada halteres":      "dumbbell alternate bicep curl",
-  "Rosca inclinada halteres":      "dumbbell incline curl",
-  "Rosca concentrada halteres":    "dumbbell concentration curl",
-  "Rosca martelo halteres":        "dumbbell hammer curl",
-  "Rosca martelo corda":           "cable hammer curl",
-  "Rosca Scott máquina":           "lever preacher curl",
-  "Rosca 21":                      "barbell curl",
-  "Rosca 45° halteres":            "dumbbell incline curl",
+  "Rosca direta barra":            "Barbell_Curl/0.gif",
+  "Rosca direta halteres":         "Dumbbell_Curl/0.gif",
+  "Rosca direta polia":            "Cable_Curl_With_Bar/0.gif",
+  "Rosca alternada halteres":      "Dumbbell_Alternate_Bicep_Curl/0.gif",
+  "Rosca inclinada halteres":      "Dumbbell_Incline_Curl/0.gif",
+  "Rosca concentrada halteres":    "Dumbbell_Concentration_Curls/0.gif",
+  "Rosca martelo halteres":        "Dumbbell_Hammer_Curl/0.gif",
+  "Rosca Scott máquina":           "Barbell_Preacher_Curl/0.gif",
+  "Rosca 21":                      "Barbell_Curl/0.gif",
+  "Rosca 45° halteres":            "Dumbbell_Incline_Curl/0.gif",
   // TRÍCEPS
-  "Tríceps pulley corda":          "cable triceps pushdown",
-  "Tríceps pulley barra reta":     "cable triceps pushdown",
-  "Tríceps testa barra W":         "barbell skull crusher",
-  "Tríceps testa halteres":        "dumbbell skull crusher",
-  "Tríceps francês halteres":      "dumbbell tricep extension",
-  "Tríceps francês barra":         "barbell tricep extension",
-  "Kick back tríceps halteres":    "dumbbell kickback",
-  "Mergulho no banco":             "bench dip",
-  "Paralelas":                     "parallel bar dip",
+  "Tríceps pulley corda":          "Triceps_Pushdown/0.gif",
+  "Tríceps pulley barra reta":     "Triceps_Pushdown/0.gif",
+  "Tríceps testa barra W":         "Barbell_Lying_Triceps_Extension/0.gif",
+  "Tríceps testa halteres":        "Lying_Tricep_Press/0.gif",
+  "Tríceps francês halteres":      "Dumbbell_Tricep_Extension/0.gif",
+  "Tríceps francês barra":         "Barbell_Lying_Triceps_Extension/0.gif",
+  "Kick back tríceps halteres":    "Dumbbell_Kickback/0.gif",
+  "Mergulho no banco":             "Bench_Dips/0.gif",
+  "Paralelas":                     "Dips/0.gif",
   // QUADRÍCEPS
-  "Agachamento livre":             "barbell squat",
-  "Agachamento sumô barra":        "barbell sumo squat",
-  "Agachamento sumô halteres":     "dumbbell sumo squat",
-  "Agachamento búlgaro halteres":  "dumbbell bulgarian split squat",
-  "Agachamento hack máquina":      "lever hack squat",
-  "Leg press 45°":                 "leg press",
-  "Cadeira extensora":             "lever leg extension",
-  "Cadeira extensora unilateral":  "lever leg extension",
-  "Passada avançada halteres":     "dumbbell lunge",
-  "Afundo com halteres":           "dumbbell lunge",
-  "Afundo com barra":              "barbell lunge",
+  "Agachamento livre":             "Barbell_Full_Squat/0.gif",
+  "Agachamento sumô barra":        "Sumo_Squat/0.gif",
+  "Agachamento sumô halteres":     "Dumbbell_Sumo_Squat/0.gif",
+  "Agachamento búlgaro halteres":  "Dumbbell_Bulgarian_Split_Squat/0.gif",
+  "Agachamento hack máquina":      "Hack_Squat/0.gif",
+  "Leg press 45°":                 "Leg_Press/0.gif",
+  "Cadeira extensora":             "Leg_Extensions/0.gif",
+  "Passada avançada halteres":     "Dumbbell_Lunge/0.gif",
+  "Afundo com halteres":           "Dumbbell_Lunge/0.gif",
+  "Afundo com barra":              "Barbell_Lunge/0.gif",
   // POSTERIOR
-  "Stiff":                         "barbell romanian deadlift",
-  "Stiff com halteres":            "dumbbell romanian deadlift",
-  "Stiff unilateral halteres":     "dumbbell single leg deadlift",
-  "Levantamento terra":            "barbell deadlift",
-  "Mesa flexora":                  "lever seated leg curl",
-  "Mesa flexora deitada":          "lever lying leg curl",
-  "Cadeira flexora":               "lever seated leg curl",
-  "Cadeira flexora unilateral":    "lever seated leg curl",
+  "Stiff":                         "Romanian_Deadlift/0.gif",
+  "Stiff com halteres":            "Dumbbell_Romanian_Deadlift/0.gif",
+  "Levantamento terra":            "Barbell_Deadlift/0.gif",
+  "Mesa flexora":                  "Lying_Leg_Curl/0.gif",
+  "Mesa flexora deitada":          "Lying_Leg_Curl/0.gif",
+  "Cadeira flexora":               "Seated_Leg_Curl/0.gif",
   // GLÚTEO
-  "Hip thrust barra":              "barbell hip thrust",
-  "Hip thrust máquina":            "lever hip thrust",
-  "Elevação pélvica com barra":    "barbell hip thrust",
-  "Glúteo 4 apoios cabo":          "cable glute kickback",
-  "Abdução em pé polia":           "cable hip abduction",
+  "Hip thrust barra":              "Barbell_Hip_Thrust/0.gif",
+  "Elevação pélvica com barra":    "Barbell_Hip_Thrust/0.gif",
+  "Glúteo 4 apoios cabo":          "Cable_Hip_Extension/0.gif",
   // PANTURRILHA
-  "Panturrilha em pé máquina":     "calf press on leg press",
-  "Panturrilha sentado máquina":   "lever seated calf raise",
-  "Panturrilha em pé barra livre": "barbell standing calf raise",
+  "Panturrilha em pé máquina":     "Calf_Press/0.gif",
+  "Panturrilha sentado máquina":   "Seated_Calf_Raise/0.gif",
+  "Panturrilha em pé barra livre": "Standing_Barbell_Calf_Raise/0.gif",
   // ABDUTORES/ADUTORES
-  "Cadeira abdutora":              "lever hip abduction",
-  "Cadeira adutora":               "lever hip adduction",
+  "Cadeira abdutora":              "Adductor/0.gif",
+  "Cadeira adutora":               "Adductor/0.gif",
   // ABDÔMEN
-  "Abdômen supra":                 "crunch",
-  "Abdômen infra":                 "leg raise",
-  "Abdômen supra declinado":       "decline crunch",
-  "Abdômen infra na paralela":     "hanging leg raise",
-  "Prancha isométrica":            "plank",
+  "Abdômen supra":                 "Crunch/0.gif",
+  "Abdômen infra":                 "Hanging_Leg_Raise/0.gif",
+  "Abdômen supra declinado":       "Decline_Crunch/0.gif",
+  "Abdômen infra na paralela":     "Hanging_Leg_Raise/0.gif",
+  "Prancha isométrica":            "Plank/0.gif",
 };
 
-// GIF cache in memory + localStorage
-const GIF_CACHE_KEY = 'darkset.gifcache';
-const GIF_CACHE = (() => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(GIF_CACHE_KEY)||'{}');
-    // Remove entradas inválidas (strings vazias de tentativas falhas anteriores)
-    Object.keys(raw).forEach(k => { if(!raw[k] || !raw[k].startsWith('http')) delete raw[k]; });
-    return raw;
-  } catch(_){ return {}; }
-})();
-const saveGifCache = () => {
-  try { localStorage.setItem(GIF_CACHE_KEY, JSON.stringify(GIF_CACHE)); } catch(_){}
-};
-
-// API key storage
-const getApiKey = () => localStorage.getItem('darkset.rapidapi.key')||'';
-
-// Fetch GIF URL for an exercise name
-async function fetchExGif(exName) {
-  if (GIF_CACHE[exName]) return GIF_CACHE[exName];
-
-  const engName = EX_NAME_MAP[exName];
-  if (!engName) return null;
-
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
-
-  const key = apiKey.trim();
-  const headers = {
-    'X-RapidAPI-Key': key,
-    'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
-  };
-
-  // Endpoint 1: busca por nome exato
-  try {
-    const q = encodeURIComponent(engName);
-    const res = await fetch(
-      `https://exercisedb.p.rapidapi.com/exercises/name/${q}?limit=3&offset=0`,
-      { headers }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const items = Array.isArray(data) ? data : (data?.data||[]);
-      if (items[0]?.gifUrl) {
-        GIF_CACHE[exName] = items[0].gifUrl;
-        saveGifCache();
-        return items[0].gifUrl;
-      }
-    }
-  } catch(_){}
-
-  // Endpoint 2: busca pela primeira palavra (mais ampla)
-  try {
-    const word = encodeURIComponent(engName.split(' ')[0]);
-    const res2 = await fetch(
-      `https://exercisedb.p.rapidapi.com/exercises/name/${word}?limit=5&offset=0`,
-      { headers }
-    );
-    if (res2.ok) {
-      const data2 = await res2.json();
-      const items2 = Array.isArray(data2) ? data2 : (data2?.data||[]);
-      const match = items2.find(e => {
-        const n = (e.name||'').toLowerCase();
-        return engName.split(' ').every(w => n.includes(w));
-      }) || items2[0];
-      if (match?.gifUrl) {
-        GIF_CACHE[exName] = match.gifUrl;
-        saveGifCache();
-        return match.gifUrl;
-      }
-    }
-  } catch(_){}
-
-  return null;
+// Retorna URL do GIF direto do GitHub — sem API, sem key
+function getGifUrl(exName) {
+  const slug = EX_GIF_MAP[exName];
+  if (!slug) return null;
+  return `${GIF_BASE}/${slug}`;
 }
 
-// React hook: load gif for an exercise
+// Cache simples em memória (não precisa mais de localStorage para GIF)
+const GIF_LOADED = {};
+
+// Hook React para carregar GIF
 function useExGif(exName) {
-  // Só usa cache se tiver URL real (não string vazia)
-  const cached = GIF_CACHE[exName];
-  const [gifUrl, setGifUrl] = useState(cached && cached.startsWith('http') ? cached : null);
-  const [loading, setLoading] = useState(false);
+  const url = getGifUrl(exName);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-
-  useEffect(()=>{
-    if(!exName) return;
-    // Limpa cache inválido (string vazia guardada de tentativas anteriores)
-    if(GIF_CACHE[exName] === '' || GIF_CACHE[exName] === null) {
-      delete GIF_CACHE[exName];
-    }
-    if(gifUrl) return; // já tem URL válida
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    fetchExGif(exName).then(url=>{
-      if(!cancelled){
-        if(url) { setGifUrl(url); }
-        else { setError(true); }
-        setLoading(false);
-      }
-    });
-    return ()=>{ cancelled=true; };
-  },[exName]);
-
-  return {gifUrl, loading, error};
+  // Pre-check se URL existe (lazy — só testa quando precisa)
+  return { gifUrl: url, loading: false, error: !url };
 }
 
+// ── Dicas de execução ────────────────────────────────────────────────────────
+const EXEC_TIPS = {
+  "Supino reto barra": "Pés no chão, escápulas retraídas. Barra desce até tocar o peito levemente. Empurre para cima e levemente para trás.",
+  "Agachamento livre": "Pés na largura dos ombros, joelhos seguem as pontas dos pés. Desça até a paralela. Peito erguido, lombar neutra.",
+  "Levantamento terra": "Barra rente à perna durante todo o movimento. Empurre o chão, não puxe a barra. Extensão do quadril no topo.",
+  "Remada curvada barra": "Coluna neutra a 45°. Puxe até o umbigo. Cotovelhos para trás, escápulas juntas no final.",
+  "Desenvolvimento barra": "Barra na linha dos olhos ao iniciar. Empurre direto para cima. Não hiperestenda a lombar.",
+  "Hip thrust barra": "Ombros no banco, pés na largura do quadril. Empurre com os calcanhares. Squeeze máximo de glúteo no topo.",
+  "Rosca direta barra": "Cotovelos fixos ao lado do corpo. Suba até contração máxima. Desça com controle. Não balance o tronco.",
+  "Tríceps pulley corda": "Cotovelos fixos e próximos ao corpo. Abra a corda ao descer. Extensão completa no final.",
+  "Stiff": "Quadril move para trás, não para baixo. Joelhos levemente flexionados e fixos. Sinta o alongamento no posterior.",
+  "Prancha isométrica": "Corpo em linha reta. Abdômen contraído. Não eleve o quadril. Respire normalmente.",
+  "Barra fixa": "Pegada um pouco mais larga que os ombros. Puxe os cotovelos para baixo e para trás. Mento acima da barra.",
+  "Agachamento sumô barra": "Pés bem abertos, pontas 45° para fora. Joelhos seguem as pontas. Ativa adutores e glúteos.",
+  "Hip thrust máquina": "Ajuste o banco na altura correta. Empurre com quadril, não com lombar. Glúteo em contração máxima no topo.",
+};
 
-// ═══════════════════════════════════════════════════════════════════════════
-// EXERCISE DETAIL — tela completa de detalhes do exercício
-// ═══════════════════════════════════════════════════════════════════════════
+// ── ExerciseDetail — tela completa de detalhes ──────────────────────────────
 const ExerciseDetail = ({exName, onClose, history}) => {
-  const {gifUrl, loading} = useExGif(exName);
+  const {gifUrl} = useExGif(exName);
   const ex = EXS.find(e=>e.name===exName);
+  const [imgError, setImgError] = useState(false);
 
-  // Calc personal stats from history
   const stats = useMemo(()=>{
-    if(!history) return {sessions:0, bestWeight:0, totalSets:0, lastDate:null};
-    let sessions=0, bestWeight=0, totalSets=0, lastDate=null;
+    if(!history||typeof history!=='object') return {sessions:0,bestWeight:0,totalSets:0,lastDate:null};
+    let sessions=0,bestWeight=0,totalSets=0,lastDate=null;
     Object.entries(history).forEach(([date,sess])=>{
-      const entry = sess.entries?.find(e=>e.name===exName);
+      const entry=sess.entries?.find(e=>e.name===exName);
       if(!entry) return;
       sessions++;
-      if(!lastDate || date>lastDate) lastDate=date;
-      entry.sets?.forEach(s=>{
-        totalSets++;
-        const w=Number(s.w||0);
-        if(w>bestWeight) bestWeight=w;
-      });
+      if(!lastDate||date>lastDate) lastDate=date;
+      entry.sets?.forEach(s=>{totalSets++;const w=Number(s.w||0);if(w>bestWeight)bestWeight=w;});
     });
-    return {sessions, bestWeight, totalSets, lastDate};
-  },[exName, history]);
+    return {sessions,bestWeight,totalSets,lastDate};
+  },[exName,history]);
 
-  const tip = EXEC_TIPS[exName] || `Execute ${exName} com controle total. Mantenha postura neutra e foque na contração muscular em cada repetição.`;
-  const toDate = iso => { if(!iso) return '—'; const[y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; };
+  const tip = EXEC_TIPS[exName]||`Execute ${exName} com controle total. Mantenha postura neutra e foque na contração muscular em cada repetição.`;
+  const toDate=iso=>{if(!iso)return '—';const[y,m,d]=iso.split('-');return`${d}/${m}/${y}`;};
 
-  // History entries for this exercise (last 5 sessions)
   const recentSessions = useMemo(()=>{
-    if(!history) return [];
+    if(!history||typeof history!=='object') return [];
     return Object.entries(history)
       .filter(([,sess])=>sess.entries?.some(e=>e.name===exName))
       .sort((a,b)=>b[0].localeCompare(a[0]))
       .slice(0,5)
-      .map(([date,sess])=>({
-        date,
-        sets: sess.entries.find(e=>e.name===exName)?.sets||[]
-      }));
+      .map(([date,sess])=>({date,sets:sess.entries.find(e=>e.name===exName)?.sets||[]}));
   },[exName,history]);
 
   return (
     <div style={{position:'fixed',inset:0,zIndex:9999,background:'var(--color-bg)',overflowY:'auto'}}>
-      {/* Header */}
       <div style={{position:'sticky',top:0,background:'var(--color-bg)',borderBottom:'1px solid var(--color-border)',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',zIndex:10}}>
         <button onClick={onClose} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .75rem',color:'var(--color-text-sub)',fontSize:'.85rem',cursor:'pointer',fontWeight:700}}>←</button>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1,color:'var(--color-text)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{exName}</div>
-          {ex&&<div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.primary} · {ex.subgroup||''} · {ex.equipment}</div>}
+          {ex&&<div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.primary} · {ex.equipment}</div>}
         </div>
-        <div style={{flexShrink:0,padding:'.25rem .6rem',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',fontSize:'.65rem',fontWeight:700,color:'var(--color-accent)',textTransform:'uppercase'}}>
-          {ex?.difficulty||''}
-        </div>
+        {ex&&<div style={{flexShrink:0,padding:'.25rem .6rem',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',fontSize:'.65rem',fontWeight:700,color:'var(--color-accent)',textTransform:'uppercase'}}>{ex.difficulty}</div>}
       </div>
 
       <div style={{padding:'1rem',display:'grid',gap:'1rem',maxWidth:'480px',margin:'0 auto'}}>
 
         {/* GIF */}
-        <div style={{background:'#000',borderRadius:'14px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'260px',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-          {loading&&(
-            <div style={{textAlign:'center',color:'var(--color-text-sub)'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>⏳</div>
-              <div style={{fontSize:'.85rem'}}>Carregando animação...</div>
-            </div>
-          )}
-          {!loading&&gifUrl&&(
-            <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}/>
-          )}
-          {!loading&&!gifUrl&&(
-            <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-              <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🎬</div>
-              <div style={{fontSize:'.9rem',fontWeight:600}}>GIF não disponível</div>
-              <div style={{fontSize:'.72rem',color:'#444',marginTop:'.35rem'}}>Configure sua API key no Perfil</div>
-            </div>
-          )}
+        <div style={{background:'#000',borderRadius:'14px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'240px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {gifUrl&&!imgError
+            ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}
+                onError={()=>setImgError(true)}/>
+            : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+                <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🎬</div>
+                <div style={{fontSize:'.85rem',fontWeight:600}}>Animação não disponível</div>
+              </div>
+          }
         </div>
 
-        {/* Personal PRs */}
+        {/* Stats */}
         {stats.sessions>0&&(
           <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
             <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.7rem'}}>Seus números</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
-              {[
-                {label:'Melhor carga',val:`${stats.bestWeight}kg`,icon:'🏆'},
-                {label:'Sessões',val:stats.sessions,icon:'📅'},
-                {label:'Total séries',val:stats.totalSets,icon:'💪'},
-              ].map(({label,val,icon})=>(
+              {[{label:'Melhor carga',val:`${stats.bestWeight}kg`,icon:'🏆'},{label:'Sessões',val:stats.sessions,icon:'📅'},{label:'Total séries',val:stats.totalSets,icon:'💪'}].map(({label,val,icon})=>(
                 <div key={label} style={{background:'rgba(0,0,0,.2)',borderRadius:'10px',padding:'.7rem .5rem',textAlign:'center'}}>
                   <div style={{fontSize:'1.2rem',marginBottom:'.2rem'}}>{icon}</div>
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',color:'var(--color-text)',lineHeight:1}}>{val}</div>
@@ -808,27 +706,22 @@ const ExerciseDetail = ({exName, onClose, history}) => {
                 </div>
               ))}
             </div>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'.6rem',textAlign:'center'}}>Último treino: {toDate(stats.lastDate)}</div>
           </div>
         )}
 
-        {/* Execution tips */}
+        {/* Dicas */}
         <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
           <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.6rem'}}>Execução correta</div>
           <p style={{fontSize:'.82rem',color:'var(--color-text-sub)',lineHeight:1.6,margin:0}}>{tip}</p>
         </div>
 
-        {/* Muscle info */}
+        {/* Músculos */}
         {ex&&(
           <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
-            <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Músculos envolvidos</div>
+            <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Músculos</div>
             <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
-              {[
-                {label:'Principal',val:ex.primary,color:'var(--color-accent)'},
-                {label:'Foco',val:ex.subgroup,color:'#facc15'},
-                {label:'Equipamento',val:ex.equipment,color:'#4ade80'},
-              ].filter(item=>item.val).map(item=>(
-                <div key={item.label} style={{padding:'.35rem .75rem',background:'rgba(0,0,0,.2)',border:`1px solid ${item.color}33`,borderRadius:'20px',display:'flex',flexDirection:'column',alignItems:'center',gap:'1px'}}>
+              {[{label:'Principal',val:ex.primary,color:'var(--color-accent)'},{label:'Foco',val:ex.subgroup,color:'#facc15'},{label:'Equipamento',val:ex.equipment,color:'#4ade80'}].filter(i=>i.val).map(item=>(
+                <div key={item.label} style={{padding:'.35rem .75rem',background:'rgba(0,0,0,.2)',border:`1px solid ${item.color}33`,borderRadius:'20px'}}>
                   <div style={{fontSize:'.55rem',color:item.color,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>{item.label}</div>
                   <div style={{fontSize:'.8rem',color:'var(--color-text)',fontWeight:600}}>{item.val}</div>
                 </div>
@@ -837,30 +730,21 @@ const ExerciseDetail = ({exName, onClose, history}) => {
           </div>
         )}
 
-        {/* Recent sessions */}
+        {/* Histórico */}
         {recentSessions.length>0&&(
           <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
             <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Histórico recente</div>
             <div style={{display:'grid',gap:'.5rem'}}>
               {recentSessions.map(({date,sets})=>{
-                const bestW = Math.max(...sets.map(s=>Number(s.w||0)));
-                const totalR = sets.reduce((a,s)=>a+Number(s.r||0),0);
+                const bestW=Math.max(0,...sets.map(s=>Number(s.w||0)));
+                const totalR=sets.reduce((a,s)=>a+Number(s.r||0),0);
                 return (
                   <div key={date} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.55rem .75rem',background:'rgba(0,0,0,.2)',borderRadius:'8px'}}>
                     <div style={{fontSize:'.75rem',color:'var(--color-text)',fontWeight:600}}>{toDate(date)}</div>
                     <div style={{display:'flex',gap:'1rem'}}>
-                      <div style={{textAlign:'center'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-text)'}}>{sets.length}x</div>
-                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>séries</div>
-                      </div>
-                      {bestW>0&&<div style={{textAlign:'center'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-accent)'}}>{bestW}kg</div>
-                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>melhor</div>
-                      </div>}
-                      <div style={{textAlign:'center'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-text)'}}>{totalR}</div>
-                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>reps</div>
-                      </div>
+                      <div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem'}}>{sets.length}x</div><div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>séries</div></div>
+                      {bestW>0&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-accent)'}}>{bestW}kg</div><div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>melhor</div></div>}
+                      <div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem'}}>{totalR}</div><div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>reps</div></div>
                     </div>
                   </div>
                 );
@@ -868,81 +752,47 @@ const ExerciseDetail = ({exName, onClose, history}) => {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
 };
 
-// ── ExGifModal — full screen GIF viewer ─────────────────────────────────────
+// ── ExGifModal — modal compacto só com GIF ──────────────────────────────────
 const ExGifModal = ({exName, onClose}) => {
-  const {gifUrl, loading} = useExGif(exName);
-  const ex = EXS.find(e=>e.name===exName);
-
+  const {gifUrl} = useExGif(exName);
+  const [imgError, setImgError] = useState(false);
   return (
     <Modal onClose={onClose}>
       <div style={{marginBottom:'.75rem'}}>
         <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',lineHeight:1.1,color:'var(--color-text)'}}>{exName}</div>
-        {ex&&<div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'3px'}}>{ex.primary} · {ex.equipment} · {ex.difficulty}</div>}
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>{exName}</div>
       </div>
-
-      <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {loading&&(
-          <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-            <div style={{fontSize:'2rem',marginBottom:'.5rem',animation:'pulse 1s infinite'}}>⏳</div>
-            <div style={{fontSize:'.8rem'}}>Carregando GIF...</div>
-          </div>
-        )}
-        {!loading&&gifUrl&&(
-          <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}/>
-        )}
-        {!loading&&!gifUrl&&(
-          <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-            <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
-            <div style={{fontSize:'.85rem',fontWeight:600,marginBottom:'.35rem'}}>GIF não encontrado</div>
-            <div style={{fontSize:'.72rem',color:'#444'}}>{getApiKey()?'Exercício não encontrado na base de dados':'Configure sua API key no Perfil'}</div>
-          </div>
-        )}
+      <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'200px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {gifUrl&&!imgError
+          ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'320px',objectFit:'contain'}} onError={()=>setImgError(true)}/>
+          : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+              <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
+              <div style={{fontSize:'.82rem'}}>Não disponível para este exercício</div>
+            </div>
+        }
       </div>
-
-      {/* Tips section */}
-      {ex&&(
-        <div style={{marginTop:'.85rem',padding:'.75rem',background:'rgba(0,0,0,.2)',borderRadius:'8px',border:'1px solid var(--color-border)'}}>
-          <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.4rem'}}>Dicas de execução</div>
-          <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
-            {EXEC_TIPS[exName]||`Execute ${exName} com controle total do movimento. Mantenha postura neutra e foque na contração muscular.`}
-          </div>
-        </div>
-      )}
     </Modal>
   );
 };
 
-// ── ExGifThumb — small thumbnail for lists ───────────────────────────────────
+// ── ExGifThumb — miniatura na lista ─────────────────────────────────────────
 const ExGifThumb = ({exName, onClick}) => {
-  const {gifUrl, loading} = useExGif(exName);
-
+  const {gifUrl} = useExGif(exName);
+  const [imgError, setImgError] = useState(false);
   return (
-    <button onClick={onClick} style={{
-      width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',
-      background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',
-      flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-      position:'relative',padding:0
-    }}>
-      {loading&&<span style={{fontSize:'.6rem',color:'var(--color-text-sub)'}}>...</span>}
-      {!loading&&gifUrl&&<img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
-      {!loading&&!gifUrl&&<span style={{fontSize:'1.1rem'}}>🎬</span>}
-      {/* Play overlay */}
-      <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity .15s'}}
-        onMouseEnter={e=>e.currentTarget.style.opacity=1}
-        onMouseLeave={e=>e.currentTarget.style.opacity=0}>
-        <span style={{fontSize:'.7rem',color:'#fff',fontWeight:700}}>▶</span>
-      </div>
+    <button onClick={onClick} style={{width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
+      {gifUrl&&!imgError
+        ? <img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={()=>setImgError(true)}/>
+        : <span style={{fontSize:'1rem'}}>🎬</span>
+      }
     </button>
   );
 };
-
 // ── Execution tips for key exercises ────────────────────────────────────────
 const EXEC_TIPS = {
   "Supino reto barra": "Pés no chão, escápulas retraídas e deprimidas. Barra desce até tocar o peito levemente. Empurre para cima e levemente para trás. Não solte o ar todo na subida.",
@@ -2522,267 +2372,230 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // COMUNIDADE — Firebase-backed social/ranking
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// DARKSQUAD — versão local (sem Firebase, funciona offline)
+// Cada usuário exporta/importa seu card de stats via código de texto
+// ═══════════════════════════════════════════════════════════════════════════
+const SQUAD_KEY = 'darkset.squad.members';
+
+const loadSquad = () => {
+  try { return JSON.parse(localStorage.getItem(SQUAD_KEY)||'[]'); } catch(_){ return []; }
+};
+const saveSquad = (d) => {
+  try { localStorage.setItem(SQUAD_KEY, JSON.stringify(d)); } catch(_){} 
+};
+
 const Community = ({history, setToast, prefs}) => {
-  const [tab, setTab] = useState('rank'); // 'rank' | 'feed' | 'grupo'
-  const [groupCode, setGroupCode] = useState(()=>localStorage.getItem('darkset.groupCode')||'');
-  const [inputCode, setInputCode] = useState('');
-  const [members, setMembers] = useState([]);
-  const [feed, setFeed] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [checkingIn, setCheckingIn] = useState(false);
-  const [checkinPhoto, setCheckinPhoto] = useState(null);
-  const photoInputRef = useRef(null);
+  const [tab, setTab]       = useState('rank');
+  const [members, setMembers] = useState(loadSquad);
+  const [showImport, setShowImport] = useState(false);
+  const [importCode, setImportCode] = useState('');
+  const [showMyCode, setShowMyCode] = useState(false);
 
-  const uid = getUID();
-  const userName = prefs.name || 'Usuário';
-  const thisWeek = (() => {
+  // Calcula stats da semana atual
+  const weekStats = useMemo(() => {
     try {
-      if(!history||typeof history!=='object') return 0;
-      const now = new Date(); const day = now.getDay()||7;
-      const mon = new Date(now); mon.setDate(now.getDate()-(day-1));
+      if (!history || typeof history !== 'object') return { count: 0, volume: 0 };
+      const now = new Date();
+      const day = now.getDay() || 7;
+      const mon = new Date(now);
+      mon.setDate(now.getDate() - (day - 1));
       mon.setHours(0,0,0,0);
-      return Object.keys(history).filter(k=>{
-        const d=new Date(k); return !isNaN(d)&&d>=mon;
-      }).length;
-    } catch(_){ return 0; }
-  })();
-
-  // Generate a group code for this user
-  const myGroupCode = (() => {
-    if (!uid) return null;
-    return uid.slice(0,8).toUpperCase();
-  })();
-
-  const joinGroup = () => {
-    if(!inputCode.trim()) return;
-    localStorage.setItem('darkset.groupCode', inputCode.trim().toUpperCase());
-    setGroupCode(inputCode.trim().toUpperCase());
-    setToast('Grupo entrado!');
-  };
-
-  const leaveGroup = () => {
-    localStorage.removeItem('darkset.groupCode');
-    setGroupCode('');
-    setMembers([]);
-    setFeed([]);
-  };
-
-  // Firebase available check
-  const [fbOk, setFbOk] = useState(false);
-  useEffect(()=>{ setFbOk(!!window._db); },[]);
-
-  // Load group data from Firebase
-  useEffect(()=>{
-    if(!groupCode||!window._db||!uid) { setLoading(false); return; }
-    setLoading(true);
-    let unsubFeed=null, unsubMembers=null;
-    try {
-      const db = window._db;
-      unsubFeed = db.collection('groups').doc(groupCode).collection('feed')
-        .orderBy('ts','desc').limit(30)
-        .onSnapshot(snap=>{
-          setFeed(snap.docs.map(d=>({id:d.id,...d.data()})));
-          setLoading(false);
-        }, ()=>setLoading(false));
-      unsubMembers = db.collection('groups').doc(groupCode).collection('members')
-        .onSnapshot(snap=>{
-          setMembers(snap.docs.map(d=>({id:d.id,...d.data()})));
-        }, ()=>{});
-      db.collection('groups').doc(groupCode).collection('members').doc(uid).set({
-        name: userName, weekCount: thisWeek, updatedAt: new Date().toISOString()
-      },{merge:true}).catch(()=>{});
-    } catch(e) { setLoading(false); }
-    return () => { try{unsubFeed&&unsubFeed();}catch(_){} try{unsubMembers&&unsubMembers();}catch(_){} };
-  },[groupCode, uid]);
-
-  const doCheckIn = async(photoData) => {
-    if(!uid||!groupCode||!window._db) { setToast('Entre em um grupo primeiro'); return; }
-    try {
-      await window._db.collection('groups').doc(groupCode).collection('feed').add({
-        uid, name:userName, type:'checkin',
-        weekCount: thisWeek,
-        photo: photoData||null,
-        ts: new Date().toISOString(),
-        date: new Date().toLocaleDateString('pt-BR'),
+      let count = 0, volume = 0;
+      Object.entries(history).forEach(([date, sess]) => {
+        const d = new Date(date);
+        if (isNaN(d) || d < mon) return;
+        count++;
+        sess.entries?.forEach(e => {
+          e.sets?.forEach(s => {
+            volume += (Number(s.w)||0) * (Number(s.r)||0);
+          });
+        });
       });
-      setToast('Check-in feito! 💪');
-    } catch(e) { setToast('Erro no check-in: '+e.message); }
-    setCheckingIn(false); setCheckinPhoto(null);
+      return { count, volume: Math.round(volume) };
+    } catch(_) { return { count: 0, volume: 0 }; }
+  }, [history]);
+
+  // Gera código exportável do usuário (base64 simples)
+  const myCard = useMemo(() => {
+    const name = prefs.name || 'Anônimo';
+    const data = { name, count: weekStats.count, volume: weekStats.volume, ts: Date.now() };
+    try { return btoa(JSON.stringify(data)); } catch(_){ return ''; }
+  }, [prefs.name, weekStats]);
+
+  // Me adiciona automaticamente na lista
+  const myEntry = useMemo(() => ({
+    id: 'me',
+    name: prefs.name || 'Você',
+    count: weekStats.count,
+    volume: weekStats.volume,
+    isMe: true,
+    ts: Date.now(),
+  }), [prefs.name, weekStats]);
+
+  // Lista completa: eu + amigos
+  const allMembers = useMemo(() => {
+    const others = members.filter(m => m.id !== 'me');
+    return [myEntry, ...others].sort((a,b) => (b.count - a.count) || (b.volume - a.volume));
+  }, [myEntry, members]);
+
+  const importMember = () => {
+    try {
+      const data = JSON.parse(atob(importCode.trim()));
+      if (!data.name) { setToast('Código inválido'); return; }
+      const id = 'friend_' + data.name.toLowerCase().replace(/\s+/g,'_');
+      const updated = [...members.filter(m => m.id !== id), { id, ...data, isMe: false }];
+      setMembers(updated);
+      saveSquad(updated);
+      setImportCode('');
+      setShowImport(false);
+      setToast(`${data.name} adicionado ao Squad! 🔥`);
+    } catch(_) { setToast('Código inválido. Peça para o amigo copiar de novo.'); }
   };
 
-  const handleCheckinPhoto = (e) => {
-    const file = e.target.files&&e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setCheckinPhoto(ev.target.result);
-    reader.readAsDataURL(file);
-    e.target.value = '';
+  const removeMember = (id) => {
+    const updated = members.filter(m => m.id !== id);
+    setMembers(updated);
+    saveSquad(updated);
   };
 
-  // Sort members by week count for ranking
-  const ranked = [...members].sort((a,b)=>(b.weekCount||0)-(a.weekCount||0));
+  const copyMyCode = () => {
+    navigator.clipboard?.writeText(myCard).then(
+      () => setToast('Código copiado! Manda pro seu amigo 📋'),
+      () => setToast('Copie o código acima manualmente')
+    );
+  };
+
   const medals = ['🥇','🥈','🥉'];
-
-  const fmtTs = (iso) => { try{ const d=new Date(iso); return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(_){return '';} };
-
-  if(!uid) return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
-          DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Comunidade de treino</div>
-      </div>
-      <div style={{textAlign:'center',padding:'2.5rem 1rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
-        <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>🔒</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',marginBottom:'.5rem',color:'var(--color-text)'}}>Login necessário</div>
-        <div style={{fontSize:'.82rem',color:'var(--color-text-sub)'}}>Faça login com Google no Perfil para acessar o Squad</div>
-      </div>
-    </div>
-  );
+  const rank = allMembers.findIndex(m => m.isMe);
 
   return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+    <div style={{marginTop:'1rem', display:'grid', gap:'1rem'}}>
+
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'.5rem'}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'.5rem'}}>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.8rem', textTransform:'uppercase', lineHeight:1, color:'var(--color-text)'}}>
             DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
           </div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Comunidade de treino</div>
+          <div style={{fontSize:'.65rem', color:'var(--color-text-sub)', letterSpacing:'.08em', textTransform:'uppercase', marginTop:'2px'}}>
+            {allMembers.length} membro{allMembers.length!==1?'s':''} · semana atual
+          </div>
         </div>
-        {groupCode&&(
-          <button onClick={()=>setCheckingIn(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
-            Check-in 💪
+        <div style={{display:'flex', gap:'.5rem'}}>
+          <button onClick={() => setShowMyCode(s=>!s)} style={{background:'rgba(255,255,255,.05)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.45rem .85rem', color:'var(--color-text-sub)', fontSize:'.75rem', fontWeight:700, textTransform:'uppercase', cursor:'pointer'}}>
+            Meu código
           </button>
-        )}
+          <button onClick={() => setShowImport(s=>!s)} style={{background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.45rem .85rem', color:'#fff', fontSize:'.75rem', fontWeight:700, textTransform:'uppercase', cursor:'pointer'}}>
+            + Amigo
+          </button>
+        </div>
       </div>
 
-      {/* Check-in modal */}
-      {checkingIn&&(
-        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.75rem'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Fazer Check-in</div>
-          {checkinPhoto
-            ? <img src={checkinPhoto} style={{width:'100%',maxHeight:'200px',objectFit:'cover',borderRadius:'8px'}} alt="preview"/>
-            : <button onClick={()=>photoInputRef.current&&photoInputRef.current.click()} style={{background:'rgba(0,0,0,.2)',border:'1px dashed var(--color-border)',borderRadius:'8px',padding:'1rem',color:'var(--color-text-sub)',fontSize:'.82rem',cursor:'pointer',textAlign:'center'}}>
-                📸 Adicionar foto (opcional)
-              </button>
-          }
-          <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handleCheckinPhoto}/>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <button onClick={()=>doCheckIn(checkinPhoto)} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.65rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
-              Confirmar Check-in
+      {/* Meu código para compartilhar */}
+      {showMyCode && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.65rem'}}>
+          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Seu código — manda pro amigo</div>
+          <div style={{background:'rgba(0,0,0,.3)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.65rem .85rem', fontSize:'.65rem', fontFamily:'monospace', color:'var(--color-text)', wordBreak:'break-all', lineHeight:1.5}}>
+            {myCard}
+          </div>
+          <div style={{fontSize:'.68rem', color:'var(--color-text-sub)'}}>
+            📊 Semana atual: <strong style={{color:'var(--color-text)'}}>{weekStats.count} treino{weekStats.count!==1?'s':''}</strong> · <strong style={{color:'var(--color-text)'}}>{weekStats.volume.toLocaleString('pt-BR')} kg volume</strong>
+          </div>
+          <button onClick={copyMyCode} style={{background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.55rem', color:'#fff', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:'.9rem', textTransform:'uppercase', cursor:'pointer'}}>
+            📋 Copiar código
+          </button>
+        </div>
+      )}
+
+      {/* Importar amigo */}
+      {showImport && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.65rem'}}>
+          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Colar código do amigo</div>
+          <textarea
+            placeholder="Cole o código do amigo aqui..."
+            value={importCode}
+            onChange={e => setImportCode(e.target.value)}
+            rows={3}
+            style={{width:'100%', background:'rgba(0,0,0,.3)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.6rem .85rem', fontSize:'.72rem', color:'var(--color-text)', fontFamily:'monospace', resize:'none'}}
+          />
+          <div style={{display:'flex', gap:'.5rem'}}>
+            <button onClick={importMember} style={{flex:1, background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.55rem', color:'#fff', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:'.9rem', textTransform:'uppercase', cursor:'pointer'}}>
+              Adicionar
             </button>
-            <button onClick={()=>{setCheckingIn(false);setCheckinPhoto(null);}} style={{background:'rgba(0,0,0,.15)',border:'1px solid var(--color-border)',borderRadius:'9px',padding:'.65rem .85rem',color:'var(--color-text-sub)',fontSize:'.85rem',cursor:'pointer'}}>
+            <button onClick={() => {setShowImport(false); setImportCode('');}} style={{background:'rgba(0,0,0,.2)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.55rem .85rem', color:'var(--color-text-sub)', fontSize:'.85rem', cursor:'pointer'}}>
               Cancelar
             </button>
           </div>
         </div>
       )}
 
-      {/* Group setup */}
-      {!groupCode ? (
-        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.85rem'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Entrar em um grupo</div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <input placeholder="Código do grupo (ex: AB12CD34)" value={inputCode} onChange={e=>setInputCode(e.target.value.toUpperCase())}
-              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)',fontFamily:'monospace',letterSpacing:'.1em'}}/>
-            <button onClick={joinGroup} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Entrar</button>
-          </div>
-          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem'}}>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>Ou compartilhe seu código</div>
-            <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-              <div style={{flex:1,background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .85rem',fontSize:'.9rem',fontFamily:'monospace',letterSpacing:'.12em',color:'var(--color-accent)',fontWeight:700}}>{myGroupCode}</div>
-              <button onClick={()=>{navigator.clipboard?.writeText(myGroupCode);setToast('Código copiado!');}} style={{background:'rgba(255,255,255,.06)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .85rem',color:'var(--color-text-sub)',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>Copiar</button>
+      {/* Tabs */}
+      <div className="mode-toggle">
+        <button className={"mode-toggle-btn"+(tab==='rank'?' active':'')} onClick={()=>setTab('rank')}>🏆 Ranking</button>
+        <button className={"mode-toggle-btn"+(tab==='como'?' active':'')} onClick={()=>setTab('como')}>❓ Como usar</button>
+      </div>
+
+      {/* Ranking */}
+      {tab==='rank' && (
+        <div style={{display:'grid', gap:'.5rem'}}>
+          {allMembers.map((m, i) => (
+            <div key={m.id} className="ds-card" style={{
+              padding:'.85rem 1rem',
+              display:'flex', alignItems:'center', gap:'.85rem',
+              background: m.isMe ? 'rgba(227,27,35,.06)' : 'var(--color-card)',
+              border: m.isMe ? '1px solid rgba(227,27,35,.3)' : '1px solid var(--color-border)',
+            }}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.5rem', minWidth:'28px', textAlign:'center', color: i<3 ? ['#FFD700','#C0C0C0','#CD7F32'][i] : 'var(--color-text-sub)'}}>
+                {i < 3 ? medals[i] : i+1}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700, fontSize:'.9rem', color:'var(--color-text)'}}>
+                  {m.name}{m.isMe ? ' (você)' : ''}
+                </div>
+                <div style={{fontSize:'.68rem', color:'var(--color-text-sub)', marginTop:'2px'}}>
+                  {m.count} treino{m.count!==1?'s':''} · {(m.volume||0).toLocaleString('pt-BR')} kg volume
+                </div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.8rem', color: i===0?'#FFD700': m.isMe?'var(--color-accent)':'var(--color-text-sub)', lineHeight:1}}>
+                  {m.count}
+                </div>
+                <div style={{fontSize:'.52rem', color:'var(--color-text-sub)', textTransform:'uppercase'}}>treinos</div>
+              </div>
+              {!m.isMe && (
+                <button onClick={() => removeMember(m.id)} style={{background:'rgba(227,27,35,.08)', border:'1px solid rgba(227,27,35,.2)', borderRadius:'6px', padding:'.3rem .5rem', color:'#e31b23', fontSize:'.75rem', cursor:'pointer'}}>×</button>
+              )}
             </div>
-            <div style={{fontSize:'.68rem',color:'#444',marginTop:'.4rem'}}>Amigos entram com esse código</div>
-          </div>
+          ))}
         </div>
-      ) : (
-        <>
-          {/* Grupo ativo */}
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.6rem .85rem',background:'rgba(74,222,128,.06)',border:'1px solid rgba(74,222,128,.2)',borderRadius:'9px'}}>
-            <div>
-              <div style={{fontSize:'.6rem',color:'#4ade80',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Grupo ativo</div>
-              <div style={{fontFamily:'monospace',fontWeight:700,fontSize:'.95rem',letterSpacing:'.1em',color:'var(--color-text)'}}>{groupCode}</div>
-            </div>
-            <button onClick={leaveGroup} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.3rem .65rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
-          </div>
-
-          {/* Tabs */}
-          <div className="mode-toggle">
-            <button className={"mode-toggle-btn"+(tab==='rank'?' active':'')} onClick={()=>setTab('rank')}>🏆 Ranking</button>
-            <button className={"mode-toggle-btn"+(tab==='feed'?' active':'')} onClick={()=>setTab('feed')}>📸 Feed</button>
-          </div>
-
-          {/* Ranking */}
-          {tab==='rank'&&(
-            <div style={{display:'grid',gap:'.5rem'}}>
-              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Treinos esta semana</div>
-              {loading&&<div style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
-              {/* Always show self first if not in list */}
-              {ranked.length===0&&!loading&&(
-                <div className="ds-card" style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',background:'var(--color-card)',border:'1px solid rgba(227,27,35,.2)'}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'var(--color-accent)'}}>🏆</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{userName} (você)</div>
-                    <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{thisWeek} treino(s) esta semana</div>
-                  </div>
-                </div>
-              )}
-              {ranked.map((m,i)=>{
-                const isMe = m.id===uid;
-                return (
-                  <div key={m.id} className="ds-card" style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',background:isMe?'rgba(227,27,35,.05)':'var(--color-card)',border:isMe?'1px solid rgba(227,27,35,.25)':'1px solid var(--color-border)'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',minWidth:'28px',textAlign:'center',color:i<3?['#FFD700','#C0C0C0','#CD7F32'][i]:'var(--color-text-sub)'}}>
-                      {i<3?medals[i]:i+1}
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
-                      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{m.weekCount||0} treino(s) esta semana</div>
-                    </div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:i===0?'#FFD700':'var(--color-text-sub)'}}>{m.weekCount||0}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Feed */}
-          {tab==='feed'&&(
-            <div style={{display:'grid',gap:'.6rem'}}>
-              {loading&&<div style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
-              {!loading&&feed.length===0&&(
-                <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
-                  <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>👥</div>
-                  <div>Nenhum check-in ainda</div>
-                  <div style={{fontSize:'.75rem',marginTop:'.25rem',color:'#444'}}>Faça o primeiro check-in do grupo!</div>
-                </div>
-              )}
-              {feed.map(item=>(
-                <div key={item.id} className="ds-card" style={{padding:'.85rem 1rem',background:'var(--color-card)'}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
-                    <div>
-                      <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{item.name}</div>
-                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)'}}>{fmtTs(item.ts)}</div>
-                    </div>
-                    <div style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'.2rem .55rem',fontSize:'.7rem',fontWeight:700,color:'var(--color-accent)'}}>
-                      💪 {item.weekCount}x/semana
-                    </div>
-                  </div>
-                  {item.photo&&<img src={item.photo} style={{width:'100%',maxHeight:'220px',objectFit:'cover',borderRadius:'8px',marginTop:'.25rem'}} alt="check-in"/>}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
       )}
-      {gifModal&&<ExGifModal exName={gifModal} onClose={()=>setGifModal(null)}/>}
-      {detailEx&&<ExerciseDetail exName={detailEx} onClose={()=>setDetailEx(null)} history={{}}/>}
+
+      {/* Como usar */}
+      {tab==='como' && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.85rem'}}>
+          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Como funciona</div>
+          {[
+            {n:'1', t:'Copie seu código', d:'Clique em "Meu código" acima e copie o código gerado.'},
+            {n:'2', t:'Mande pro amigo', d:'Cole no WhatsApp, Instagram ou onde preferir.'},
+            {n:'3', t:'O amigo faz o mesmo', d:'Ele copia o código dele e manda de volta pra você.'},
+            {n:'4', t:'Adicione ao Squad', d:'Clique em "+ Amigo", cole o código dele e adicione.'},
+            {n:'5', t:'Atualize semanalmente', d:'Cada segunda-feira os treinos da semana zeram. Compartilhe o código atualizado com os amigos!'},
+          ].map(({n,t,d}) => (
+            <div key={n} style={{display:'flex', gap:'.85rem', alignItems:'flex-start'}}>
+              <div style={{width:'28px', height:'28px', borderRadius:'50%', background:'var(--color-accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'.9rem', color:'#fff', flexShrink:0}}>{n}</div>
+              <div>
+                <div style={{fontSize:'.82rem', fontWeight:700, color:'var(--color-text)'}}>{t}</div>
+                <div style={{fontSize:'.72rem', color:'var(--color-text-sub)', marginTop:'2px', lineHeight:1.4}}>{d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 };
-
 
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
