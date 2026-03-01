@@ -1,5 +1,5 @@
 // DarkSet Service Worker V5.1.0
-const CACHE = 'darkset-v5-3-0';
+const CACHE = 'darkset-v5-3-1';
 const ASSETS = ['/', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 // ── Install: cache assets ──────────────────────────────────────────────────
