@@ -3983,6 +3983,28 @@ const Profile=({prefs,setPrefs,history})=>{
 };
 
 
+// ErrorBoundary para mostrar erros em vez de tela preta
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = {error:null,info:null}; }
+  componentDidCatch(error, info) { this.setState({error,info}); }
+  render() {
+    if(this.state.error) {
+      return (
+        <div style={{padding:'2rem',fontFamily:'monospace',color:'#e31b23',background:'#0a0a0a',minHeight:'100vh'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:'#e31b23',marginBottom:'1rem'}}>ERRO NO APP</div>
+          <div style={{fontSize:'.85rem',marginBottom:'1rem',color:'#fff'}}>{String(this.state.error)}</div>
+          <div style={{fontSize:'.7rem',color:'#666',whiteSpace:'pre-wrap',overflow:'auto'}}>{this.state.info?.componentStack}</div>
+          <button onClick={()=>this.setState({error:null,info:null})} style={{marginTop:'1rem',background:'#e31b23',color:'#fff',border:'none',borderRadius:'8px',padding:'.75rem 1.5rem',cursor:'pointer',fontWeight:700}}>
+            Tentar novamente
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 function App(){
   const [screen,setScreen]=useState("home");
   // Apply saved theme immediately on load
@@ -4017,8 +4039,7 @@ function App(){
   const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem('darkset.onboarded'));
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
-  // Gym mode: listen for Wi-Fi (not available in PWA, manual only)
-  const [gymModeActive,setGymModeActive]=useState(()=>!!(JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}').gymMode));
+  const gymModeActive = prefs.gymMode||false;
 
   // Sync theme with prefs — runs whenever prefs.theme changes
   useEffect(()=>{
@@ -4069,6 +4090,8 @@ function App(){
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
+      {/* Onboarding — primeira vez */}
+      {showOnboarding&&<Onboarding prefs={prefs} setPrefs={setPrefs} onDone={()=>{localStorage.setItem('darkset.onboarded','1');setShowOnboarding(false);}}/>}
       {/* Splash screen */}
       {showSplash&&(
         <div style={{position:'fixed',inset:0,background:'#080808',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
@@ -4144,7 +4167,7 @@ function App(){
       {screen==="measures" && <Measures setToast={setToast}/>}
       {screen==="coach" && <DarkAICoach history={history} prefs={prefs} setToast={setToast}/>}
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
-      {screen==="gym" && <GymMode prefs={prefs} setPrefs={p=>{setPrefs(p); if(typeof p==='function'){const np=p(prefs);setGymModeActive(!!np.gymMode);}else setGymModeActive(!!p.gymMode);}} setToast={setToast} goto={goto}/>}
+      {screen==="gym" && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
@@ -4154,7 +4177,7 @@ function App(){
   );
 }
 const root=ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App/>);
+root.render(<ErrorBoundary><App/></ErrorBoundary>);
 
 </script>
 
