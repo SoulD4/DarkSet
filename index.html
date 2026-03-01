@@ -485,17 +485,445 @@ const EXS=[
   E("Abdômen supra declinado","Abdômen","Supra","Peso corporal","avançado"),
   E("Prancha isométrica","Abdômen","Estático","Peso corporal","iniciante"),
 ];
-// --- Demo media for 3 exercises (GIF-only) ---
-(()=>{
-  const byName = (n)=> EXS.find(e=> e.name===n);
-  const setGif=(n, gif)=>{
-    const ex = byName(n); if(!ex) return;
-    ex.media = { type:"gif", srcGif: gif, thumb: null };
-  };
-  setGif("Supino reto barra", "/gifs/supino_reto_barra.gif"); // Peito
-  setGif("Remada curvada barra", "/gifs/remada_curvada_barra.gif"); // Costas
-  setGif("Agachamento livre", "/gifs/agachamento_livre.gif"); // Perna
+// ═══════════════════════════════════════════════════════════════════════════
+// GIF SYSTEM — ExerciseDB (RapidAPI) + cache local
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Mapeamento: nome PT-BR → nome ExerciseDB (inglês)
+const EX_NAME_MAP = {
+  // PEITO
+  "Supino reto barra":             "barbell bench press",
+  "Supino reto halteres":          "dumbbell bench press",
+  "Supino reto máquina":           "lever chest press",
+  "Supino inclinado barra":        "barbell incline bench press",
+  "Supino inclinado halteres":     "dumbbell incline bench press",
+  "Supino inclinado máquina":      "lever incline chest press",
+  "Supino declinado barra":        "barbell decline bench press",
+  "Supino declinado halteres":     "dumbbell decline bench press",
+  "Crossover polia alta":          "cable fly",
+  "Crucifixo reto halteres":       "dumbbell fly",
+  "Crucifixo inclinado halteres":  "dumbbell incline fly",
+  "Crucifixo Máquina":             "lever pec deck fly",
+  "Peck deck":                     "lever pec deck fly",
+  "Flexão de braço":               "push-up",
+  "Pullover halteres":             "dumbbell pullover",
+  // OMBRO
+  "Desenvolvimento barra":         "barbell shoulder press",
+  "Desenvolvimento halteres":      "dumbbell shoulder press",
+  "Desenvolvimento máquina":       "lever shoulder press",
+  "Arnold press halteres":         "dumbbell arnold press",
+  "Elevação lateral halteres":     "dumbbell lateral raise",
+  "Elevação lateral polia":        "cable lateral raise",
+  "Elevação lateral unilateral polia": "cable lateral raise",
+  "Elevação frontal barra":        "barbell front raise",
+  "Elevação frontal halteres":     "dumbbell front raise",
+  "Face Pull (corda)":             "cable face pull",
+  "Crucifixo inverso máquina":     "lever reverse fly",
+  "Crucifixo inverso halteres":    "dumbbell reverse fly",
+  "Crucifixo inverso polia":       "cable reverse fly",
+  // TRAPÉZIO
+  "Encolhimento barra":            "barbell shrug",
+  "Encolhimento halteres":         "dumbbell shrug",
+  "Remada alta barra":             "barbell upright row",
+  // COSTAS
+  "Barra fixa":                    "pull-up",
+  "Puxada alta aberta":            "cable pulldown",
+  "Puxada triângulo":              "cable close grip pull down",
+  "Puxada fechada":                "cable close grip pull down",
+  "Pulldown":                      "cable pulldown",
+  "Puxada alta unilateral":        "cable pulldown",
+  "Remada curvada barra":          "barbell bent over row",
+  "Remada curvada halteres":       "dumbbell bent over row",
+  "Remada unilateral halteres":    "dumbbell one arm row",
+  "Remada serrote halteres":       "dumbbell one arm row",
+  "Remada articulada":             "lever seated row",
+  "Remada baixa polia":            "cable seated row",
+  "Remada baixa aberta polia":     "cable seated row",
+  "Remada cavalinho":              "barbell pendlay row",
+  "Hiperextensão lombar":          "hyperextension",
+  "Extensão lombar máquina":       "lever back extension",
+  // BÍCEPS
+  "Rosca direta barra":            "barbell curl",
+  "Rosca direta halteres":         "dumbbell curl",
+  "Rosca direta polia":            "cable curl",
+  "Rosca alternada halteres":      "dumbbell alternate bicep curl",
+  "Rosca inclinada halteres":      "dumbbell incline curl",
+  "Rosca concentrada halteres":    "dumbbell concentration curl",
+  "Rosca martelo halteres":        "dumbbell hammer curl",
+  "Rosca martelo corda":           "cable hammer curl",
+  "Rosca Scott máquina":           "lever preacher curl",
+  "Rosca 21":                      "barbell curl",
+  "Rosca 45° halteres":            "dumbbell incline curl",
+  // TRÍCEPS
+  "Tríceps pulley corda":          "cable triceps pushdown",
+  "Tríceps pulley barra reta":     "cable triceps pushdown",
+  "Tríceps testa barra W":         "barbell skull crusher",
+  "Tríceps testa halteres":        "dumbbell skull crusher",
+  "Tríceps francês halteres":      "dumbbell tricep extension",
+  "Tríceps francês barra":         "barbell tricep extension",
+  "Kick back tríceps halteres":    "dumbbell kickback",
+  "Mergulho no banco":             "bench dip",
+  "Paralelas":                     "parallel bar dip",
+  // QUADRÍCEPS
+  "Agachamento livre":             "barbell squat",
+  "Agachamento sumô barra":        "barbell sumo squat",
+  "Agachamento sumô halteres":     "dumbbell sumo squat",
+  "Agachamento búlgaro halteres":  "dumbbell bulgarian split squat",
+  "Agachamento hack máquina":      "lever hack squat",
+  "Leg press 45°":                 "leg press",
+  "Cadeira extensora":             "lever leg extension",
+  "Cadeira extensora unilateral":  "lever leg extension",
+  "Passada avançada halteres":     "dumbbell lunge",
+  "Afundo com halteres":           "dumbbell lunge",
+  "Afundo com barra":              "barbell lunge",
+  // POSTERIOR
+  "Stiff":                         "barbell romanian deadlift",
+  "Stiff com halteres":            "dumbbell romanian deadlift",
+  "Stiff unilateral halteres":     "dumbbell single leg deadlift",
+  "Levantamento terra":            "barbell deadlift",
+  "Mesa flexora":                  "lever seated leg curl",
+  "Mesa flexora deitada":          "lever lying leg curl",
+  "Cadeira flexora":               "lever seated leg curl",
+  "Cadeira flexora unilateral":    "lever seated leg curl",
+  // GLÚTEO
+  "Hip thrust barra":              "barbell hip thrust",
+  "Hip thrust máquina":            "lever hip thrust",
+  "Elevação pélvica com barra":    "barbell hip thrust",
+  "Glúteo 4 apoios cabo":          "cable glute kickback",
+  "Abdução em pé polia":           "cable hip abduction",
+  // PANTURRILHA
+  "Panturrilha em pé máquina":     "calf press on leg press",
+  "Panturrilha sentado máquina":   "lever seated calf raise",
+  "Panturrilha em pé barra livre": "barbell standing calf raise",
+  // ABDUTORES/ADUTORES
+  "Cadeira abdutora":              "lever hip abduction",
+  "Cadeira adutora":               "lever hip adduction",
+  // ABDÔMEN
+  "Abdômen supra":                 "crunch",
+  "Abdômen infra":                 "leg raise",
+  "Abdômen supra declinado":       "decline crunch",
+  "Abdômen infra na paralela":     "hanging leg raise",
+  "Prancha isométrica":            "plank",
+};
+
+// GIF cache in memory + localStorage
+const GIF_CACHE_KEY = 'darkset.gifcache';
+const GIF_CACHE = (() => {
+  try { return JSON.parse(localStorage.getItem(GIF_CACHE_KEY)||'{}'); } catch(_){ return {}; }
 })();
+const saveGifCache = () => {
+  try { localStorage.setItem(GIF_CACHE_KEY, JSON.stringify(GIF_CACHE)); } catch(_){}
+};
+
+// API key storage
+const getApiKey = () => localStorage.getItem('darkset.rapidapi.key')||'';
+
+// Fetch GIF URL for an exercise name
+async function fetchExGif(exName) {
+  if (GIF_CACHE[exName]) return GIF_CACHE[exName];
+
+  const engName = EX_NAME_MAP[exName];
+  if (!engName) return null;
+
+  const apiKey = getApiKey();
+
+  // Try ExerciseDB API first (if key configured)
+  if (apiKey) {
+    try {
+      const q = encodeURIComponent(engName);
+      const res = await fetch(
+        `https://exercisedb.p.rapidapi.com/exercises/name/${q}?limit=1`,
+        { headers: { 'X-RapidAPI-Key': apiKey, 'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com' } }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]?.gifUrl) {
+        GIF_CACHE[exName] = data[0].gifUrl;
+        saveGifCache();
+        return data[0].gifUrl;
+      }
+    } catch(_){}
+  }
+
+  // Fallback: ExerciseDB free tier (no key needed, limited)
+  try {
+    const slug = engName.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+    const res = await fetch(`https://exercisedb.io/api/v2/exercises/name/${encodeURIComponent(engName)}?limit=1`);
+    if(res.ok){
+      const data = await res.json();
+      const gif = data?.exercises?.[0]?.gifUrl || data?.[0]?.gifUrl;
+      if(gif){
+        GIF_CACHE[exName] = gif;
+        saveGifCache();
+        return gif;
+      }
+    }
+  } catch(_){}
+
+  return null;
+}
+
+// React hook: load gif for an exercise
+function useExGif(exName) {
+  const [gifUrl, setGifUrl] = useState(GIF_CACHE[exName]||null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(()=>{
+    if(!exName || gifUrl) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchExGif(exName).then(url=>{
+      if(!cancelled){ setGifUrl(url||''); setLoading(false); }
+    });
+    return ()=>{ cancelled=true; };
+  },[exName]);
+
+  return {gifUrl, loading};
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXERCISE DETAIL — tela completa de detalhes do exercício
+// ═══════════════════════════════════════════════════════════════════════════
+const ExerciseDetail = ({exName, onClose, history}) => {
+  const {gifUrl, loading} = useExGif(exName);
+  const ex = EXS.find(e=>e.name===exName);
+
+  // Calc personal stats from history
+  const stats = useMemo(()=>{
+    if(!history) return {sessions:0, bestWeight:0, totalSets:0, lastDate:null};
+    let sessions=0, bestWeight=0, totalSets=0, lastDate=null;
+    Object.entries(history).forEach(([date,sess])=>{
+      const entry = sess.entries?.find(e=>e.name===exName);
+      if(!entry) return;
+      sessions++;
+      if(!lastDate || date>lastDate) lastDate=date;
+      entry.sets?.forEach(s=>{
+        totalSets++;
+        const w=Number(s.w||0);
+        if(w>bestWeight) bestWeight=w;
+      });
+    });
+    return {sessions, bestWeight, totalSets, lastDate};
+  },[exName, history]);
+
+  const tip = EXEC_TIPS[exName] || `Execute ${exName} com controle total. Mantenha postura neutra e foque na contração muscular em cada repetição.`;
+  const toDate = iso => { if(!iso) return '—'; const[y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; };
+
+  // History entries for this exercise (last 5 sessions)
+  const recentSessions = useMemo(()=>{
+    if(!history) return [];
+    return Object.entries(history)
+      .filter(([,sess])=>sess.entries?.some(e=>e.name===exName))
+      .sort((a,b)=>b[0].localeCompare(a[0]))
+      .slice(0,5)
+      .map(([date,sess])=>({
+        date,
+        sets: sess.entries.find(e=>e.name===exName)?.sets||[]
+      }));
+  },[exName,history]);
+
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:9999,background:'var(--color-bg)',overflowY:'auto'}}>
+      {/* Header */}
+      <div style={{position:'sticky',top:0,background:'var(--color-bg)',borderBottom:'1px solid var(--color-border)',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',zIndex:10}}>
+        <button onClick={onClose} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .75rem',color:'var(--color-text-sub)',fontSize:'.85rem',cursor:'pointer',fontWeight:700}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1,color:'var(--color-text)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{exName}</div>
+          {ex&&<div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.primary} · {ex.subgroup||''} · {ex.equipment}</div>}
+        </div>
+        <div style={{flexShrink:0,padding:'.25rem .6rem',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',fontSize:'.65rem',fontWeight:700,color:'var(--color-accent)',textTransform:'uppercase'}}>
+          {ex?.difficulty||''}
+        </div>
+      </div>
+
+      <div style={{padding:'1rem',display:'grid',gap:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+
+        {/* GIF */}
+        <div style={{background:'#000',borderRadius:'14px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'260px',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+          {loading&&(
+            <div style={{textAlign:'center',color:'var(--color-text-sub)'}}>
+              <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>⏳</div>
+              <div style={{fontSize:'.85rem'}}>Carregando animação...</div>
+            </div>
+          )}
+          {!loading&&gifUrl&&(
+            <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}/>
+          )}
+          {!loading&&!gifUrl&&(
+            <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+              <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🎬</div>
+              <div style={{fontSize:'.9rem',fontWeight:600}}>GIF não disponível</div>
+              <div style={{fontSize:'.72rem',color:'#444',marginTop:'.35rem'}}>Configure sua API key no Perfil</div>
+            </div>
+          )}
+        </div>
+
+        {/* Personal PRs */}
+        {stats.sessions>0&&(
+          <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.7rem'}}>Seus números</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
+              {[
+                {label:'Melhor carga',val:`${stats.bestWeight}kg`,icon:'🏆'},
+                {label:'Sessões',val:stats.sessions,icon:'📅'},
+                {label:'Total séries',val:stats.totalSets,icon:'💪'},
+              ].map(({label,val,icon})=>(
+                <div key={label} style={{background:'rgba(0,0,0,.2)',borderRadius:'10px',padding:'.7rem .5rem',textAlign:'center'}}>
+                  <div style={{fontSize:'1.2rem',marginBottom:'.2rem'}}>{icon}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',color:'var(--color-text)',lineHeight:1}}>{val}</div>
+                  <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.05em',marginTop:'3px'}}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'.6rem',textAlign:'center'}}>Último treino: {toDate(stats.lastDate)}</div>
+          </div>
+        )}
+
+        {/* Execution tips */}
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.6rem'}}>Execução correta</div>
+          <p style={{fontSize:'.82rem',color:'var(--color-text-sub)',lineHeight:1.6,margin:0}}>{tip}</p>
+        </div>
+
+        {/* Muscle info */}
+        {ex&&(
+          <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Músculos envolvidos</div>
+            <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
+              {[
+                {label:'Principal',val:ex.primary,color:'var(--color-accent)'},
+                {label:'Foco',val:ex.subgroup,color:'#facc15'},
+                {label:'Equipamento',val:ex.equipment,color:'#4ade80'},
+              ].filter(item=>item.val).map(item=>(
+                <div key={item.label} style={{padding:'.35rem .75rem',background:'rgba(0,0,0,.2)',border:`1px solid ${item.color}33`,borderRadius:'20px',display:'flex',flexDirection:'column',alignItems:'center',gap:'1px'}}>
+                  <div style={{fontSize:'.55rem',color:item.color,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>{item.label}</div>
+                  <div style={{fontSize:'.8rem',color:'var(--color-text)',fontWeight:600}}>{item.val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent sessions */}
+        {recentSessions.length>0&&(
+          <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Histórico recente</div>
+            <div style={{display:'grid',gap:'.5rem'}}>
+              {recentSessions.map(({date,sets})=>{
+                const bestW = Math.max(...sets.map(s=>Number(s.w||0)));
+                const totalR = sets.reduce((a,s)=>a+Number(s.r||0),0);
+                return (
+                  <div key={date} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.55rem .75rem',background:'rgba(0,0,0,.2)',borderRadius:'8px'}}>
+                    <div style={{fontSize:'.75rem',color:'var(--color-text)',fontWeight:600}}>{toDate(date)}</div>
+                    <div style={{display:'flex',gap:'1rem'}}>
+                      <div style={{textAlign:'center'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-text)'}}>{sets.length}x</div>
+                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>séries</div>
+                      </div>
+                      {bestW>0&&<div style={{textAlign:'center'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-accent)'}}>{bestW}kg</div>
+                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>melhor</div>
+                      </div>}
+                      <div style={{textAlign:'center'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'var(--color-text)'}}>{totalR}</div>
+                        <div style={{fontSize:'.5rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>reps</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+// ── ExGifModal — full screen GIF viewer ─────────────────────────────────────
+const ExGifModal = ({exName, onClose}) => {
+  const {gifUrl, loading} = useExGif(exName);
+  const ex = EXS.find(e=>e.name===exName);
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{marginBottom:'.75rem'}}>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',lineHeight:1.1,color:'var(--color-text)'}}>{exName}</div>
+        {ex&&<div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'3px'}}>{ex.primary} · {ex.equipment} · {ex.difficulty}</div>}
+      </div>
+
+      <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {loading&&(
+          <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+            <div style={{fontSize:'2rem',marginBottom:'.5rem',animation:'pulse 1s infinite'}}>⏳</div>
+            <div style={{fontSize:'.8rem'}}>Carregando GIF...</div>
+          </div>
+        )}
+        {!loading&&gifUrl&&(
+          <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}/>
+        )}
+        {!loading&&!gifUrl&&(
+          <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+            <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
+            <div style={{fontSize:'.85rem',fontWeight:600,marginBottom:'.35rem'}}>GIF não encontrado</div>
+            <div style={{fontSize:'.72rem',color:'#444'}}>Configure sua API key no Perfil para acesso completo</div>
+          </div>
+        )}
+      </div>
+
+      {/* Tips section */}
+      {ex&&(
+        <div style={{marginTop:'.85rem',padding:'.75rem',background:'rgba(0,0,0,.2)',borderRadius:'8px',border:'1px solid var(--color-border)'}}>
+          <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.4rem'}}>Dicas de execução</div>
+          <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
+            {EXEC_TIPS[exName]||`Execute ${exName} com controle total do movimento. Mantenha postura neutra e foque na contração muscular.`}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+// ── ExGifThumb — small thumbnail for lists ───────────────────────────────────
+const ExGifThumb = ({exName, onClick}) => {
+  const {gifUrl, loading} = useExGif(exName);
+
+  return (
+    <button onClick={onClick} style={{
+      width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',
+      background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',
+      flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+      position:'relative',padding:0
+    }}>
+      {loading&&<span style={{fontSize:'.6rem',color:'var(--color-text-sub)'}}>...</span>}
+      {!loading&&gifUrl&&<img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
+      {!loading&&!gifUrl&&<span style={{fontSize:'1.1rem'}}>🎬</span>}
+      {/* Play overlay */}
+      <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity .15s'}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=1}
+        onMouseLeave={e=>e.currentTarget.style.opacity=0}>
+        <span style={{fontSize:'.7rem',color:'#fff',fontWeight:700}}>▶</span>
+      </div>
+    </button>
+  );
+};
+
+// ── Execution tips for key exercises ────────────────────────────────────────
+const EXEC_TIPS = {
+  "Supino reto barra": "Pés no chão, escápulas retraídas e deprimidas. Barra desce até tocar o peito levemente. Empurre para cima e levemente para trás. Não solte o ar todo na subida.",
+  "Agachamento livre": "Pés na largura dos ombros, pontas para fora. Joelhos seguem as pontas dos pés. Desça até a paralela com a coxa. Mantenha o peito erguido e lombar neutra.",
+  "Levantamento terra": "Quadril na altura correta — nem muito alto nem muito baixo. Barra rente à perna durante todo o movimento. Empurre o chão, não puxe a barra. Extensão do quadril no topo.",
+  "Remada curvada barra": "Coluna neutra com tronco a 45°. Puxe a barra até o umbigo, não até o peito. Cotovelhos apontados para trás. Escápulas juntas no final do movimento.",
+  "Desenvolvimento barra": "Barra na linha dos olhos ao iniciar. Empurre direto para cima sem inclinar o tronco. Não hiperestenda a lombar. Controle a descida.",
+  "Hip thrust barra": "Ombros apoiados no banco, pés na largura do quadril. Empurre com os calcanhares, não com as pontas dos pés. Squeeze máximo de glúteo no topo. Quadril neutro, não hiperestenda.",
+  "Rosca direta barra": "Cotovelos fixos ao longo do corpo. Suba até a contração máxima do bíceps. Desça com controle (2-3 segundos). Não balance o tronco.",
+  "Tríceps pulley corda": "Cotovelos fixos e próximos ao corpo. Abra a corda ao descer para melhorar contração. Extensão completa no final. Controle a subida.",
+  "Stiff": "Quadril se move para trás, não para baixo. Joelhos levemente flexionados e fixos. Sinta o alongamento no posterior. Barra rente às pernas durante todo o movimento.",
+  "Prancha isométrica": "Corpo em linha reta da cabeça aos calcanhares. Abdômen contraído. Não eleve o quadril nem deixe cair. Respire normalmente durante o isométrico.",
+};
+
 
 // Filters
 const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
@@ -982,6 +1410,19 @@ const Plans=({plans,setPlans,goto,setToast})=>{
   const [filterLevel,setFilterLevel]=useState('todos');
   const [filterDays,setFilterDays]=useState('todos');
   const [previewPlan,setPreviewPlan]=useState(null);
+  const [showQR,setShowQR]=useState(false);
+  const handleQRResult=(url)=>{
+    setShowQR(false);
+    try{
+      const u=new URL(url);
+      const raw=u.searchParams.get('import');
+      if(raw){
+        const json=JSON.parse(decodeURIComponent(raw));
+        importPreset({...json,id:'import_'+Date.now()});
+        setToast('Ficha importada via QR! 📲');
+      } else { setToast('QR inválido'); }
+    }catch(e){ setToast('Link inválido'); }
+  };
 
   const importPreset=(preset)=>{
     const id=Date.now();
@@ -1041,6 +1482,9 @@ const Plans=({plans,setPlans,goto,setToast})=>{
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Fichas</div>
           <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{plans.list.length} ficha(s) salva(s)</div>
         </div>
+        <button onClick={()=>setShowQR(true)} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .85rem',color:'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
+          📷 QR
+        </button>
       </div>
 
       {/* Tab toggle */}
@@ -1193,6 +1637,8 @@ const Plans=({plans,setPlans,goto,setToast})=>{
         </div>
       )}
 
+      {showQR&&<QRScanner onResult={handleQRResult} onClose={()=>setShowQR(false)}/>}
+
       {sharePlan&&(
         <Modal onClose={()=>setSharePlan(null)}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',marginBottom:'1rem'}}>{sharePlan.name}</div>
@@ -1218,6 +1664,8 @@ const Builder=({planId,plans,setPlans,setToast})=>{
   const [filters,setFilters]=useState(()=>load(LS.filters,{q:"",m:"",s:"",e:"",d:""}));
   const [tab,setTab]=useState('ficha'); // 'ficha' | 'buscar'
   const {q,m,s,e,d}=filters;
+  const [gifModal,setGifModal]=useState(null);
+  const [detailEx,setDetailEx]=useState(null);
 
   useEffect(()=>save(LS.filters,filters),[filters]);
 
@@ -1424,14 +1872,15 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                 const added=!canAdd(ex);
                 rows.push(
                   <div key={ex.id} style={{
-                    display:'grid',gridTemplateColumns:'1fr auto auto',alignItems:'center',gap:'.6rem',
+                    display:'grid',gridTemplateColumns:'52px 1fr auto auto',alignItems:'center',gap:'.6rem',
                     background:added?'rgba(227,27,35,.04)':'rgba(0,0,0,.25)',
                     border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
                     borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
                   }}>
+                    <ExGifThumb exName={ex.name} onClick={()=>setDetailEx(ex.name)}/>
                     <div>
                       <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'var(--color-text)'}}>{ex.name}</div>
-                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.equipment} · {ex.difficulty}</div>
+                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.equipment} · {ex.difficulty} · <span onClick={()=>setDetailEx(ex.name)} style={{color:'var(--color-accent)',cursor:'pointer',fontWeight:700}}>ver detalhes</span></div>
                     </div>
                     {!added && (
                       <select
@@ -1769,10 +2218,527 @@ const Cardio = ({goto, setToast}) => {
   );
 };
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MEDIDAS CORPORAIS
+// ═══════════════════════════════════════════════════════════════════════════
+const MEASURES_KEY = 'darkset.measures';
+const loadMeasures = () => { try{return JSON.parse(localStorage.getItem(MEASURES_KEY)||'[]');}catch(_){return [];} };
+const saveMeasures = (d) => { try{localStorage.setItem(MEASURES_KEY,JSON.stringify(d));}catch(_){} };
+
+const Measures = ({setToast}) => {
+  const [entries, setEntries] = useState(loadMeasures);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({date:new Date().toISOString().slice(0,10),peso:'',gordura:'',cintura:'',quadril:'',peito:'',braco:'',coxa:''});
+
+  const save = () => {
+    if(!form.peso && !form.gordura) { setToast('Preencha ao menos peso ou % gordura'); return; }
+    const updated = [{ id:Date.now(), ...form }, ...entries];
+    setEntries(updated); saveMeasures(updated); setAdding(false);
+    setForm({date:new Date().toISOString().slice(0,10),peso:'',gordura:'',cintura:'',quadril:'',peito:'',braco:'',coxa:''});
+    setToast('Medidas salvas ✓');
+  };
+  const del = (id) => { const u=entries.filter(e=>e.id!==id); setEntries(u); saveMeasures(u); };
+  const toBR=(iso)=>{if(!iso)return '';const[y,m,d]=iso.split('-');return d+'/'+m+'/'+y;};
+
+  const Field = ({label,field,unit=''}) => (
+    <div>
+      <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.25rem'}}>{label}{unit&&<span style={{color:'#555'}}> ({unit})</span>}</div>
+      <input type="number" step="0.1" placeholder="—" value={form[field]} onChange={e=>setForm(f=>({...f,[field]:e.target.value}))}
+        style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'1rem',color:'var(--color-text)',fontWeight:600}}/>
+    </div>
+  );
+
+  const last = entries[0];
+  const prev = entries[1];
+  const diff = (field) => {
+    if(!last||!prev||!last[field]||!prev[field]) return null;
+    const d = (Number(last[field])-Number(prev[field])).toFixed(1);
+    return {val:d, pos:Number(d)>0};
+  };
+
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'var(--color-accent)'}}>BODY</span>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Medidas corporais</div>
+        </div>
+        <button onClick={()=>setAdding(a=>!a)} style={{background:adding?'rgba(0,0,0,.15)':'var(--color-accent)',border:adding?'1px solid var(--color-border)':'none',borderRadius:'8px',padding:'.5rem 1.1rem',color:adding?'var(--color-text-sub)':'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>
+          {adding?'Cancelar':'+ Registrar'}
+        </button>
+      </div>
+
+      {/* Add form */}
+      {adding&&(
+        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.75rem',background:'var(--color-card)'}}>
+          <div>
+            <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.25rem'}}>Data</div>
+            <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}
+              style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.9rem',color:'var(--color-text)'}}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem'}}>
+            <Field label="Peso" field="peso" unit="kg"/>
+            <Field label="Gordura" field="gordura" unit="%"/>
+            <Field label="Cintura" field="cintura" unit="cm"/>
+            <Field label="Quadril" field="quadril" unit="cm"/>
+            <Field label="Peito" field="peito" unit="cm"/>
+            <Field label="Braço" field="braco" unit="cm"/>
+            <Field label="Coxa" field="coxa" unit="cm"/>
+          </div>
+          <button onClick={save} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.7rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
+            Salvar medidas
+          </button>
+        </div>
+      )}
+
+      {/* Latest snapshot */}
+      {last&&(
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase'}}>Última medição — {toBR(last.date)}</div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
+            {[['Peso','peso','kg'],['Gordura','gordura','%'],['Cintura','cintura','cm'],['Quadril','quadril','cm'],['Peito','peito','cm'],['Braço','braco','cm'],['Coxa','coxa','cm']].map(([lbl,key,unit])=>{
+              if(!last[key]) return null;
+              const d = diff(key);
+              return (
+                <div key={key} style={{background:'rgba(0,0,0,.2)',borderRadius:'8px',padding:'.6rem .65rem',textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',color:'var(--color-text)'}}>{last[key]}<span style={{fontSize:'.6rem',color:'var(--color-text-sub)',marginLeft:'2px'}}>{unit}</span></div>
+                  <div style={{fontSize:'.58rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.05em'}}>{lbl}</div>
+                  {d&&<div style={{fontSize:'.62rem',fontWeight:700,color:d.pos?'#e31b23':'#4ade80',marginTop:'2px'}}>{d.pos?'+':''}{d.val}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* History list */}
+      {entries.length>0&&(
+        <div style={{display:'grid',gap:'.5rem'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Histórico ({entries.length})</div>
+          {entries.map((e,i)=>(
+            <div key={e.id} className="ds-card" style={{padding:'.7rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--color-card)'}}>
+              <div>
+                <div style={{fontSize:'.8rem',fontWeight:700,color:'var(--color-text)'}}>{toBR(e.date)}</div>
+                <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
+                  {[e.peso&&`${e.peso}kg`,e.gordura&&`${e.gordura}%gord`,e.cintura&&`C:${e.cintura}cm`].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <button onClick={()=>del(e.id)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'.25rem .5rem',color:'#e31b23',fontSize:'.75rem',cursor:'pointer'}}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!last&&!adding&&(
+        <div style={{textAlign:'center',padding:'3rem 1rem',color:'var(--color-text-sub)'}}>
+          <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>📏</div>
+          <div style={{fontSize:'1rem',fontWeight:700}}>Sem medidas ainda</div>
+          <div style={{fontSize:'.78rem',marginTop:'.35rem',color:'#444'}}>Registre peso, medidas e gordura para ver sua evolução</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QR CODE SCANNER (for importing plans)
+// ═══════════════════════════════════════════════════════════════════════════
+const QRScanner = ({onResult, onClose}) => {
+  const videoRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(()=>{
+    let stream = null;
+    const start = async() => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+        if(videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); setScanning(true); }
+      } catch(e) { setError('Câmera não disponível: '+e.message); }
+    };
+    start();
+    return () => { if(stream) stream.getTracks().forEach(t=>t.stop()); };
+  },[]);
+
+  // Use BarcodeDetector API if available, else show manual input
+  const [manual, setManual] = useState('');
+  const hasBarcodeApi = typeof BarcodeDetector !== 'undefined';
+
+  useEffect(()=>{
+    if(!hasBarcodeApi || !scanning) return;
+    const detector = new BarcodeDetector({formats:['qr_code']});
+    const interval = setInterval(async()=>{
+      if(!videoRef.current) return;
+      try {
+        const codes = await detector.detect(videoRef.current);
+        if(codes.length>0) { clearInterval(interval); onResult(codes[0].rawValue); }
+      } catch(_){}
+    }, 500);
+    return ()=>clearInterval(interval);
+  },[scanning, hasBarcodeApi]);
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',marginBottom:'1rem'}}>Escanear QR Code</div>
+        {error ? (
+          <div style={{color:'var(--color-accent)',fontSize:'.85rem',padding:'1rem'}}>{error}</div>
+        ) : (
+          <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',background:'#000',marginBottom:'1rem'}}>
+            <video ref={videoRef} style={{width:'100%',maxHeight:'240px',objectFit:'cover',display:'block'}} muted playsInline/>
+            <div style={{position:'absolute',inset:'20%',border:'2px solid var(--color-accent)',borderRadius:'8px',boxShadow:'0 0 0 9999px rgba(0,0,0,.5)'}}/>
+          </div>
+        )}
+        {!hasBarcodeApi&&(
+          <div style={{marginTop:'.75rem'}}>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.5rem'}}>Ou cole o link da ficha:</div>
+            <div style={{display:'flex',gap:'.5rem'}}>
+              <input placeholder="https://darksetoficial.netlify.app/?import=..." value={manual} onChange={e=>setManual(e.target.value)}
+                style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .75rem',fontSize:'.82rem',color:'var(--color-text)'}}/>
+              <button onClick={()=>manual&&onResult(manual)} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem .85rem',color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer'}}>OK</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFICAÇÕES DE TREINO
+// ═══════════════════════════════════════════════════════════════════════════
+const NotifSettings = ({prefs, setPrefs, setToast}) => {
+  const [enabled, setEnabled] = useState(!!prefs.notifEnabled);
+  const [hour, setHour] = useState(prefs.notifHour||7);
+  const [min, setMin] = useState(prefs.notifMin||0);
+  const [perm, setPerm] = useState(Notification?.permission||'default');
+
+  const requestAndSave = async() => {
+    if('Notification' in window){
+      const p = await Notification.requestPermission();
+      setPerm(p);
+      if(p==='granted'){
+        setEnabled(true);
+        setPrefs(prev=>({...prev, notifEnabled:true, notifHour:hour, notifMin:min}));
+        setToast('Lembrete ativado! ⏰');
+        // Schedule via service worker if available
+        scheduleNotif(hour,min);
+      } else {
+        setToast('Permissão negada. Ative nas configurações do celular.');
+      }
+    } else {
+      setToast('Notificações não suportadas neste dispositivo');
+    }
+  };
+
+  const disable = () => {
+    setEnabled(false);
+    setPrefs(prev=>({...prev, notifEnabled:false}));
+    setToast('Lembrete desativado');
+  };
+
+  const scheduleNotif = (h,m) => {
+    // Use SW periodic sync if available, else manual check
+    if('serviceWorker' in navigator && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({type:'scheduleNotif', hour:h, min:m});
+    }
+  };
+
+  const fmtTime = (h,m) => `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+
+  return (
+    <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.85rem',background:'var(--color-card)'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Lembrete diário</div>
+          <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>Te avisa na hora certa de treinar</div>
+        </div>
+        <Switch checked={enabled} onChange={v=>v?requestAndSave():disable()}/>
+      </div>
+
+      {enabled&&(
+        <>
+          <div>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>Horário do lembrete</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+              <input type="number" min={0} max={23} value={hour} onChange={e=>setHour(Number(e.target.value))}
+                style={{width:'60px',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .65rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:700,textAlign:'center'}}/>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.2rem',color:'var(--color-text-sub)'}}>:</span>
+              <input type="number" min={0} max={59} step={5} value={min} onChange={e=>setMin(Number(e.target.value))}
+                style={{width:'60px',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .65rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:700,textAlign:'center'}}/>
+              <button onClick={()=>{setPrefs(prev=>({...prev,notifHour:hour,notifMin:min}));scheduleNotif(hour,min);setToast('Horário salvo');}}
+                style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem .85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>
+                Salvar
+              </button>
+            </div>
+          </div>
+          <div style={{fontSize:'.7rem',color:'#4ade80'}}>⏰ Lembrete ativo às {fmtTime(hour,min)} todos os dias</div>
+        </>
+      )}
+      {perm==='denied'&&<div style={{fontSize:'.72rem',color:'var(--color-accent)'}}>Permissão negada. Ative nas configurações do sistema.</div>}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMUNIDADE — Firebase-backed social/ranking
+// ═══════════════════════════════════════════════════════════════════════════
+const Community = ({history, setToast, prefs}) => {
+  const [tab, setTab] = useState('rank'); // 'rank' | 'feed' | 'grupo'
+  const [groupCode, setGroupCode] = useState(()=>localStorage.getItem('darkset.groupCode')||'');
+  const [inputCode, setInputCode] = useState('');
+  const [members, setMembers] = useState([]);
+  const [feed, setFeed] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkinPhoto, setCheckinPhoto] = useState(null);
+  const photoInputRef = useRef(null);
+
+  const uid = getUID();
+  const userName = prefs.name || 'Usuário';
+  const thisWeek = (() => {
+    const now = new Date(); const day = now.getDay()||7;
+    const mon = new Date(now); mon.setDate(now.getDate()-(day-1));
+    return Object.keys(history).filter(k=>new Date(k)>=mon).length;
+  })();
+
+  // Generate a group code for this user
+  const myGroupCode = (() => {
+    if (!uid) return null;
+    return uid.slice(0,8).toUpperCase();
+  })();
+
+  const joinGroup = () => {
+    if(!inputCode.trim()) return;
+    localStorage.setItem('darkset.groupCode', inputCode.trim().toUpperCase());
+    setGroupCode(inputCode.trim().toUpperCase());
+    setToast('Grupo entrado!');
+  };
+
+  const leaveGroup = () => {
+    localStorage.removeItem('darkset.groupCode');
+    setGroupCode('');
+    setMembers([]);
+    setFeed([]);
+  };
+
+  // Load group data from Firebase
+  useEffect(()=>{
+    if(!groupCode||!window._db||!uid) return;
+    setLoading(true);
+    try {
+      const db = window._db;
+      // Real-time listener on group doc
+      const unsubFeed = db.collection('groups').doc(groupCode).collection('feed')
+        .orderBy('ts','desc').limit(30)
+        .onSnapshot(snap=>{
+          setFeed(snap.docs.map(d=>({id:d.id,...d.data()})));
+          setLoading(false);
+        }, ()=>setLoading(false));
+      const unsubMembers = db.collection('groups').doc(groupCode).collection('members')
+        .onSnapshot(snap=>{
+          setMembers(snap.docs.map(d=>({id:d.id,...d.data()})));
+        }, ()=>{});
+      // Register self in group
+      db.collection('groups').doc(groupCode).collection('members').doc(uid).set({
+        name: userName, weekCount: thisWeek, updatedAt: new Date().toISOString()
+      },{merge:true});
+      return () => { unsubFeed(); unsubMembers(); };
+    } catch(e) { setLoading(false); }
+  },[groupCode, uid, thisWeek]);
+
+  const doCheckIn = async(photoData) => {
+    if(!uid||!groupCode||!window._db) { setToast('Entre em um grupo primeiro'); return; }
+    try {
+      await window._db.collection('groups').doc(groupCode).collection('feed').add({
+        uid, name:userName, type:'checkin',
+        weekCount: thisWeek,
+        photo: photoData||null,
+        ts: new Date().toISOString(),
+        date: new Date().toLocaleDateString('pt-BR'),
+      });
+      setToast('Check-in feito! 💪');
+    } catch(e) { setToast('Erro no check-in: '+e.message); }
+    setCheckingIn(false); setCheckinPhoto(null);
+  };
+
+  const handleCheckinPhoto = (e) => {
+    const file = e.target.files&&e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setCheckinPhoto(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Sort members by week count for ranking
+  const ranked = [...members].sort((a,b)=>(b.weekCount||0)-(a.weekCount||0));
+  const medals = ['🥇','🥈','🥉'];
+
+  const fmtTs = (iso) => { try{ const d=new Date(iso); return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(_){return '';} };
+
+  if(!uid) return (
+    <div style={{marginTop:'1rem',textAlign:'center',padding:'3rem 1rem',color:'var(--color-text-sub)'}}>
+      <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>🔒</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',marginBottom:'.5rem'}}>Login necessário</div>
+      <div style={{fontSize:'.82rem'}}>Faça login no Perfil para acessar a Comunidade</div>
+    </div>
+  );
+
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'.5rem'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Comunidade de treino</div>
+        </div>
+        {groupCode&&(
+          <button onClick={()=>{setCheckingIn(true);}} style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
+            Check-in 💪
+          </button>
+        )}
+      </div>
+
+      {/* Check-in modal */}
+      {checkingIn&&(
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.75rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Fazer Check-in</div>
+          {checkinPhoto
+            ? <img src={checkinPhoto} style={{width:'100%',maxHeight:'200px',objectFit:'cover',borderRadius:'8px'}} alt="preview"/>
+            : <button onClick={()=>photoInputRef.current&&photoInputRef.current.click()} style={{background:'rgba(0,0,0,.2)',border:'1px dashed var(--color-border)',borderRadius:'8px',padding:'1rem',color:'var(--color-text-sub)',fontSize:'.82rem',cursor:'pointer',textAlign:'center'}}>
+                📸 Adicionar foto (opcional)
+              </button>
+          }
+          <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handleCheckinPhoto}/>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <button onClick={()=>doCheckIn(checkinPhoto)} style={{flex:1,background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.65rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
+              Confirmar Check-in
+            </button>
+            <button onClick={()=>{setCheckingIn(false);setCheckinPhoto(null);}} style={{background:'rgba(0,0,0,.15)',border:'1px solid var(--color-border)',borderRadius:'9px',padding:'.65rem .85rem',color:'var(--color-text-sub)',fontSize:'.85rem',cursor:'pointer'}}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Group setup */}
+      {!groupCode ? (
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)',display:'grid',gap:'.85rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Entrar em um grupo</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input placeholder="Código do grupo (ex: AB12CD34)" value={inputCode} onChange={e=>setInputCode(e.target.value.toUpperCase())}
+              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.9rem',color:'var(--color-text)',fontFamily:'monospace',letterSpacing:'.1em'}}/>
+            <button onClick={joinGroup} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Entrar</button>
+          </div>
+          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem'}}>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>Ou compartilhe seu código</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+              <div style={{flex:1,background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .85rem',fontSize:'.9rem',fontFamily:'monospace',letterSpacing:'.12em',color:'var(--color-accent)',fontWeight:700}}>{myGroupCode}</div>
+              <button onClick={()=>{navigator.clipboard?.writeText(myGroupCode);setToast('Código copiado!');}} style={{background:'rgba(255,255,255,.06)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .85rem',color:'var(--color-text-sub)',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>Copiar</button>
+            </div>
+            <div style={{fontSize:'.68rem',color:'#444',marginTop:'.4rem'}}>Amigos entram com esse código</div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Grupo ativo */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.6rem .85rem',background:'rgba(74,222,128,.06)',border:'1px solid rgba(74,222,128,.2)',borderRadius:'9px'}}>
+            <div>
+              <div style={{fontSize:'.6rem',color:'#4ade80',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Grupo ativo</div>
+              <div style={{fontFamily:'monospace',fontWeight:700,fontSize:'.95rem',letterSpacing:'.1em',color:'var(--color-text)'}}>{groupCode}</div>
+            </div>
+            <button onClick={leaveGroup} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.3rem .65rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
+          </div>
+
+          {/* Tabs */}
+          <div className="mode-toggle">
+            <button className={"mode-toggle-btn"+(tab==='rank'?' active':'')} onClick={()=>setTab('rank')}>🏆 Ranking</button>
+            <button className={"mode-toggle-btn"+(tab==='feed'?' active':'')} onClick={()=>setTab('feed')}>📸 Feed</button>
+          </div>
+
+          {/* Ranking */}
+          {tab==='rank'&&(
+            <div style={{display:'grid',gap:'.5rem'}}>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Treinos esta semana</div>
+              {loading&&<div style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
+              {/* Always show self first if not in list */}
+              {ranked.length===0&&!loading&&(
+                <div className="ds-card" style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',background:'var(--color-card)',border:'1px solid rgba(227,27,35,.2)'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'var(--color-accent)'}}>🏆</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{userName} (você)</div>
+                    <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{thisWeek} treino(s) esta semana</div>
+                  </div>
+                </div>
+              )}
+              {ranked.map((m,i)=>{
+                const isMe = m.id===uid;
+                return (
+                  <div key={m.id} className="ds-card" style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',background:isMe?'rgba(227,27,35,.05)':'var(--color-card)',border:isMe?'1px solid rgba(227,27,35,.25)':'1px solid var(--color-border)'}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',minWidth:'28px',textAlign:'center',color:i<3?['#FFD700','#C0C0C0','#CD7F32'][i]:'var(--color-text-sub)'}}>
+                      {i<3?medals[i]:i+1}
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
+                      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{m.weekCount||0} treino(s) esta semana</div>
+                    </div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:i===0?'#FFD700':'var(--color-text-sub)'}}>{m.weekCount||0}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Feed */}
+          {tab==='feed'&&(
+            <div style={{display:'grid',gap:'.6rem'}}>
+              {loading&&<div style={{textAlign:'center',padding:'1.5rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
+              {!loading&&feed.length===0&&(
+                <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
+                  <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>👥</div>
+                  <div>Nenhum check-in ainda</div>
+                  <div style={{fontSize:'.75rem',marginTop:'.25rem',color:'#444'}}>Faça o primeiro check-in do grupo!</div>
+                </div>
+              )}
+              {feed.map(item=>(
+                <div key={item.id} className="ds-card" style={{padding:'.85rem 1rem',background:'var(--color-card)'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{item.name}</div>
+                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)'}}>{fmtTs(item.ts)}</div>
+                    </div>
+                    <div style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'.2rem .55rem',fontSize:'.7rem',fontWeight:700,color:'var(--color-accent)'}}>
+                      💪 {item.weekCount}x/semana
+                    </div>
+                  </div>
+                  {item.photo&&<img src={item.photo} style={{width:'100%',maxHeight:'220px',objectFit:'cover',borderRadius:'8px',marginTop:'.25rem'}} alt="check-in"/>}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {gifModal&&<ExGifModal exName={gifModal} onClose={()=>setGifModal(null)}/>}
+      {detailEx&&<ExerciseDetail exName={detailEx} onClose={()=>setDetailEx(null)} history={{}}/>}
+    </div>
+  );
+};
+
+
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
   const [day, setDay] = React.useState(DAYS[0]);
   const [videoEx, setVideoEx] = React.useState(null);
+  const [detailExV, setDetailExV] = React.useState(null);
 
   if (!plan) {
     return <Card title="Visualizar ficha"><div className="text-sm text-textSub">Nenhuma ficha ativa. Crie/ative uma ficha primeiro.</div></Card>;
@@ -1780,12 +2746,7 @@ const Viewer = ({planId, plans, goto}) => {
 
   const items = plan.byDay?.[day] || [];
   const openVideo = (ex) => {
-    const meta = EXS.find(e => e.id === ex.exId) || EXS.find(e => e.name === ex.name);
-    if (meta && meta.media?.srcGif) {
-      setVideoEx(meta);
-    } else {
-      setVideoEx({ name: ex.name, media: null }); // sem preview
-    }
+    setDetailExV(ex.name);
   };
 
   return (
@@ -1822,24 +2783,7 @@ const Viewer = ({planId, plans, goto}) => {
         )}
       </Card>
 
-      {videoEx && (
-        <Modal onClose={() => setVideoEx(null)}>
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <div className="text-sm text-textSub">Execução do exercício</div>
-              <div className="font-semibold">{videoEx.name}</div>
-            </div>
-            <Button variant="ghost" onClick={() => setVideoEx(null)}>Fechar</Button>
-          </div>
-          {videoEx.media && videoEx.media.srcGif ? (
-            <div className="rounded-xl overflow-hidden border border-borderDark bg-black">
-              <img src={videoEx.media.srcGif} alt={videoEx.name} className="w-full h-auto" />
-            </div>
-          ) : (
-            <div className="text-sm text-textSub">Prévia ainda não disponível para este exercício.</div>
-          )}
-        </Modal>
-      )}
+      {detailExV&&<ExerciseDetail exName={detailExV} onClose={()=>setDetailExV(null)} history={{}}/>}
     </div>
   );
 };
@@ -2030,6 +2974,28 @@ function clearDraftSession(planId, day) {
   } catch(_) {}
 }
 
+
+// ── Smart Rest Duration based on exercise type ───────────────────────────
+function smartRestDuration(exName, prefs) {
+  if (!exName) return Number(prefs.timerPreset||60);
+  const name = exName.toLowerCase();
+  // Compound/heavy → longer rest
+  if (/(agachamento|levantamento|supino reto barra|barra fixa|desenvolvimento barra|stiff$)/.test(name)) return 120;
+  // Isolation → shorter
+  if (/(rosca|tríceps|panturrilha|abdôm|elevação|crucifixo|kick back)/.test(name)) return 45;
+  // Default
+  return Number(prefs.timerPreset||60);
+}
+
+// Global rest timer trigger — called after each set save
+function triggerSmartRest(exName, prefs) {
+  if (!prefs.showTimer) return;
+  const dur = smartRestDuration(exName, prefs);
+  const endsAt = Date.now() + dur * 1000;
+  // Dispatch event so DarkTimer picks it up
+  window.dispatchEvent(new CustomEvent('darkset:startRest', {detail: {endsAt, dur}}));
+}
+
 const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
   const activePlanId = plans.activeId || (plans.list[0]?.id ?? null);
   const activePlan = plans.list.find(p => p.id === activePlanId) || null;
@@ -2042,6 +3008,8 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
   const [rir, setRir] = useState([]);
   const [savedSnap, setSavedSnap] = useState({});
 
+  const [sessionGif,setSessionGif]=useState(null);
+  const [sessionDetail,setSessionDetail]=useState(null);
   // ── FREE MODE STATE ──
   const [freeExercises, setFreeExercises] = useState(() => {
     try { const d = JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d) && d.length ? d : []; } catch(_) { return []; }
@@ -2106,6 +3074,7 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
     });
     setSavedSnap(m => ({...m, [cursor]: snapshot()}));
     if (prefs.vibrate && navigator.vibrate) navigator.vibrate(20);
+    triggerSmartRest(planItems[cursor]?.name, prefs);
     setToast('Séries salvas ✓');
   };
 
@@ -2277,8 +3246,11 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
         <div className="flex items-center justify-between" style={{marginBottom:'.6rem'}}>
           <div>
-            <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em'}}>{activePlan.name} · {day}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1,marginTop:'.15rem'}}>{current.name}</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>{activePlan.name} · {day}</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginTop:'.15rem'}}>
+              <button onClick={()=>setSessionDetail(current.name)} style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1,color:'var(--color-text)',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'left'}}>{current.name}</button>
+              <button onClick={()=>setSessionGif(current.name)} style={{flexShrink:0,background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'7px',padding:'.28rem .55rem',fontSize:'.75rem',color:'var(--color-accent)',cursor:'pointer',fontWeight:700,lineHeight:1}}>🎬</button>
+            </div>
           </div>
           <div style={{textAlign:'right'}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.6rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'1rem',color:'#333'}}>/{planItems.length}</span></div>
@@ -2292,6 +3264,8 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast}) => {
 
       {/* Timer */}
       {prefs.showTimer && <DarkTimer prefs={prefs}/>}
+      {sessionGif&&<ExGifModal exName={sessionGif} onClose={()=>setSessionGif(null)}/>}
+      {sessionDetail&&<ExerciseDetail exName={sessionDetail} onClose={()=>setSessionDetail(null)} history={history}/>}
 
       {/* Sets */}
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
@@ -2532,6 +3506,34 @@ const History=({history,setHistory,prefs})=>{
 };
 
 // Profile
+// ── API Key input component ──────────────────────────────────────────────────
+const GifApiKeyInput = () => {
+  const [key, setKey] = useState(()=>localStorage.getItem('darkset.rapidapi.key')||'');
+  const [saved, setSaved] = useState(false);
+  const save = () => {
+    localStorage.setItem('darkset.rapidapi.key', key.trim());
+    // Clear gif cache so new key takes effect
+    localStorage.removeItem('darkset.gifcache');
+    Object.keys(GIF_CACHE).forEach(k=>delete GIF_CACHE[k]);
+    setSaved(true); setTimeout(()=>setSaved(false),2000);
+  };
+  return (
+    <div style={{display:'flex',gap:'.4rem'}}>
+      <input
+        type="password"
+        placeholder="Cole sua API key aqui..."
+        value={key}
+        onChange={e=>{setKey(e.target.value);setSaved(false);}}
+        style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .65rem',fontSize:'.75rem',color:'var(--color-text)',fontFamily:'monospace'}}
+      />
+      <button onClick={save} style={{background:saved?'rgba(74,222,128,.15)':'var(--color-accent)',border:saved?'1px solid rgba(74,222,128,.3)':'none',borderRadius:'7px',padding:'.4rem .85rem',color:saved?'#4ade80':'#fff',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer',transition:'all .2s'}}>
+        {saved?'✓ Salvo':'Salvar'}
+      </button>
+    </div>
+  );
+};
+
+
 const Profile=({prefs,setPrefs,history})=>{
   const [tab,setTab]=useState('config');
   const [name,setName]=useState(prefs.name||'');
@@ -2710,6 +3712,9 @@ const Profile=({prefs,setPrefs,history})=>{
             {dirty?'Salvar alterações':'Sem alterações'}
           </button>
 
+          {/* Notificações */}
+          <NotifSettings prefs={prefs} setPrefs={setPrefs} setToast={()=>{}}/>
+
           {/* Sync */}
           <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'1rem',display:'grid',gap:'.5rem'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -2722,6 +3727,18 @@ const Profile=({prefs,setPrefs,history})=>{
               </button>
             </div>
             {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
+          </div>
+
+          {/* API Key para GIFs */}
+          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'grid',gap:'.5rem'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>GIFs de Exercícios</div>
+                <div style={{fontSize:'.62rem',color:'#444',marginTop:'1px'}}>RapidAPI key (ExerciseDB)</div>
+              </div>
+              <a href="https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb" target="_blank" rel="noreferrer" style={{fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700,textDecoration:'none'}}>Criar grátis →</a>
+            </div>
+            <GifApiKeyInput/>
           </div>
 
           {/* Tutorial */}
@@ -2919,6 +3936,8 @@ function App(){
           <button className={"ds-nav-btn"+(screen==="builder"?" active":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar</button>
           <button className={"ds-nav-btn"+(screen==="session"?" active":"")} onClick={()=>goto("session")}>Treino</button>
           <button className={"ds-nav-btn"+(screen==="cardio"?" active":"")} onClick={()=>goto("cardio")}>Cardio</button>
+          <button className={"ds-nav-btn"+(screen==="community"?" active":"")} onClick={()=>goto("community")}>Squad</button>
+          <button className={"ds-nav-btn"+(screen==="measures"?" active":"")} onClick={()=>goto("measures")}>Medidas</button>
           <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
           <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
         </nav>
@@ -2936,10 +3955,12 @@ function App(){
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
+      {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
+      {screen==="measures" && <Measures setToast={setToast}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.0.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.1.0</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
