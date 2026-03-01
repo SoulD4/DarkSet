@@ -794,18 +794,6 @@ const ExGifThumb = ({exName, onClick}) => {
   );
 };
 // ── Execution tips for key exercises ────────────────────────────────────────
-const EXEC_TIPS = {
-  "Supino reto barra": "Pés no chão, escápulas retraídas e deprimidas. Barra desce até tocar o peito levemente. Empurre para cima e levemente para trás. Não solte o ar todo na subida.",
-  "Agachamento livre": "Pés na largura dos ombros, pontas para fora. Joelhos seguem as pontas dos pés. Desça até a paralela com a coxa. Mantenha o peito erguido e lombar neutra.",
-  "Levantamento terra": "Quadril na altura correta — nem muito alto nem muito baixo. Barra rente à perna durante todo o movimento. Empurre o chão, não puxe a barra. Extensão do quadril no topo.",
-  "Remada curvada barra": "Coluna neutra com tronco a 45°. Puxe a barra até o umbigo, não até o peito. Cotovelhos apontados para trás. Escápulas juntas no final do movimento.",
-  "Desenvolvimento barra": "Barra na linha dos olhos ao iniciar. Empurre direto para cima sem inclinar o tronco. Não hiperestenda a lombar. Controle a descida.",
-  "Hip thrust barra": "Ombros apoiados no banco, pés na largura do quadril. Empurre com os calcanhares, não com as pontas dos pés. Squeeze máximo de glúteo no topo. Quadril neutro, não hiperestenda.",
-  "Rosca direta barra": "Cotovelos fixos ao longo do corpo. Suba até a contração máxima do bíceps. Desça com controle (2-3 segundos). Não balance o tronco.",
-  "Tríceps pulley corda": "Cotovelos fixos e próximos ao corpo. Abra a corda ao descer para melhorar contração. Extensão completa no final. Controle a subida.",
-  "Stiff": "Quadril se move para trás, não para baixo. Joelhos levemente flexionados e fixos. Sinta o alongamento no posterior. Barra rente às pernas durante todo o movimento.",
-  "Prancha isométrica": "Corpo em linha reta da cabeça aos calcanhares. Abdômen contraído. Não eleve o quadril nem deixe cair. Respire normalmente durante o isométrico.",
-};
 
 
 // Filters
@@ -2372,230 +2360,16 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // COMUNIDADE — Firebase-backed social/ranking
 // ═══════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════
-// DARKSQUAD — versão local (sem Firebase, funciona offline)
-// Cada usuário exporta/importa seu card de stats via código de texto
-// ═══════════════════════════════════════════════════════════════════════════
-const SQUAD_KEY = 'darkset.squad.members';
-
-const loadSquad = () => {
-  try { return JSON.parse(localStorage.getItem(SQUAD_KEY)||'[]'); } catch(_){ return []; }
-};
-const saveSquad = (d) => {
-  try { localStorage.setItem(SQUAD_KEY, JSON.stringify(d)); } catch(_){} 
-};
-
 const Community = ({history, setToast, prefs}) => {
-  const [tab, setTab]       = useState('rank');
-  const [members, setMembers] = useState(loadSquad);
-  const [showImport, setShowImport] = useState(false);
-  const [importCode, setImportCode] = useState('');
-  const [showMyCode, setShowMyCode] = useState(false);
-
-  // Calcula stats da semana atual
-  const weekStats = useMemo(() => {
-    try {
-      if (!history || typeof history !== 'object') return { count: 0, volume: 0 };
-      const now = new Date();
-      const day = now.getDay() || 7;
-      const mon = new Date(now);
-      mon.setDate(now.getDate() - (day - 1));
-      mon.setHours(0,0,0,0);
-      let count = 0, volume = 0;
-      Object.entries(history).forEach(([date, sess]) => {
-        const d = new Date(date);
-        if (isNaN(d) || d < mon) return;
-        count++;
-        sess.entries?.forEach(e => {
-          e.sets?.forEach(s => {
-            volume += (Number(s.w)||0) * (Number(s.r)||0);
-          });
-        });
-      });
-      return { count, volume: Math.round(volume) };
-    } catch(_) { return { count: 0, volume: 0 }; }
-  }, [history]);
-
-  // Gera código exportável do usuário (base64 simples)
-  const myCard = useMemo(() => {
-    const name = prefs.name || 'Anônimo';
-    const data = { name, count: weekStats.count, volume: weekStats.volume, ts: Date.now() };
-    try { return btoa(JSON.stringify(data)); } catch(_){ return ''; }
-  }, [prefs.name, weekStats]);
-
-  // Me adiciona automaticamente na lista
-  const myEntry = useMemo(() => ({
-    id: 'me',
-    name: prefs.name || 'Você',
-    count: weekStats.count,
-    volume: weekStats.volume,
-    isMe: true,
-    ts: Date.now(),
-  }), [prefs.name, weekStats]);
-
-  // Lista completa: eu + amigos
-  const allMembers = useMemo(() => {
-    const others = members.filter(m => m.id !== 'me');
-    return [myEntry, ...others].sort((a,b) => (b.count - a.count) || (b.volume - a.volume));
-  }, [myEntry, members]);
-
-  const importMember = () => {
-    try {
-      const data = JSON.parse(atob(importCode.trim()));
-      if (!data.name) { setToast('Código inválido'); return; }
-      const id = 'friend_' + data.name.toLowerCase().replace(/[^a-z0-9]+/g,'_');
-      const updated = [...members.filter(m => m.id !== id), { id, ...data, isMe: false }];
-      setMembers(updated);
-      saveSquad(updated);
-      setImportCode('');
-      setShowImport(false);
-      setToast(`${data.name} adicionado ao Squad! 🔥`);
-    } catch(_) { setToast('Código inválido. Peça para o amigo copiar de novo.'); }
-  };
-
-  const removeMember = (id) => {
-    const updated = members.filter(m => m.id !== id);
-    setMembers(updated);
-    saveSquad(updated);
-  };
-
-  const copyMyCode = () => {
-    navigator.clipboard?.writeText(myCard).then(
-      () => setToast('Código copiado! Manda pro seu amigo 📋'),
-      () => setToast('Copie o código acima manualmente')
-    );
-  };
-
-  const medals = ['🥇','🥈','🥉'];
-  const rank = allMembers.findIndex(m => m.isMe);
-
   return (
-    <div style={{marginTop:'1rem', display:'grid', gap:'1rem'}}>
-
-      {/* Header */}
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'.5rem'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.8rem', textTransform:'uppercase', lineHeight:1, color:'var(--color-text)'}}>
-            DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
-          </div>
-          <div style={{fontSize:'.65rem', color:'var(--color-text-sub)', letterSpacing:'.08em', textTransform:'uppercase', marginTop:'2px'}}>
-            {allMembers.length} membro{allMembers.length!==1?'s':''} · semana atual
-          </div>
-        </div>
-        <div style={{display:'flex', gap:'.5rem'}}>
-          <button onClick={() => setShowMyCode(s=>!s)} style={{background:'rgba(255,255,255,.05)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.45rem .85rem', color:'var(--color-text-sub)', fontSize:'.75rem', fontWeight:700, textTransform:'uppercase', cursor:'pointer'}}>
-            Meu código
-          </button>
-          <button onClick={() => setShowImport(s=>!s)} style={{background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.45rem .85rem', color:'#fff', fontSize:'.75rem', fontWeight:700, textTransform:'uppercase', cursor:'pointer'}}>
-            + Amigo
-          </button>
-        </div>
-      </div>
-
-      {/* Meu código para compartilhar */}
-      {showMyCode && (
-        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.65rem'}}>
-          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Seu código — manda pro amigo</div>
-          <div style={{background:'rgba(0,0,0,.3)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.65rem .85rem', fontSize:'.65rem', fontFamily:'monospace', color:'var(--color-text)', wordBreak:'break-all', lineHeight:1.5}}>
-            {myCard}
-          </div>
-          <div style={{fontSize:'.68rem', color:'var(--color-text-sub)'}}>
-            📊 Semana atual: <strong style={{color:'var(--color-text)'}}>{weekStats.count} treino{weekStats.count!==1?'s':''}</strong> · <strong style={{color:'var(--color-text)'}}>{weekStats.volume.toLocaleString('pt-BR')} kg volume</strong>
-          </div>
-          <button onClick={copyMyCode} style={{background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.55rem', color:'#fff', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:'.9rem', textTransform:'uppercase', cursor:'pointer'}}>
-            📋 Copiar código
-          </button>
-        </div>
-      )}
-
-      {/* Importar amigo */}
-      {showImport && (
-        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.65rem'}}>
-          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Colar código do amigo</div>
-          <textarea
-            placeholder="Cole o código do amigo aqui..."
-            value={importCode}
-            onChange={e => setImportCode(e.target.value)}
-            rows={3}
-            style={{width:'100%', background:'rgba(0,0,0,.3)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.6rem .85rem', fontSize:'.72rem', color:'var(--color-text)', fontFamily:'monospace', resize:'none'}}
-          />
-          <div style={{display:'flex', gap:'.5rem'}}>
-            <button onClick={importMember} style={{flex:1, background:'var(--color-accent)', border:'none', borderRadius:'8px', padding:'.55rem', color:'#fff', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:'.9rem', textTransform:'uppercase', cursor:'pointer'}}>
-              Adicionar
-            </button>
-            <button onClick={() => {setShowImport(false); setImportCode('');}} style={{background:'rgba(0,0,0,.2)', border:'1px solid var(--color-border)', borderRadius:'8px', padding:'.55rem .85rem', color:'var(--color-text-sub)', fontSize:'.85rem', cursor:'pointer'}}>
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="mode-toggle">
-        <button className={"mode-toggle-btn"+(tab==='rank'?' active':'')} onClick={()=>setTab('rank')}>🏆 Ranking</button>
-        <button className={"mode-toggle-btn"+(tab==='como'?' active':'')} onClick={()=>setTab('como')}>❓ Como usar</button>
-      </div>
-
-      {/* Ranking */}
-      {tab==='rank' && (
-        <div style={{display:'grid', gap:'.5rem'}}>
-          {allMembers.map((m, i) => (
-            <div key={m.id} className="ds-card" style={{
-              padding:'.85rem 1rem',
-              display:'flex', alignItems:'center', gap:'.85rem',
-              background: m.isMe ? 'rgba(227,27,35,.06)' : 'var(--color-card)',
-              border: m.isMe ? '1px solid rgba(227,27,35,.3)' : '1px solid var(--color-border)',
-            }}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.5rem', minWidth:'28px', textAlign:'center', color: i<3 ? ['#FFD700','#C0C0C0','#CD7F32'][i] : 'var(--color-text-sub)'}}>
-                {i < 3 ? medals[i] : i+1}
-              </div>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700, fontSize:'.9rem', color:'var(--color-text)'}}>
-                  {m.name}{m.isMe ? ' (você)' : ''}
-                </div>
-                <div style={{fontSize:'.68rem', color:'var(--color-text-sub)', marginTop:'2px'}}>
-                  {m.count} treino{m.count!==1?'s':''} · {(m.volume||0).toLocaleString('pt-BR')} kg volume
-                </div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'1.8rem', color: i===0?'#FFD700': m.isMe?'var(--color-accent)':'var(--color-text-sub)', lineHeight:1}}>
-                  {m.count}
-                </div>
-                <div style={{fontSize:'.52rem', color:'var(--color-text-sub)', textTransform:'uppercase'}}>treinos</div>
-              </div>
-              {!m.isMe && (
-                <button onClick={() => removeMember(m.id)} style={{background:'rgba(227,27,35,.08)', border:'1px solid rgba(227,27,35,.2)', borderRadius:'6px', padding:'.3rem .5rem', color:'#e31b23', fontSize:'.75rem', cursor:'pointer'}}>×</button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Como usar */}
-      {tab==='como' && (
-        <div className="ds-card" style={{padding:'1rem 1.1rem', background:'var(--color-card)', display:'grid', gap:'.85rem'}}>
-          <div style={{fontSize:'.65rem', color:'var(--color-accent)', textTransform:'uppercase', letterSpacing:'.07em', fontWeight:700}}>Como funciona</div>
-          {[
-            {n:'1', t:'Copie seu código', d:'Clique em "Meu código" acima e copie o código gerado.'},
-            {n:'2', t:'Mande pro amigo', d:'Cole no WhatsApp, Instagram ou onde preferir.'},
-            {n:'3', t:'O amigo faz o mesmo', d:'Ele copia o código dele e manda de volta pra você.'},
-            {n:'4', t:'Adicione ao Squad', d:'Clique em "+ Amigo", cole o código dele e adicione.'},
-            {n:'5', t:'Atualize semanalmente', d:'Cada segunda-feira os treinos da semana zeram. Compartilhe o código atualizado com os amigos!'},
-          ].map(({n,t,d}) => (
-            <div key={n} style={{display:'flex', gap:'.85rem', alignItems:'flex-start'}}>
-              <div style={{width:'28px', height:'28px', borderRadius:'50%', background:'var(--color-accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:'.9rem', color:'#fff', flexShrink:0}}>{n}</div>
-              <div>
-                <div style={{fontSize:'.82rem', fontWeight:700, color:'var(--color-text)'}}>{t}</div>
-                <div style={{fontSize:'.72rem', color:'var(--color-text-sub)', marginTop:'2px', lineHeight:1.4}}>{d}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
+    <div style={{marginTop:'1rem',padding:'2rem 1rem',textAlign:'center',color:'var(--color-text-sub)'}}>
+      <div style={{fontSize:'3rem',marginBottom:'1rem'}}>🚧</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'var(--color-text)',marginBottom:'.5rem'}}>Em breve</div>
+      <div style={{fontSize:'.85rem'}}>O modo Squad está sendo atualizado. Em breve disponível!</div>
     </div>
   );
 };
+
 
 const Viewer = ({planId, plans, goto}) => {
   const plan = plans.list.find(p => p.id === planId) || plans.list[0] || null;
@@ -2841,12 +2615,11 @@ function clearDraftSession(planId, day) {
 // ── Smart Rest Duration based on exercise type ───────────────────────────
 function smartRestDuration(exName, prefs) {
   if (!exName) return Number(prefs.timerPreset||60);
-  const name = exName.toLowerCase();
-  // Compound/heavy → longer rest
-  if (/(agachamento|levantamento|supino reto barra|barra fixa|desenvolvimento barra|stiff$)/.test(name)) return 120;
-  // Isolation → shorter
-  if (/(rosca|tríceps|panturrilha|abdôm|elevação|crucifixo|kick back)/.test(name)) return 45;
-  // Default
+  const name = (exName||'').toLowerCase();
+  const heavy = ['agachamento','levantamento','supino reto barra','barra fixa','desenvolvimento barra','stiff'];
+  const light = ['rosca','triceps','panturrilha','abdom','elevacao','crucifixo','kick'];
+  if (heavy.some(k=>name.includes(k))) return 120;
+  if (light.some(k=>name.includes(k))) return 45;
   return Number(prefs.timerPreset||60);
 }
 
@@ -3784,7 +3557,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.1.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.2.0</footer>
       {toast && <Toast text={toast}/>}
     </div>
   );
