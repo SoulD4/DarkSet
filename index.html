@@ -2443,7 +2443,7 @@ const Community = ({history, setToast, prefs}) => {
     try {
       const data = JSON.parse(atob(importCode.trim()));
       if (!data.name) { setToast('Código inválido'); return; }
-      const id = 'friend_' + data.name.toLowerCase().replace(/\s+/g,'_');
+      const id = 'friend_' + data.name.toLowerCase().replace(/[^a-z0-9]+/g,'_');
       const updated = [...members.filter(m => m.id !== id), { id, ...data, isMe: false }];
       setMembers(updated);
       saveSquad(updated);
@@ -3369,33 +3369,6 @@ const History=({history,setHistory,prefs})=>{
 };
 
 // Profile
-// ── API Key input component ──────────────────────────────────────────────────
-const GifApiKeyInput = () => {
-  const [key, setKey] = useState(()=>localStorage.getItem('darkset.rapidapi.key')||'');
-  const [saved, setSaved] = useState(false);
-  const save = () => {
-    localStorage.setItem('darkset.rapidapi.key', key.trim());
-    // Clear gif cache so new key takes effect
-    localStorage.removeItem('darkset.gifcache');
-    Object.keys(GIF_CACHE).forEach(k=>delete GIF_CACHE[k]);
-    setSaved(true); setTimeout(()=>setSaved(false),2000);
-  };
-  return (
-    <div style={{display:'flex',gap:'.4rem'}}>
-      <input
-        type="password"
-        placeholder="Cole sua API key aqui..."
-        value={key}
-        onChange={e=>{setKey(e.target.value);setSaved(false);}}
-        style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .65rem',fontSize:'.75rem',color:'var(--color-text)',fontFamily:'monospace'}}
-      />
-      <button onClick={save} style={{background:saved?'rgba(74,222,128,.15)':'var(--color-accent)',border:saved?'1px solid rgba(74,222,128,.3)':'none',borderRadius:'7px',padding:'.4rem .85rem',color:saved?'#4ade80':'#fff',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer',transition:'all .2s'}}>
-        {saved?'✓ Salvo':'Salvar'}
-      </button>
-    </div>
-  );
-};
-
 
 const Profile=({prefs,setPrefs,history})=>{
   const [tab,setTab]=useState('config');
@@ -3590,18 +3563,6 @@ const Profile=({prefs,setPrefs,history})=>{
               </button>
             </div>
             {syncMsg&&<div style={{fontSize:'.72rem',color:syncMsg.startsWith('Erro')?'#e31b23':'#4ade80'}}>{syncMsg}</div>}
-          </div>
-
-          {/* API Key para GIFs */}
-          <div style={{borderTop:'1px solid var(--color-border)',paddingTop:'.85rem',display:'grid',gap:'.5rem'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div>
-                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>GIFs de Exercícios</div>
-                <div style={{fontSize:'.62rem',color:'#444',marginTop:'1px'}}>Cole a X-RapidAPI-Key (não o Host)</div>
-              </div>
-              <a href="https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb" target="_blank" rel="noreferrer" style={{fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700,textDecoration:'none'}}>Criar grátis →</a>
-            </div>
-            <GifApiKeyInput/>
           </div>
 
           {/* Tutorial */}
