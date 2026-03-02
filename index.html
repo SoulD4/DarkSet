@@ -612,16 +612,31 @@ async function fetchExerciseDBGif(exName) {
   const query = EX_EN_MAP[exName];
   if (!query) { GIF_CACHE[exName] = null; return null; }
   try {
-    const res = await fetch(
+    // Tenta endpoint v2 primeiro, depois v1 como fallback
+    const urls = [
       `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(query)}?limit=1&offset=0`,
-      { headers: { 'x-rapidapi-key': EXERCISEDB_KEY, 'x-rapidapi-host': EXERCISEDB_HOST } }
-    );
-    if (!res.ok) { GIF_CACHE[exName] = null; return null; }
-    const data = await res.json();
-    const gif = (Array.isArray(data) && data[0]?.gifUrl) ? data[0].gifUrl : null;
-    GIF_CACHE[exName] = gif;
-    return gif;
-  } catch(_) { GIF_CACHE[exName] = null; return null; }
+      `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(query)}`,
+    ];
+    for (const url of urls) {
+      const res = await fetch(url, {
+        headers: { 'x-rapidapi-key': EXERCISEDB_KEY, 'x-rapidapi-host': EXERCISEDB_HOST }
+      });
+      if (!res.ok) {
+        console.warn('[ExerciseDB] HTTP', res.status, url);
+        continue;
+      }
+      const data = await res.json();
+      console.log('[ExerciseDB] Response for', exName, ':', JSON.stringify(data).slice(0,200));
+      // API pode retornar array direto ou {exercises:[...]}
+      const list = Array.isArray(data) ? data : (data.exercises || data.data || []);
+      const gif = list[0]?.gifUrl || list[0]?.gif || null;
+      if (gif) { GIF_CACHE[exName] = gif; return gif; }
+    }
+    GIF_CACHE[exName] = null; return null;
+  } catch(e) {
+    console.warn('[ExerciseDB] Error for', exName, e.message);
+    GIF_CACHE[exName] = null; return null;
+  }
 }
 
 // Fallback: URL estática do yuhonas (JPG)
@@ -1216,7 +1231,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.5.2
+          DarkSet · V5.5.3
         </div>
       </div>
     </>
@@ -3290,9 +3305,21 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
   const [day, setDay] = useState(DAYS[(new Date().getDay() || 7) - 1]);
   const [cursor, setCursor] = useState(0);
   const planItems = activePlan?.byDay?.[day] || [];
-  const [sets, setSets] = useState([]);
-  const [rir, setRir] = useState([]);
-  const [savedSnap, setSavedSnap] = useState({});
+  // allSets: mapa de índice → {sets, rir} — persiste enquanto sessão ativa
+  const [allSets, setAllSets] = useState({});
+  // sets/rir do exercício atual (derivados de allSets)
+  const sets = allSets[cursor]?.sets || [];
+  const rir  = allSets[cursor]?.rir  || [];
+  const setSets = (fn) => setAllSets(prev => {
+    const cur = prev[cursor] || {sets:[], rir:[]};
+    const newSets = typeof fn === 'function' ? fn(cur.sets) : fn;
+    return {...prev, [cursor]: {...cur, sets: newSets}};
+  });
+  const setRir = (fn) => setAllSets(prev => {
+    const cur = prev[cursor] || {sets:[], rir:[]};
+    const newRir = typeof fn === 'function' ? fn(cur.rir) : fn;
+    return {...prev, [cursor]: {...cur, rir: newRir}};
+  });
 
   const [sessionGif,setSessionGif]=useState(null);
   const [sessionDetail,setSessionDetail]=useState(null);
@@ -3309,32 +3336,26 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
     try { localStorage.setItem(DRAFT_FREE_KEY, JSON.stringify(freeExercises)); } catch(_) {}
   }, [freeExercises]);
 
-  // ── PLAN MODE: load draft when cursor/day changes ──
+  // ── PLAN MODE: inicializa sets do exercício atual se ainda não preenchido ──
   useEffect(() => {
     if (!started || mode !== 'plan') return;
     const planned = planItems[cursor]?.setsPlanned || 3;
-    const draft = loadDraft(activePlanId, day, cursor);
-    if (draft && draft.sets?.length) {
-      setSets(draft.sets);
-      setRir(draft.rir || Array.from({length: draft.sets.length}, () => rirDefault));
-    } else {
+    setAllSets(prev => {
+      if (prev[cursor] && prev[cursor].sets.length > 0) return prev; // já tem dados
       const _def = rirDefault;
-      setSets(Array.from({length: planned}, () => ({w: '', r: ''})));
-      setRir(Array.from({length: planned}, () => _def));
-    }
+      return {
+        ...prev,
+        [cursor]: {
+          sets: Array.from({length: planned}, () => ({w: '', r: ''})),
+          rir: Array.from({length: planned}, () => _def)
+        }
+      };
+    });
   }, [cursor, day, started, mode]);
-
-  // Autosave plan draft on every sets/rir change
-  useEffect(() => {
-    if (!started || mode !== 'plan' || !activePlanId) return;
-    saveDraft(activePlanId, day, cursor, sets, rir);
-  }, [sets, rir]);
 
   const start = () => setStarted(true);
   const back = () => setStarted(false);
 
-  const snapshot = () => JSON.stringify({sets, rir});
-  const isDirty = !savedSnap[cursor] || savedSnap[cursor] !== snapshot();
 
   const lastPerf = (() => {
     const ex = planItems[cursor]; if (!ex) return null;
@@ -3346,30 +3367,44 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
     return null;
   })();
 
-  const saveCurrent = () => {
-    const ex = planItems[cursor]; if (!ex) return;
-    // Checar PR antes de salvar
-    if (onPR) {
-      const pr = detectPR(ex.name, sets, history);
-      if (pr) {
-        onPR({exName: ex.name, weight: pr});
-        if (prefs.vibrate && navigator.vibrate) navigator.vibrate([80, 40, 200]);
-      }
-    }
+  // saveAll: salva todos os exercícios que têm ao menos 1 série com reps preenchidas
+  const saveAll = () => {
     const dateKey = new Date().toISOString().slice(0, 10);
+    let saved = 0;
     setHistory(prev => {
       const copy = {...prev};
       if (!copy[dateKey]) copy[dateKey] = {planId: activePlanId, planName: activePlan.name, day, entries: []};
-      const setsOut = sets.map((s, i) => ({w: s.w, r: s.r, ...(rir[i] && rir[i] !== '--' ? {rir: rir[i]} : {})}));
-      const idx = copy[dateKey].entries.findIndex(en => en.name === ex.name);
-      if (idx >= 0) copy[dateKey].entries[idx].sets = setsOut;
-      else copy[dateKey].entries.push({name: ex.name, exId: ex.exId, sets: setsOut});
+      planItems.forEach((ex, ci) => {
+        const exSets = allSets[ci]?.sets || [];
+        const exRir  = allSets[ci]?.rir  || [];
+        const valid = exSets.filter(s => s.r && String(s.r).trim() !== '');
+        if (!valid.length) return; // pula exercícios sem nada anotado
+        // Checar PR
+        if (onPR) {
+          const pr = detectPR(ex.name, exSets, history);
+          if (pr) {
+            onPR({exName: ex.name, weight: pr});
+            if (prefs.vibrate && navigator.vibrate) navigator.vibrate([80, 40, 200]);
+          }
+        }
+        const setsOut = exSets.map((s, i) => ({w: s.w, r: s.r, ...(exRir[i] && exRir[i] !== '--' ? {rir: exRir[i]} : {})}));
+        const idx2 = copy[dateKey].entries.findIndex(en => en.name === ex.name);
+        if (idx2 >= 0) copy[dateKey].entries[idx2].sets = setsOut;
+        else copy[dateKey].entries.push({name: ex.name, exId: ex.exId, sets: setsOut});
+        saved++;
+      });
       return copy;
     });
-    setSavedSnap(m => ({...m, [cursor]: snapshot()}));
-    if (prefs.vibrate && navigator.vibrate) navigator.vibrate(20);
-    triggerSmartRest(planItems[cursor]?.name, prefs);
-    setToast('Séries salvas ✓');
+    if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100,50,200]);
+    clearDraftSession(activePlanId, day);
+    back();
+    setToast(saved > 0 ? `${saved} exercício(s) salvos! 💪` : 'Nenhum dado para salvar');
+  };
+
+  // Marca visualmente exercícios com dados (pelo menos 1 rep)
+  const hasData = (ci) => {
+    const s = allSets[ci]?.sets || [];
+    return s.some(x => x.r && String(x.r).trim() !== '');
   };
 
   // ── FREE MODE helpers ──
@@ -3591,13 +3626,18 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
           ))}
         </div>
 
-        <div className="flex items-center justify-between" style={{marginTop:'.85rem'}}>
+        {/* Indicador de exercícios preenchidos */}
+        <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginTop:'.6rem',marginBottom:'.3rem'}}>
+          {planItems.map((_,ci)=>(
+            <div key={ci} style={{width:'8px',height:'8px',borderRadius:'50%',background:ci===cursor?'var(--color-accent)':hasData(ci)?'#4ade80':'#222',border:ci===cursor?'none':'1px solid #333',transition:'background .2s'}}/>
+          ))}
+        </div>
+        <div className="flex items-center justify-between" style={{marginTop:'.5rem'}}>
           <Button variant="ghost" onClick={() => setCursor(i => Math.max(0, i-1))} disabled={cursor===0}>← Anterior</Button>
           <div className="flex gap-2">
-            <Button variant={isDirty?'accent':'success'} onClick={saveCurrent}>{isDirty?'Salvar':'Salvo ✓'}</Button>
             {cursor < planItems.length-1
-              ? <Button onClick={() => { saveCurrent(); setCursor(i => i+1); }}>Próximo →</Button>
-              : <Button variant="accent" onClick={() => { saveCurrent(); clearDraftSession(activePlanId, day); back(); setToast('Treino concluído! 💪'); }}>Concluir</Button>
+              ? <Button variant="accent" onClick={() => { triggerSmartRest(planItems[cursor]?.name, prefs); setCursor(i => i+1); }}>Próximo →</Button>
+              : <Button variant="accent" onClick={saveAll}>Concluir e Salvar 💪</Button>
             }
           </div>
         </div>
@@ -4227,7 +4267,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.2</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.3</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
