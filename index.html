@@ -551,7 +551,7 @@ const EX_SLUG_MAP = {
   // OMBRO
   "Desenvolvimento barra":           "Barbell_Shoulder_Press",
   "Desenvolvimento halteres":        "Dumbbell_Shoulder_Press",
-  "Desenvolvimento máquina":         "Alternating_Cable_Shoulder_Press",
+  "Desenvolvimento máquina":         "Dumbbell_Shoulder_Press",
   "Arnold press halteres":           "Arnold_Press",
   "Elevação lateral halteres":       "Dumbbell_Lateral_Raise",
   "Elevação lateral polia":          "Cable_Seated_Lateral_Raise",
@@ -560,8 +560,8 @@ const EX_SLUG_MAP = {
   "Elevação frontal halteres":       "Front_Dumbbell_Raise",
   "Face Pull (corda)":               "Face_Pull",
   "Crucifixo inverso halteres":      "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
-  "Crucifixo inverso máquina":       "Reverse_Flyes",
-  "Crucifixo inverso polia":         "Cable_Rear_Delt_Fly",
+  "Crucifixo inverso máquina":       "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
+  "Crucifixo inverso polia":         "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
   // TRAPÉZIO
   "Encolhimento barra":              "Barbell_Shrug",
   "Encolhimento halteres":           "Dumbbell_Shrug",
@@ -575,15 +575,15 @@ const EX_SLUG_MAP = {
   "Puxada alta unilateral":          "Close-Grip_Front_Lat_Pulldown",
   "Remada curvada barra":            "Barbell_Bent_Over_Row",
   "Remada curvada halteres":         "Bent_Over_Two-Dumbbell_Row",
-  "Remada unilateral halteres":      "Dumbbell_One-Arm_Upright_Row",
-  "Remada serrote halteres":         "Dumbbell_One-Arm_Upright_Row",
+  "Remada unilateral halteres":      "Seated_Cable_Rows",
+  "Remada serrote halteres":         "Seated_Cable_Rows",
   "Remada articulada":               "Seated_Cable_Rows",
   "Remada baixa polia":              "Seated_Cable_Rows",
   "Remada baixa aberta polia":       "Seated_Cable_Rows",
   "Remada baixa unilateral":         "Seated_Cable_Rows",
   "Remada cavalinho":                "Barbell_Bent_Over_Row",
-  "Hiperextensão lombar":            "Hyperextensions_With_No_Hyperextension_Bench",
-  "Extensão lombar máquina":         "Hyperextensions_With_No_Hyperextension_Bench",
+  "Hiperextensão lombar":            "Back_Extension",
+  "Extensão lombar máquina":         "Back_Extension",
   // BÍCEPS
   "Rosca direta barra":              "Barbell_Curl",
   "Rosca direta halteres":           "Dumbbell_Curl",
@@ -597,7 +597,7 @@ const EX_SLUG_MAP = {
   "Rosca 21":                        "Barbell_Curl",
   "Rosca 45° halteres":              "Incline_Dumbbell_Curl",
   "Rosca inversa barra":             "Reverse_Barbell_Curl",
-  "Rosca punho barra":               "Cable_Wrist_Curl",
+  "Rosca punho barra":               "Barbell_Curl",
   // TRÍCEPS
   "Tríceps pulley corda":            "Triceps_Pushdown",
   "Tríceps pulley barra reta":       "Triceps_Pushdown",
@@ -626,7 +626,7 @@ const EX_SLUG_MAP = {
   "Stiff":                           "Romanian_Deadlift",
   "Stiff com halteres":              "Romanian_Deadlift",
   "Stiff unilateral halteres":       "Romanian_Deadlift",
-  "Levantamento terra":              "Axle_Deadlift",
+  "Levantamento terra":              "Barbell_Deadlift",
   "Mesa flexora":                    "Lying_Leg_Curls",
   "Mesa flexora deitada":            "Lying_Leg_Curls",
   "Cadeira flexora":                 "Seated_Leg_Curl",
@@ -636,17 +636,17 @@ const EX_SLUG_MAP = {
   "Hip thrust barra":                "Barbell_Hip_Thrust",
   "Hip thrust máquina":              "Barbell_Hip_Thrust",
   "Elevação pélvica com barra":      "Barbell_Hip_Thrust",
-  "Glúteo 4 apoios cabo":            "Cable_Hip_Extension",
-  "Abdução em pé polia":             "Cable_Hip_Abduction",
+  "Glúteo 4 apoios cabo":            "Barbell_Hip_Thrust",
+  "Abdução em pé polia":             "Adductor",
   // PANTURRILHA
-  "Panturrilha em pé máquina":       "Calf_Press",
+  "Panturrilha em pé máquina":       "Standing_Calf_Raises",
   "Panturrilha sentado máquina":     "Seated_Calf_Raise",
   "Panturrilha em pé barra livre":   "Standing_Calf_Raises",
   // ABDUTORES/ADUTORES
   "Cadeira abdutora":                "Adductor",
   "Cadeira adutora":                 "Adductor",
   // ABDÔMEN
-  "Abdômen supra":                   "Ab_Crunch_Machine",
+  "Abdômen supra":                   "Decline_Crunch",
   "Abdômen infra":                   "Hanging_Leg_Raise",
   "Abdômen supra declinado":         "Decline_Crunch",
   "Abdômen infra na paralela":       "Hanging_Leg_Raise",
@@ -703,6 +703,36 @@ const EXEC_TIPS = {
   "Agachamento sumô barra": "Pés bem abertos, pontas 45° para fora. Joelhos seguem as pontas. Ativa adutores e glúteos.",
   "Hip thrust máquina": "Ajuste o banco na altura correta. Empurre com quadril, não com lombar. Glúteo em contração máxima no topo.",
 };
+
+const LogoRow=()=>(
+  <div className="flex items-center gap-2">
+    <div style={{lineHeight:1}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',letterSpacing:'.03em',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
+        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+      </div>
+      <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'1px'}}>Seu treino · Sua evolução</div>
+    </div>
+  </div>
+);
+
+const Toast=({text})=><div className="ds-toast">{text}</div>;
+
+const Modal=({onClose,children})=>(
+  <div className="modal-bg" onClick={onClose}>
+    <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'12px',padding:'1.25rem',maxWidth:'440px',width:'92%'}} onClick={e=>e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
+const Card=({title,children,accent=false})=>(
+  <div className={"ds-card"+(accent?" ds-card-accent":"")} style={{padding:'1rem 1.1rem',marginBottom:0}}>
+    {title && <div className="ds-section-title" style={{marginBottom:'.75rem'}}>{title}</div>}
+    {children}
+  </div>
+);
+
+
 
 // ── GifAnimBlock — bloco de animação reutilizável ───────────────────────────
 const GifAnimBlock = ({slug, exName, height='280px'}) => {
@@ -1310,6 +1340,7 @@ const NAV_ITEMS = [
   {section: 'PROGRESSO',icon:'📈', label:'Histórico',   screen:'history'},
   {section: null,       icon:'📏', label:'Medidas',     screen:'measures'},
   {section: 'SOCIAL',   icon:'👥', label:'Squad',       screen:'community'},
+  {section: 'NUTRIÇÃO', icon:'🥗', label:'Dieta',       screen:'diet'},
   {section: null,       icon:'🏟️', label:'Modo Academia',screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
 ];
@@ -1351,35 +1382,6 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
     </>
   );
 };
-
-
-const LogoRow=()=>(
-  <div className="flex items-center gap-2">
-    <div style={{lineHeight:1}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',letterSpacing:'.03em',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
-      </div>
-      <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'1px'}}>Seu treino · Sua evolução</div>
-    </div>
-  </div>
-);
-
-const Toast=({text})=><div className="ds-toast">{text}</div>;
-
-const Modal=({onClose,children})=>(
-  <div className="modal-bg" onClick={onClose}>
-    <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'12px',padding:'1.25rem',maxWidth:'440px',width:'92%'}} onClick={e=>e.stopPropagation()}>
-      {children}
-    </div>
-  </div>
-);
-
-const Card=({title,children,accent=false})=>(
-  <div className={"ds-card"+(accent?" ds-card-accent":"")} style={{padding:'1rem 1.1rem',marginBottom:0}}>
-    {title && <div className="ds-section-title" style={{marginBottom:'.75rem'}}>{title}</div>}
-    {children}
-  </div>
-);
 
 
 // Play Icon
@@ -1935,10 +1937,7 @@ const Builder=({planId,plans,setPlans,setToast})=>{
     return copy;
   });
 
-  const MUSCLES=[...new Set(EXS.map(e=>e.primary))];
   const SUBS_BY=MUSCLES.reduce((acc,mu)=>{acc[mu]=[...new Set(EXS.filter(e=>e.primary===mu&&e.subgroup).map(e=>e.subgroup))];return acc;},{});
-  const EQUIPS=[...new Set(EXS.map(e=>e.equipment))];
-  const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
 
   const totalSets=dayItems.reduce((a,it)=>a+(it.setsPlanned||3),0);
 
@@ -4232,6 +4231,239 @@ const Profile=({prefs,setPrefs,history})=>{
 };
 
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DIETA — Registro de refeições
+// ═══════════════════════════════════════════════════════════════════════════
+const DIET_LS = 'darkset.v1.diet';
+const MEAL_ICONS = ['🍳','🥗','🍱','🍎','🥛','🍕','🥩','🥦','🧃','🫙','🍌','🥤','🍚','🥚','🫐'];
+
+const Diet = ({setToast}) => {
+  const todayStr = () => new Date().toISOString().slice(0,10);
+  const [diet, setDiet] = useState(() => load(DIET_LS, {}));
+  const [viewDate, setViewDate] = useState(todayStr());
+  const [showAdd, setShowAdd] = useState(false);
+  const [editIdx, setEditIdx] = useState(null);
+  const [form, setForm] = useState({name:'',calories:'',protein:'',carbs:'',fat:'',time:'',icon:'🍳',note:''});
+
+  useEffect(() => save(DIET_LS, diet), [diet]);
+
+  const dayMeals = diet[viewDate] || [];
+
+  const totals = useMemo(() => dayMeals.reduce((acc, m) => ({
+    calories: acc.calories + (Number(m.calories)||0),
+    protein:  acc.protein  + (Number(m.protein)||0),
+    carbs:    acc.carbs    + (Number(m.carbs)||0),
+    fat:      acc.fat      + (Number(m.fat)||0),
+  }), {calories:0, protein:0, carbs:0, fat:0}), [dayMeals]);
+
+  const resetForm = () => {
+    const now = new Date();
+    setForm({name:'', calories:'', protein:'', carbs:'', fat:'',
+      time: String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
+      icon:'🍳', note:''});
+    setEditIdx(null);
+  };
+
+  const openAdd = () => { resetForm(); setShowAdd(true); };
+  const openEdit = (idx) => { setForm({...dayMeals[idx]}); setEditIdx(idx); setShowAdd(true); };
+
+  const saveMeal = () => {
+    if(!form.name.trim()) { setToast('Informe o nome da refeição'); return; }
+    setDiet(d => {
+      const arr = [...(d[viewDate]||[])];
+      if(editIdx !== null) arr[editIdx] = {...form};
+      else arr.push({...form});
+      arr.sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      return {...d, [viewDate]: arr};
+    });
+    setShowAdd(false);
+    setToast(editIdx !== null ? 'Refeição atualizada ✓' : 'Refeição adicionada ✓');
+  };
+
+  const deleteMeal = (idx) => {
+    if(!confirm('Excluir esta refeição?')) return;
+    setDiet(d => { const arr=[...(d[viewDate]||[])]; arr.splice(idx,1); return {...d,[viewDate]:arr}; });
+    setToast('Refeição removida');
+  };
+
+  const changeDate = (offset) => {
+    const d = new Date(viewDate+'T12:00:00'); d.setDate(d.getDate()+offset);
+    setViewDate(d.toISOString().slice(0,10));
+  };
+
+  const fmtDate = (iso) => {
+    const dt = new Date(iso+'T12:00:00');
+    const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const [,m,d] = iso.split('-');
+    return days[dt.getDay()]+', '+d+' '+months[Number(m)-1];
+  };
+
+  const isToday = viewDate === todayStr();
+
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem',paddingBottom:'2rem'}}>
+
+      {/* Navegação de data */}
+      <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em'}}>
+            🥗 <span style={{color:'var(--color-accent)'}}>Dieta</span>
+          </div>
+          <button onClick={openAdd}
+            style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>
+            + Refeição
+          </button>
+        </div>
+
+        {/* Date nav */}
+        <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+          <button onClick={()=>changeDate(-1)}
+            style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .7rem',color:'#888',cursor:'pointer',fontSize:'.9rem'}}>‹</button>
+          <div style={{flex:1,textAlign:'center'}}>
+            <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{fmtDate(viewDate)}</div>
+            {isToday && <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Hoje</div>}
+          </div>
+          <button onClick={()=>changeDate(1)} disabled={isToday}
+            style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .7rem',color:isToday?'#333':'#888',cursor:isToday?'default':'pointer',fontSize:'.9rem'}}>›</button>
+        </div>
+      </div>
+
+      {/* Resumo de macros */}
+      {dayMeals.length > 0 && (
+        <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
+          <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Resumo do dia</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.5rem',marginBottom:'.65rem'}}>
+            {[
+              {label:'Kcal', val:Math.round(totals.calories), color:'var(--color-accent)'},
+              {label:'Prot', val:Math.round(totals.protein)+'g', color:'#e74c3c'},
+              {label:'Carbs', val:Math.round(totals.carbs)+'g', color:'#f59e0b'},
+              {label:'Gord', val:Math.round(totals.fat)+'g', color:'#3b82f6'},
+            ].map(item => (
+              <div key={item.label} style={{textAlign:'center',padding:'.5rem .3rem',background:'rgba(0,0,0,.2)',borderRadius:'8px',border:`1px solid ${item.color}22`}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:item.color}}>{item.val||'—'}</div>
+                <div style={{fontSize:'.55rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lista de refeições */}
+      {dayMeals.length > 0 && (
+        <div style={{display:'grid',gap:'.5rem'}}>
+          {dayMeals.map((meal, idx) => (
+            <div key={idx} className="ds-card" style={{padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+              <div style={{fontSize:'1.6rem',flexShrink:0}}>{meal.icon||'🍽️'}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
+                  <span style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{meal.name}</span>
+                  {meal.time && <span style={{fontSize:'.6rem',color:'#444',fontWeight:600}}>· {meal.time}</span>}
+                </div>
+                <div style={{display:'flex',gap:'.5rem',marginTop:'3px',flexWrap:'wrap'}}>
+                  {meal.calories && <span style={{fontSize:'.7rem',color:'var(--color-accent)',fontWeight:700}}>{meal.calories} kcal</span>}
+                  {meal.protein  && <span style={{fontSize:'.65rem',color:'#888'}}>P: {meal.protein}g</span>}
+                  {meal.carbs    && <span style={{fontSize:'.65rem',color:'#888'}}>C: {meal.carbs}g</span>}
+                  {meal.fat      && <span style={{fontSize:'.65rem',color:'#888'}}>G: {meal.fat}g</span>}
+                </div>
+                {meal.note && <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px',fontStyle:'italic'}}>{meal.note}</div>}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:'4px',flexShrink:0}}>
+                <button onClick={()=>openEdit(idx)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .5rem',color:'#888',cursor:'pointer',fontSize:'.75rem'}}>✏️</button>
+                <button onClick={()=>deleteMeal(idx)} style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'6px',padding:'.3rem .5rem',color:'#e31b23',cursor:'pointer',fontSize:'.75rem'}}>✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {dayMeals.length === 0 && (
+        <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#222'}}>
+          <div style={{fontSize:'3rem',marginBottom:'.5rem',opacity:.3}}>🥗</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.4rem'}}>Dia Vazio</div>
+          <div style={{fontSize:'.78rem',color:'#333',marginBottom:'1.25rem'}}>Registre suas refeições e acompanhe sua nutrição</div>
+          <button onClick={openAdd} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
+            + Adicionar Refeição
+          </button>
+        </div>
+      )}
+
+      {/* Modal adicionar/editar */}
+      {showAdd && (
+        <div className="modal-bg" onClick={()=>setShowAdd(false)}>
+          <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'14px',padding:'1.25rem',maxWidth:'420px',width:'93%',maxHeight:'90vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:'1rem'}}>
+              {editIdx !== null ? 'Editar Refeição' : '+ Nova Refeição'}
+            </div>
+
+            {/* Ícone */}
+            <div style={{marginBottom:'.85rem'}}>
+              <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Ícone</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
+                {MEAL_ICONS.map(ic => (
+                  <button key={ic} onClick={()=>setForm(f=>({...f,icon:ic}))}
+                    style={{width:'36px',height:'36px',borderRadius:'8px',fontSize:'1.2rem',
+                      background:form.icon===ic?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',
+                      border:form.icon===ic?'1px solid var(--color-accent)':'1px solid #1e1e1e',cursor:'pointer'}}>
+                    {ic}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Nome + horário */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:'.5rem',marginBottom:'.6rem'}}>
+              <div>
+                <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Refeição *</div>
+                <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .8rem',fontSize:'.88rem',color:'var(--color-text)'}}
+                  placeholder="Ex: Café da manhã…" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
+              </div>
+              <div>
+                <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Horário</div>
+                <input type="time" style={{background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .6rem',fontSize:'.88rem',color:'var(--color-text)',width:'7rem'}}
+                  value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
+              </div>
+            </div>
+
+            {/* Macros */}
+            <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem',fontWeight:700}}>Macros (opcional)</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'.6rem'}}>
+              {[
+                {key:'calories',label:'Kcal',color:'var(--color-accent)'},
+                {key:'protein', label:'Prot',color:'#e74c3c'},
+                {key:'carbs',   label:'Carbs',color:'#f59e0b'},
+                {key:'fat',     label:'Gord',color:'#3b82f6'},
+              ].map(({key,label,color}) => (
+                <div key={key}>
+                  <div style={{fontSize:'.55rem',color,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'3px',fontWeight:700}}>{label}</div>
+                  <input type="number" min="0"
+                    style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'7px',padding:'.45rem .4rem',fontSize:'.85rem',color:'var(--color-text)',textAlign:'center'}}
+                    placeholder="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/>
+                </div>
+              ))}
+            </div>
+
+            {/* Observação */}
+            <div style={{marginBottom:'1rem'}}>
+              <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Observação</div>
+              <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .8rem',fontSize:'.82rem',color:'var(--color-text)'}}
+                placeholder="Ex: Com azeite, sem sal…" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+            </div>
+
+            <div style={{display:'flex',gap:'.5rem',justifyContent:'flex-end'}}>
+              <button onClick={()=>setShowAdd(false)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem 1rem',color:'#888',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Cancelar</button>
+              <button onClick={saveMeal} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.25rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
+                {editIdx !== null ? 'Salvar' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 function App(){
   const [screen,setScreen]=useState("home");
   // Apply saved theme immediately on load
@@ -4382,6 +4614,7 @@ function App(){
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
+      {screen==="diet"   && <Diet setToast={setToast}/>}
       {screen==="measures" && <Measures setToast={setToast}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
