@@ -525,7 +525,7 @@ const EXS=[
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Base URL do repositório público
-const GIF_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+const GIF_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
 
 // Mapeamento: nome PT-BR → slug do exercício no repositório
 const EX_GIF_MAP = {
@@ -628,6 +628,29 @@ const EX_GIF_MAP = {
   "Abdômen supra declinado":       "Decline_Crunch/0.gif",
   "Abdômen infra na paralela":     "Hanging_Leg_Raise/0.gif",
   "Prancha isométrica":            "Plank/0.gif",
+
+  // ── VARIAÇÕES MÁQUINA / UNILATERAL ──────────────────────────────────────
+  "Supino reto máquina":                "Chest_Press_Machine/0.gif",
+  "Supino inclinado máquina":           "Dumbbell_Incline_Bench_Press/0.gif",
+  "Supino inclinado Articulado":        "Dumbbell_Incline_Bench_Press/0.gif",
+  "Crucifixo Máquina":                  "Pec_Deck_Fly/0.gif",
+  "Crucifixo inverso polia":            "Reverse_Cable_Flyes/0.gif",
+  "Desenvolvimento máquina":            "Dumbbell_Shoulder_Press/0.gif",
+  "Elevação lateral unilateral polia":  "Cable_Lateral_Raise/0.gif",
+  "Puxada alta unilateral":             "Pulldown/0.gif",
+  "Remada baixa aberta polia":          "Seated_Cable_Row/0.gif",
+  "Remada baixa unilateral":            "Dumbbell_One_Arm_Row/0.gif",
+  "Cadeira extensora unilateral":       "Leg_Extension/0.gif",
+  "Cadeira flexora unilateral":         "Lying_Leg_Curl/0.gif",
+  "Flexora unilateral em pé":           "Lying_Leg_Curl/0.gif",
+  "Hip thrust máquina":                 "Barbell_Hip_Thrust/0.gif",
+  "Leg press 180° unilateral":          "Leg_Press/0.gif",
+  "Stiff unilateral halteres":          "Romanian_Deadlift/0.gif",
+  "Abdução em pé polia":                "Hip_Abduction/0.gif",
+  "Rosca inversa barra":                "Barbell_Reverse_Curl/0.gif",
+  "Rosca martelo corda":                "Dumbbell_Hammer_Curl/0.gif",
+  "Rosca punho barra":                  "Wrist_Curl/0.gif",
+  "Tríceps pulley polia":               "Pushdowns/0.gif",
 };
 
 // Retorna URL do GIF direto do GitHub — sem API, sem key
@@ -1152,7 +1175,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.5.0
+          DarkSet · V5.5.1
         </div>
       </div>
     </>
@@ -1905,7 +1928,7 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                     border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
                     borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
                   }}>
-                    <ExGifThumb exName={ex.name} onClick={()=>setDetailEx(ex.name)}/>
+                    <ExGifThumb exName={ex.name} onClick={()=>setGifModal(ex.name)}/>
                     <div>
                       <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'var(--color-text)'}}>{ex.name}</div>
                       <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.equipment} · {ex.difficulty} · <span onClick={()=>setDetailEx(ex.name)} style={{color:'var(--color-accent)',cursor:'pointer',fontWeight:700}}>ver detalhes</span></div>
@@ -1946,6 +1969,8 @@ const Builder=({planId,plans,setPlans,setToast})=>{
           </div>
         </div>
       )}
+    {gifModal&&<ExGifModal exName={gifModal} onClose={()=>setGifModal(null)}/>}
+    {detailEx&&<ExerciseDetail exName={detailEx} onClose={()=>setDetailEx(null)} history={{}}/>}
     </div>
   );
 };
@@ -4161,7 +4186,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.1</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
