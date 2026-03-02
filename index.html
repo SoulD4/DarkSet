@@ -526,150 +526,181 @@ const EXS=[
 
 // Base URL do repositório público
 const GIF_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
+const EXERCISEDB_KEY = 'd4e8fd1d99mshed71ecbb787a392p1fc988jsn3b4934119953';
+const EXERCISEDB_HOST = 'exercisedb.p.rapidapi.com';
 
-// Mapeamento: nome PT-BR → slug do exercício no repositório
-const EX_GIF_MAP = {
+// Cache em memória: evita requests repetidos na mesma sessão
+const GIF_CACHE = {};
+
+// Mapeamento PT-BR → termo de busca em inglês para ExerciseDB
+const EX_EN_MAP = {
   // PEITO
-  "Supino reto barra":             "Barbell_Bench_Press/0.jpg",
-  "Supino reto halteres":          "Dumbbell_Bench_Press/0.jpg",
-  "Supino inclinado barra":        "Barbell_Incline_Bench_Press/0.jpg",
-  "Supino inclinado halteres":     "Dumbbell_Incline_Bench_Press/0.jpg",
-  "Supino declinado barra":        "Barbell_Decline_Bench_Press/0.jpg",
-  "Supino declinado halteres":     "Dumbbell_Decline_Bench_Press/0.jpg",
-  "Crossover polia alta":          "Cable_Crossover/0.jpg",
-  "Crucifixo reto halteres":       "Dumbbell_Flyes/0.jpg",
-  "Crucifixo inclinado halteres":  "Dumbbell_Incline_Flyes/0.jpg",
-  "Peck deck":                     "Pec_Deck_Fly/0.jpg",
-  "Flexão de braço":               "Push-Up/0.jpg",
-  "Pullover halteres":             "Dumbbell_Pullover/0.jpg",
+  "Supino reto barra":"barbell bench press","Supino reto halteres":"dumbbell bench press",
+  "Supino reto máquina":"chest press machine","Supino inclinado barra":"barbell incline bench press",
+  "Supino inclinado halteres":"dumbbell incline bench press","Supino inclinado máquina":"incline chest press",
+  "Supino inclinado Articulado":"dumbbell incline bench press","Supino declinado barra":"barbell decline bench press",
+  "Supino declinado halteres":"dumbbell decline bench press","Crossover polia alta":"cable crossover",
+  "Crucifixo reto halteres":"dumbbell flyes","Crucifixo inclinado halteres":"dumbbell incline flyes",
+  "Crucifixo Máquina":"pec deck fly","Peck deck":"pec deck fly","Flexão de braço":"push up",
+  "Pullover halteres":"dumbbell pullover",
   // OMBRO
-  "Desenvolvimento barra":         "Barbell_Shoulder_Press/0.jpg",
-  "Desenvolvimento halteres":      "Dumbbell_Shoulder_Press/0.jpg",
-  "Arnold press halteres":         "Arnold_Dumbbell_Press/0.jpg",
-  "Elevação lateral halteres":     "Dumbbell_Lateral_Raise/0.jpg",
-  "Elevação lateral polia":        "Cable_Lateral_Raise/0.jpg",
-  "Elevação frontal barra":        "Barbell_Front_Raise/0.jpg",
-  "Elevação frontal halteres":     "Dumbbell_Front_Raise/0.jpg",
-  "Face Pull (corda)":             "Cable_Face_Pull/0.jpg",
-  "Crucifixo inverso halteres":    "Dumbbell_Bent_Over_Lateral_Raise/0.jpg",
-  "Crucifixo inverso máquina":     "Reverse_Fly/0.jpg",
+  "Desenvolvimento barra":"barbell shoulder press","Desenvolvimento halteres":"dumbbell shoulder press",
+  "Desenvolvimento máquina":"shoulder press machine","Arnold press halteres":"arnold dumbbell press",
+  "Elevação lateral halteres":"dumbbell lateral raise","Elevação lateral polia":"cable lateral raise",
+  "Elevação lateral unilateral polia":"cable lateral raise","Elevação frontal barra":"barbell front raise",
+  "Elevação frontal halteres":"dumbbell front raise","Face Pull (corda)":"cable face pull",
+  "Crucifixo inverso halteres":"dumbbell bent over lateral raise","Crucifixo inverso máquina":"reverse fly",
+  "Crucifixo inverso polia":"cable reverse fly",
   // TRAPÉZIO
-  "Encolhimento barra":            "Barbell_Shrug/0.jpg",
-  "Encolhimento halteres":         "Dumbbell_Shrug/0.jpg",
-  "Remada alta barra":             "Barbell_Upright_Row/0.jpg",
+  "Encolhimento barra":"barbell shrug","Encolhimento halteres":"dumbbell shrug","Remada alta barra":"barbell upright row",
   // COSTAS
-  "Barra fixa":                    "Pull-up/0.jpg",
-  "Puxada alta aberta":            "Wide-Grip_Lat_Pulldown/0.jpg",
-  "Puxada fechada":                "Close-Grip_Front_Lat_Pulldown/0.jpg",
-  "Pulldown":                      "Wide-Grip_Lat_Pulldown/0.jpg",
-  "Puxada triângulo":              "Close-Grip_Front_Lat_Pulldown/0.jpg",
-  "Remada curvada barra":          "Barbell_Bent_Over_Row/0.jpg",
-  "Remada curvada halteres":       "Dumbbell_Bent_Over_Row/0.jpg",
-  "Remada unilateral halteres":    "Dumbbell_One-Arm_Row/0.jpg",
-  "Remada serrote halteres":       "Dumbbell_One-Arm_Row/0.jpg",
-  "Remada articulada":             "Seated_Cable_Row/0.jpg",
-  "Remada baixa polia":            "Seated_Cable_Row/0.jpg",
-  "Remada cavalinho":              "Barbell_Bent_Over_Row/0.jpg",
-  "Hiperextensão lombar":          "Hyperextensions_Back_Extensions/0.jpg",
-  "Extensão lombar máquina":       "Hyperextensions_Back_Extensions/0.jpg",
+  "Barra fixa":"pull up","Puxada alta aberta":"wide grip lat pulldown","Puxada fechada":"close grip lat pulldown",
+  "Pulldown":"lat pulldown","Puxada triângulo":"close grip lat pulldown","Puxada alta unilateral":"single arm lat pulldown",
+  "Remada curvada barra":"barbell bent over row","Remada curvada halteres":"dumbbell bent over row",
+  "Remada unilateral halteres":"dumbbell one arm row","Remada serrote halteres":"dumbbell one arm row",
+  "Remada articulada":"seated cable row","Remada baixa polia":"seated cable row",
+  "Remada baixa aberta polia":"seated cable row","Remada baixa unilateral":"one arm cable row",
+  "Remada cavalinho":"barbell bent over row","Hiperextensão lombar":"hyperextension",
+  "Extensão lombar máquina":"hyperextension",
   // BÍCEPS
-  "Rosca direta barra":            "Barbell_Curl/0.jpg",
-  "Rosca direta halteres":         "Dumbbell_Curl/0.jpg",
-  "Rosca direta polia":            "Cable_Curl_With_Bar/0.jpg",
-  "Rosca alternada halteres":      "Dumbbell_Alternate_Bicep_Curl/0.jpg",
-  "Rosca inclinada halteres":      "Dumbbell_Incline_Curl/0.jpg",
-  "Rosca concentrada halteres":    "Dumbbell_Concentration_Curls/0.jpg",
-  "Rosca martelo halteres":        "Dumbbell_Hammer_Curl/0.jpg",
-  "Rosca Scott máquina":           "Barbell_Preacher_Curl/0.jpg",
-  "Rosca 21":                      "Barbell_Curl/0.jpg",
-  "Rosca 45° halteres":            "Dumbbell_Incline_Curl/0.jpg",
+  "Rosca direta barra":"barbell curl","Rosca direta halteres":"dumbbell curl",
+  "Rosca direta polia":"cable curl","Rosca alternada halteres":"dumbbell alternate bicep curl",
+  "Rosca inclinada halteres":"dumbbell incline curl","Rosca concentrada halteres":"dumbbell concentration curl",
+  "Rosca martelo halteres":"dumbbell hammer curl","Rosca martelo corda":"hammer curl",
+  "Rosca Scott máquina":"barbell preacher curl","Rosca 21":"barbell curl",
+  "Rosca 45° halteres":"dumbbell incline curl","Rosca inversa barra":"barbell reverse curl",
+  "Rosca punho barra":"wrist curl",
   // TRÍCEPS
-  "Tríceps pulley corda":          "Triceps_Pushdown/0.jpg",
-  "Tríceps pulley barra reta":     "Triceps_Pushdown/0.jpg",
-  "Tríceps testa barra W":         "Barbell_Lying_Triceps_Extension/0.jpg",
-  "Tríceps testa halteres":        "Lying_Tricep_Press/0.jpg",
-  "Tríceps francês halteres":      "Dumbbell_Tricep_Extension/0.jpg",
-  "Tríceps francês barra":         "Barbell_Lying_Triceps_Extension/0.jpg",
-  "Kick back tríceps halteres":    "Dumbbell_Kickback/0.jpg",
-  "Mergulho no banco":             "Bench_Dips/0.jpg",
-  "Paralelas":                     "Dips/0.jpg",
+  "Tríceps pulley corda":"cable tricep pushdown","Tríceps pulley barra reta":"triceps pushdown",
+  "Tríceps pulley polia":"cable tricep pushdown","Tríceps testa barra W":"barbell lying triceps extension",
+  "Tríceps testa halteres":"lying tricep extension","Tríceps francês halteres":"dumbbell tricep extension",
+  "Tríceps francês barra":"barbell lying triceps extension","Kick back tríceps halteres":"dumbbell kickback",
+  "Mergulho no banco":"bench dips","Paralelas":"dips",
   // QUADRÍCEPS
-  "Agachamento livre":             "Barbell_Full_Squat/0.jpg",
-  "Agachamento sumô barra":        "Sumo_Squat/0.jpg",
-  "Agachamento sumô halteres":     "Dumbbell_Sumo_Squat/0.jpg",
-  "Agachamento búlgaro halteres":  "Dumbbell_Bulgarian_Split_Squat/0.jpg",
-  "Agachamento hack máquina":      "Hack_Squat/0.jpg",
-  "Leg press 45°":                 "Leg_Press/0.jpg",
-  "Cadeira extensora":             "Leg_Extensions/0.jpg",
-  "Passada avançada halteres":     "Dumbbell_Lunge/0.jpg",
-  "Afundo com halteres":           "Dumbbell_Lunge/0.jpg",
-  "Afundo com barra":              "Barbell_Lunge/0.jpg",
+  "Agachamento livre":"barbell squat","Agachamento sumô barra":"sumo squat",
+  "Agachamento sumô halteres":"dumbbell sumo squat","Agachamento búlgaro halteres":"dumbbell bulgarian split squat",
+  "Agachamento hack máquina":"hack squat","Leg press 45°":"leg press",
+  "Leg press 180° unilateral":"leg press","Cadeira extensora":"leg extension",
+  "Cadeira extensora unilateral":"leg extension","Passada avançada halteres":"dumbbell lunge",
+  "Afundo com halteres":"dumbbell lunge","Afundo com barra":"barbell lunge",
   // POSTERIOR
-  "Stiff":                         "Romanian_Deadlift/0.jpg",
-  "Stiff com halteres":            "Dumbbell_Romanian_Deadlift/0.jpg",
-  "Levantamento terra":            "Barbell_Deadlift/0.jpg",
-  "Mesa flexora":                  "Lying_Leg_Curl/0.jpg",
-  "Mesa flexora deitada":          "Lying_Leg_Curl/0.jpg",
-  "Cadeira flexora":               "Seated_Leg_Curl/0.jpg",
+  "Stiff":"romanian deadlift","Stiff com halteres":"dumbbell romanian deadlift",
+  "Stiff unilateral halteres":"dumbbell romanian deadlift","Levantamento terra":"barbell deadlift",
+  "Mesa flexora":"lying leg curl","Mesa flexora deitada":"lying leg curl",
+  "Cadeira flexora":"seated leg curl","Cadeira flexora unilateral":"lying leg curl",
+  "Flexora unilateral em pé":"standing leg curl",
   // GLÚTEO
-  "Hip thrust barra":              "Barbell_Hip_Thrust/0.jpg",
-  "Elevação pélvica com barra":    "Barbell_Hip_Thrust/0.jpg",
-  "Glúteo 4 apoios cabo":          "Cable_Hip_Extension/0.jpg",
+  "Hip thrust barra":"barbell hip thrust","Hip thrust máquina":"barbell hip thrust",
+  "Elevação pélvica com barra":"barbell hip thrust","Glúteo 4 apoios cabo":"cable hip extension",
+  "Abdução em pé polia":"cable hip abduction",
   // PANTURRILHA
-  "Panturrilha em pé máquina":     "Calf_Press/0.jpg",
-  "Panturrilha sentado máquina":   "Seated_Calf_Raise/0.jpg",
-  "Panturrilha em pé barra livre": "Standing_Barbell_Calf_Raise/0.jpg",
+  "Panturrilha em pé máquina":"calf press","Panturrilha sentado máquina":"seated calf raise",
+  "Panturrilha em pé barra livre":"standing barbell calf raise",
   // ABDUTORES/ADUTORES
-  "Cadeira abdutora":              "Adductor/0.jpg",
-  "Cadeira adutora":               "Adductor/0.jpg",
+  "Cadeira abdutora":"hip abduction","Cadeira adutora":"adductor",
   // ABDÔMEN
-  "Abdômen supra":                 "Crunch/0.jpg",
-  "Abdômen infra":                 "Hanging_Leg_Raise/0.jpg",
-  "Abdômen supra declinado":       "Decline_Crunch/0.jpg",
-  "Abdômen infra na paralela":     "Hanging_Leg_Raise/0.jpg",
-  "Prancha isométrica":            "Plank/0.jpg",
-
-  // ── VARIAÇÕES MÁQUINA / UNILATERAL ──────────────────────────────────────
-  "Supino reto máquina":                "Chest_Press_Machine/0.jpg",
-  "Supino inclinado máquina":           "Dumbbell_Incline_Bench_Press/0.jpg",
-  "Supino inclinado Articulado":        "Dumbbell_Incline_Bench_Press/0.jpg",
-  "Crucifixo Máquina":                  "Pec_Deck_Fly/0.jpg",
-  "Crucifixo inverso polia":            "Reverse_Cable_Flyes/0.jpg",
-  "Desenvolvimento máquina":            "Dumbbell_Shoulder_Press/0.jpg",
-  "Elevação lateral unilateral polia":  "Cable_Lateral_Raise/0.jpg",
-  "Puxada alta unilateral":             "Pulldown/0.jpg",
-  "Remada baixa aberta polia":          "Seated_Cable_Row/0.jpg",
-  "Remada baixa unilateral":            "Dumbbell_One_Arm_Row/0.jpg",
-  "Cadeira extensora unilateral":       "Leg_Extension/0.jpg",
-  "Cadeira flexora unilateral":         "Lying_Leg_Curl/0.jpg",
-  "Flexora unilateral em pé":           "Lying_Leg_Curl/0.jpg",
-  "Hip thrust máquina":                 "Barbell_Hip_Thrust/0.jpg",
-  "Leg press 180° unilateral":          "Leg_Press/0.jpg",
-  "Stiff unilateral halteres":          "Romanian_Deadlift/0.jpg",
-  "Abdução em pé polia":                "Hip_Abduction/0.jpg",
-  "Rosca inversa barra":                "Barbell_Reverse_Curl/0.jpg",
-  "Rosca martelo corda":                "Dumbbell_Hammer_Curl/0.jpg",
-  "Rosca punho barra":                  "Wrist_Curl/0.jpg",
-  "Tríceps pulley polia":               "Pushdowns/0.jpg",
+  "Abdômen supra":"crunch","Abdômen infra":"hanging leg raise",
+  "Abdômen supra declinado":"decline crunch","Abdômen infra na paralela":"hanging leg raise",
+  "Prancha isométrica":"plank",
+  // LOMBAR
+  "Passada avançada halteres":"dumbbell lunge",
 };
 
-// Retorna URL do GIF direto do GitHub — sem API, sem key
-function getGifUrl(exName) {
-  const slug = EX_GIF_MAP[exName];
-  if (!slug) return null;
-  return `${GIF_BASE}/${slug}`;
+// Busca GIF na ExerciseDB (RapidAPI) com cache em memória
+async function fetchExerciseDBGif(exName) {
+  if (GIF_CACHE[exName] !== undefined) return GIF_CACHE[exName];
+  const query = EX_EN_MAP[exName];
+  if (!query) { GIF_CACHE[exName] = null; return null; }
+  try {
+    const res = await fetch(
+      `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(query)}?limit=1&offset=0`,
+      { headers: { 'x-rapidapi-key': EXERCISEDB_KEY, 'x-rapidapi-host': EXERCISEDB_HOST } }
+    );
+    if (!res.ok) { GIF_CACHE[exName] = null; return null; }
+    const data = await res.json();
+    const gif = (Array.isArray(data) && data[0]?.gifUrl) ? data[0].gifUrl : null;
+    GIF_CACHE[exName] = gif;
+    return gif;
+  } catch(_) { GIF_CACHE[exName] = null; return null; }
 }
 
-// Cache simples em memória (não precisa mais de localStorage para GIF)
-const GIF_LOADED = {};
+// Fallback: URL estática do yuhonas (JPG)
+const EX_GIF_MAP = {
+  "Supino reto barra":"Barbell_Bench_Press/0.jpg","Supino reto halteres":"Dumbbell_Bench_Press/0.jpg",
+  "Supino inclinado barra":"Barbell_Incline_Bench_Press/0.jpg","Supino inclinado halteres":"Dumbbell_Incline_Bench_Press/0.jpg",
+  "Supino declinado barra":"Barbell_Decline_Bench_Press/0.jpg","Supino declinado halteres":"Dumbbell_Decline_Bench_Press/0.jpg",
+  "Crossover polia alta":"Cable_Crossover/0.jpg","Crucifixo reto halteres":"Dumbbell_Flyes/0.jpg",
+  "Crucifixo inclinado halteres":"Dumbbell_Incline_Flyes/0.jpg","Peck deck":"Pec_Deck_Fly/0.jpg",
+  "Flexão de braço":"Push-Up/0.jpg","Pullover halteres":"Dumbbell_Pullover/0.jpg",
+  "Desenvolvimento barra":"Barbell_Shoulder_Press/0.jpg","Desenvolvimento halteres":"Dumbbell_Shoulder_Press/0.jpg",
+  "Arnold press halteres":"Arnold_Dumbbell_Press/0.jpg","Elevação lateral halteres":"Dumbbell_Lateral_Raise/0.jpg",
+  "Elevação lateral polia":"Cable_Lateral_Raise/0.jpg","Elevação frontal barra":"Barbell_Front_Raise/0.jpg",
+  "Elevação frontal halteres":"Dumbbell_Front_Raise/0.jpg","Face Pull (corda)":"Cable_Face_Pull/0.jpg",
+  "Crucifixo inverso halteres":"Dumbbell_Bent_Over_Lateral_Raise/0.jpg","Crucifixo inverso máquina":"Reverse_Fly/0.jpg",
+  "Encolhimento barra":"Barbell_Shrug/0.jpg","Encolhimento halteres":"Dumbbell_Shrug/0.jpg",
+  "Remada alta barra":"Barbell_Upright_Row/0.jpg","Barra fixa":"Pull-up/0.jpg",
+  "Puxada alta aberta":"Wide-Grip_Lat_Pulldown/0.jpg","Puxada fechada":"Close-Grip_Front_Lat_Pulldown/0.jpg",
+  "Pulldown":"Wide-Grip_Lat_Pulldown/0.jpg","Puxada triângulo":"Close-Grip_Front_Lat_Pulldown/0.jpg",
+  "Remada curvada barra":"Barbell_Bent_Over_Row/0.jpg","Remada curvada halteres":"Dumbbell_Bent_Over_Row/0.jpg",
+  "Remada unilateral halteres":"Dumbbell_One-Arm_Row/0.jpg","Remada serrote halteres":"Dumbbell_One-Arm_Row/0.jpg",
+  "Remada articulada":"Seated_Cable_Row/0.jpg","Remada baixa polia":"Seated_Cable_Row/0.jpg",
+  "Remada cavalinho":"Barbell_Bent_Over_Row/0.jpg","Hiperextensão lombar":"Hyperextensions_Back_Extensions/0.jpg",
+  "Extensão lombar máquina":"Hyperextensions_Back_Extensions/0.jpg","Rosca direta barra":"Barbell_Curl/0.jpg",
+  "Rosca direta halteres":"Dumbbell_Curl/0.jpg","Rosca direta polia":"Cable_Curl_With_Bar/0.jpg",
+  "Rosca alternada halteres":"Dumbbell_Alternate_Bicep_Curl/0.jpg","Rosca inclinada halteres":"Dumbbell_Incline_Curl/0.jpg",
+  "Rosca concentrada halteres":"Dumbbell_Concentration_Curls/0.jpg","Rosca martelo halteres":"Dumbbell_Hammer_Curl/0.jpg",
+  "Rosca Scott máquina":"Barbell_Preacher_Curl/0.jpg","Rosca 21":"Barbell_Curl/0.jpg",
+  "Rosca 45° halteres":"Dumbbell_Incline_Curl/0.jpg","Tríceps pulley corda":"Triceps_Pushdown/0.jpg",
+  "Tríceps pulley barra reta":"Triceps_Pushdown/0.jpg","Tríceps testa barra W":"Barbell_Lying_Triceps_Extension/0.jpg",
+  "Tríceps testa halteres":"Lying_Tricep_Press/0.jpg","Tríceps francês halteres":"Dumbbell_Tricep_Extension/0.jpg",
+  "Tríceps francês barra":"Barbell_Lying_Triceps_Extension/0.jpg","Kick back tríceps halteres":"Dumbbell_Kickback/0.jpg",
+  "Mergulho no banco":"Bench_Dips/0.jpg","Paralelas":"Dips/0.jpg",
+  "Agachamento livre":"Barbell_Full_Squat/0.jpg","Agachamento sumô barra":"Sumo_Squat/0.jpg",
+  "Agachamento sumô halteres":"Dumbbell_Sumo_Squat/0.jpg","Agachamento búlgaro halteres":"Dumbbell_Bulgarian_Split_Squat/0.jpg",
+  "Agachamento hack máquina":"Hack_Squat/0.jpg","Leg press 45°":"Leg_Press/0.jpg",
+  "Cadeira extensora":"Leg_Extensions/0.jpg","Passada avançada halteres":"Dumbbell_Lunge/0.jpg",
+  "Afundo com halteres":"Dumbbell_Lunge/0.jpg","Afundo com barra":"Barbell_Lunge/0.jpg",
+  "Stiff":"Romanian_Deadlift/0.jpg","Stiff com halteres":"Dumbbell_Romanian_Deadlift/0.jpg",
+  "Levantamento terra":"Barbell_Deadlift/0.jpg","Mesa flexora":"Lying_Leg_Curl/0.jpg",
+  "Mesa flexora deitada":"Lying_Leg_Curl/0.jpg","Cadeira flexora":"Seated_Leg_Curl/0.jpg",
+  "Hip thrust barra":"Barbell_Hip_Thrust/0.jpg","Elevação pélvica com barra":"Barbell_Hip_Thrust/0.jpg",
+  "Glúteo 4 apoios cabo":"Cable_Hip_Extension/0.jpg","Panturrilha em pé máquina":"Calf_Press/0.jpg",
+  "Panturrilha sentado máquina":"Seated_Calf_Raise/0.jpg","Panturrilha em pé barra livre":"Standing_Barbell_Calf_Raise/0.jpg",
+  "Cadeira abdutora":"Adductor/0.jpg","Cadeira adutora":"Adductor/0.jpg",
+  "Abdômen supra":"Crunch/0.jpg","Abdômen infra":"Hanging_Leg_Raise/0.jpg",
+  "Abdômen supra declinado":"Decline_Crunch/0.jpg","Abdômen infra na paralela":"Hanging_Leg_Raise/0.jpg",
+  "Prancha isométrica":"Plank/0.jpg",
+};
+function getFallbackUrl(exName) {
+  const slug = EX_GIF_MAP[exName];
+  return slug ? `${GIF_BASE}/${slug}` : null;
+}
 
-// Hook React para carregar GIF
+// useExGif: tenta ExerciseDB primeiro, fallback para JPG estático
 function useExGif(exName) {
-  const url = getGifUrl(exName);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-  // Pre-check se URL existe (lazy — só testa quando precisa)
-  return { gifUrl: url, loading: false, error: !url };
+  const [gifUrl, setGifUrl] = useState(() => getFallbackUrl(exName));
+  const [loading, setLoading] = useState(true);
+  const [isGif, setIsGif] = useState(false);
+
+  useEffect(() => {
+    if (!exName) { setLoading(false); return; }
+    // Se já está no cache, usa direto
+    if (GIF_CACHE[exName] !== undefined) {
+      if (GIF_CACHE[exName]) { setGifUrl(GIF_CACHE[exName]); setIsGif(true); }
+      else { setGifUrl(getFallbackUrl(exName)); setIsGif(false); }
+      setLoading(false);
+      return;
+    }
+    // Busca na API
+    setLoading(true);
+    fetchExerciseDBGif(exName).then(url => {
+      if (url) { setGifUrl(url); setIsGif(true); }
+      else { setGifUrl(getFallbackUrl(exName)); setIsGif(false); }
+      setLoading(false);
+    });
+  }, [exName]);
+
+  return { gifUrl, loading, isGif };
 }
 
 // ── Dicas de execução ────────────────────────────────────────────────────────
@@ -811,21 +842,29 @@ const ExerciseDetail = ({exName, onClose, history}) => {
 
 // ── ExGifModal — modal compacto só com GIF ──────────────────────────────────
 const ExGifModal = ({exName, onClose}) => {
-  const {gifUrl} = useExGif(exName);
+  const {gifUrl, loading, isGif} = useExGif(exName);
   const [imgError, setImgError] = useState(false);
   return (
     <Modal onClose={onClose}>
-      <div style={{marginBottom:'.75rem'}}>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>{exName}</div>
+      <div style={{marginBottom:'.75rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>{exName}</div>
+        </div>
+        {isGif&&!imgError&&<span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'5px',padding:'2px 8px',fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800,letterSpacing:'.06em'}}>GIF</span>}
       </div>
       <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'200px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {gifUrl&&!imgError
-          ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'320px',objectFit:'contain'}} onError={()=>setImgError(true)}/>
-          : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-              <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
-              <div style={{fontSize:'.82rem'}}>Não disponível para este exercício</div>
+        {loading
+          ? <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+              <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
+              <div style={{fontSize:'.78rem'}}>Carregando...</div>
             </div>
+          : gifUrl&&!imgError
+            ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain'}} onError={()=>setImgError(true)}/>
+            : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+                <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
+                <div style={{fontSize:'.82rem'}}>Não disponível para este exercício</div>
+              </div>
         }
       </div>
     </Modal>
@@ -834,13 +873,15 @@ const ExGifModal = ({exName, onClose}) => {
 
 // ── ExGifThumb — miniatura na lista ─────────────────────────────────────────
 const ExGifThumb = ({exName, onClick}) => {
-  const {gifUrl} = useExGif(exName);
+  const {gifUrl, loading} = useExGif(exName);
   const [imgError, setImgError] = useState(false);
   return (
-    <button onClick={onClick} style={{width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
-      {gifUrl&&!imgError
-        ? <img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={()=>setImgError(true)}/>
-        : <span style={{fontSize:'1rem'}}>🎬</span>
+    <button onClick={onClick} style={{width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0,position:'relative'}}>
+      {loading
+        ? <span style={{fontSize:'.8rem',color:'#333'}}>⟳</span>
+        : gifUrl&&!imgError
+          ? <img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={()=>setImgError(true)}/>
+          : <span style={{fontSize:'1rem'}}>🎬</span>
       }
     </button>
   );
@@ -1175,7 +1216,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.5.1
+          DarkSet · V5.5.2
         </div>
       </div>
     </>
@@ -4186,7 +4227,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.1</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.2</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
