@@ -520,202 +520,171 @@ const EXS=[
 
 // Mapeamento: nome PT-BR → nome ExerciseDB (inglês)
 // ═══════════════════════════════════════════════════════════════════════════
-// GIF SYSTEM — URLs diretas do repositório free-exercise-db (GitHub)
-// Sem API key, sem cadastro, funciona para todo mundo automaticamente
+// ═══════════════════════════════════════════════════════════════════════════
+// GIF SYSTEM — yuhonas/free-exercise-db via jsDelivr CDN
+// 2 frames alternados a 800ms simulando animação. Sem API key.
+// Mapeamentos corrigidos conforme diagnóstico (PARCIAL/SEM MATCH resolvidos)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Base URL do repositório público
-const GIF_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
-const EXERCISEDB_KEY = 'd4e8fd1d99mshed71ecbb787a392p1fc988jsn3b4934119953';
-const EXERCISEDB_HOST = 'exercisedb.p.rapidapi.com';
+const YUHONAS_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
 
-// Cache em memória: evita requests repetidos na mesma sessão
-const GIF_CACHE = {};
-
-// Mapeamento PT-BR → termo de busca em inglês para ExerciseDB
-const EX_EN_MAP = {
+// Mapa direto PT-BR → slug exato da pasta no yuhonas
+// Corrigido com base no diagnóstico: substituídos todos os PARCIAL por slugs verificados
+const EX_SLUG_MAP = {
   // PEITO
-  "Supino reto barra":"barbell bench press","Supino reto halteres":"dumbbell bench press",
-  "Supino reto máquina":"chest press machine","Supino inclinado barra":"barbell incline bench press",
-  "Supino inclinado halteres":"dumbbell incline bench press","Supino inclinado máquina":"incline chest press",
-  "Supino inclinado Articulado":"dumbbell incline bench press","Supino declinado barra":"barbell decline bench press",
-  "Supino declinado halteres":"dumbbell decline bench press","Crossover polia alta":"cable crossover",
-  "Crucifixo reto halteres":"dumbbell flyes","Crucifixo inclinado halteres":"dumbbell incline flyes",
-  "Crucifixo Máquina":"pec deck fly","Peck deck":"pec deck fly","Flexão de braço":"push up",
-  "Pullover halteres":"dumbbell pullover",
+  "Supino reto barra":               "Barbell_Bench_Press",
+  "Supino reto halteres":            "Dumbbell_Bench_Press",
+  "Supino reto máquina":             "Barbell_Bench_Press",
+  "Supino inclinado barra":          "Barbell_Incline_Bench_Press",
+  "Supino inclinado halteres":       "Dumbbell_Incline_Bench_Press",
+  "Supino inclinado máquina":        "Barbell_Incline_Bench_Press",
+  "Supino inclinado Articulado":     "Dumbbell_Incline_Bench_Press",
+  "Supino declinado barra":          "Barbell_Decline_Bench_Press",
+  "Supino declinado halteres":       "Decline_Dumbbell_Bench_Press",
+  "Crossover polia alta":            "Cable_Crossover",
+  "Crucifixo reto halteres":         "Dumbbell_Flyes",
+  "Crucifixo inclinado halteres":    "Incline_Dumbbell_Flyes",
+  "Crucifixo Máquina":               "Dumbbell_Flyes",
+  "Peck deck":                       "Dumbbell_Flyes",
+  "Flexão de braço":                 "Push-Up",
+  "Pullover halteres":               "Bent-Arm_Dumbbell_Pullover",
   // OMBRO
-  "Desenvolvimento barra":"barbell shoulder press","Desenvolvimento halteres":"dumbbell shoulder press",
-  "Desenvolvimento máquina":"shoulder press machine","Arnold press halteres":"arnold dumbbell press",
-  "Elevação lateral halteres":"dumbbell lateral raise","Elevação lateral polia":"cable lateral raise",
-  "Elevação lateral unilateral polia":"cable lateral raise","Elevação frontal barra":"barbell front raise",
-  "Elevação frontal halteres":"dumbbell front raise","Face Pull (corda)":"cable face pull",
-  "Crucifixo inverso halteres":"dumbbell bent over lateral raise","Crucifixo inverso máquina":"reverse fly",
-  "Crucifixo inverso polia":"cable reverse fly",
+  "Desenvolvimento barra":           "Barbell_Shoulder_Press",
+  "Desenvolvimento halteres":        "Dumbbell_Shoulder_Press",
+  "Desenvolvimento máquina":         "Alternating_Cable_Shoulder_Press",
+  "Arnold press halteres":           "Arnold_Press",
+  "Elevação lateral halteres":       "Dumbbell_Lateral_Raise",
+  "Elevação lateral polia":          "Cable_Seated_Lateral_Raise",
+  "Elevação lateral unilateral polia":"Cable_Seated_Lateral_Raise",
+  "Elevação frontal barra":          "Standing_Front_Barbell_Raise_Over_Head",
+  "Elevação frontal halteres":       "Front_Dumbbell_Raise",
+  "Face Pull (corda)":               "Face_Pull",
+  "Crucifixo inverso halteres":      "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
+  "Crucifixo inverso máquina":       "Reverse_Flyes",
+  "Crucifixo inverso polia":         "Cable_Rear_Delt_Fly",
   // TRAPÉZIO
-  "Encolhimento barra":"barbell shrug","Encolhimento halteres":"dumbbell shrug","Remada alta barra":"barbell upright row",
+  "Encolhimento barra":              "Barbell_Shrug",
+  "Encolhimento halteres":           "Dumbbell_Shrug",
+  "Remada alta barra":               "Upright_Row-Front_Barbell",
   // COSTAS
-  "Barra fixa":"pull up","Puxada alta aberta":"wide grip lat pulldown","Puxada fechada":"close grip lat pulldown",
-  "Pulldown":"lat pulldown","Puxada triângulo":"close grip lat pulldown","Puxada alta unilateral":"single arm lat pulldown",
-  "Remada curvada barra":"barbell bent over row","Remada curvada halteres":"dumbbell bent over row",
-  "Remada unilateral halteres":"dumbbell one arm row","Remada serrote halteres":"dumbbell one arm row",
-  "Remada articulada":"seated cable row","Remada baixa polia":"seated cable row",
-  "Remada baixa aberta polia":"seated cable row","Remada baixa unilateral":"one arm cable row",
-  "Remada cavalinho":"barbell bent over row","Hiperextensão lombar":"hyperextension",
-  "Extensão lombar máquina":"hyperextension",
+  "Barra fixa":                      "Band_Assisted_Pull-Up",
+  "Puxada alta aberta":              "Close-Grip_Front_Lat_Pulldown",
+  "Puxada fechada":                  "Close-Grip_Front_Lat_Pulldown",
+  "Pulldown":                        "Close-Grip_Front_Lat_Pulldown",
+  "Puxada triângulo":                "Close-Grip_Front_Lat_Pulldown",
+  "Puxada alta unilateral":          "Close-Grip_Front_Lat_Pulldown",
+  "Remada curvada barra":            "Barbell_Bent_Over_Row",
+  "Remada curvada halteres":         "Bent_Over_Two-Dumbbell_Row",
+  "Remada unilateral halteres":      "Dumbbell_One-Arm_Upright_Row",
+  "Remada serrote halteres":         "Dumbbell_One-Arm_Upright_Row",
+  "Remada articulada":               "Seated_Cable_Rows",
+  "Remada baixa polia":              "Seated_Cable_Rows",
+  "Remada baixa aberta polia":       "Seated_Cable_Rows",
+  "Remada baixa unilateral":         "Seated_Cable_Rows",
+  "Remada cavalinho":                "Barbell_Bent_Over_Row",
+  "Hiperextensão lombar":            "Hyperextensions_With_No_Hyperextension_Bench",
+  "Extensão lombar máquina":         "Hyperextensions_With_No_Hyperextension_Bench",
   // BÍCEPS
-  "Rosca direta barra":"barbell curl","Rosca direta halteres":"dumbbell curl",
-  "Rosca direta polia":"cable curl","Rosca alternada halteres":"dumbbell alternate bicep curl",
-  "Rosca inclinada halteres":"dumbbell incline curl","Rosca concentrada halteres":"dumbbell concentration curl",
-  "Rosca martelo halteres":"dumbbell hammer curl","Rosca martelo corda":"hammer curl",
-  "Rosca Scott máquina":"barbell preacher curl","Rosca 21":"barbell curl",
-  "Rosca 45° halteres":"dumbbell incline curl","Rosca inversa barra":"barbell reverse curl",
-  "Rosca punho barra":"wrist curl",
+  "Rosca direta barra":              "Barbell_Curl",
+  "Rosca direta halteres":           "Dumbbell_Curl",
+  "Rosca direta polia":              "Cable_Hammer_Curls_-_Rope_Attachment",
+  "Rosca alternada halteres":        "Alternate_Hammer_Curl",
+  "Rosca inclinada halteres":        "Incline_Dumbbell_Curl",
+  "Rosca concentrada halteres":      "Concentration_Curls",
+  "Rosca martelo halteres":          "Alternate_Hammer_Curl",
+  "Rosca martelo corda":             "Alternate_Hammer_Curl",
+  "Rosca Scott máquina":             "Preacher_Curl",
+  "Rosca 21":                        "Barbell_Curl",
+  "Rosca 45° halteres":              "Incline_Dumbbell_Curl",
+  "Rosca inversa barra":             "Reverse_Barbell_Curl",
+  "Rosca punho barra":               "Cable_Wrist_Curl",
   // TRÍCEPS
-  "Tríceps pulley corda":"cable tricep pushdown","Tríceps pulley barra reta":"triceps pushdown",
-  "Tríceps pulley polia":"cable tricep pushdown","Tríceps testa barra W":"barbell lying triceps extension",
-  "Tríceps testa halteres":"lying tricep extension","Tríceps francês halteres":"dumbbell tricep extension",
-  "Tríceps francês barra":"barbell lying triceps extension","Kick back tríceps halteres":"dumbbell kickback",
-  "Mergulho no banco":"bench dips","Paralelas":"dips",
+  "Tríceps pulley corda":            "Triceps_Pushdown",
+  "Tríceps pulley barra reta":       "Triceps_Pushdown",
+  "Tríceps pulley polia":            "Triceps_Pushdown",
+  "Tríceps testa barra W":           "Cable_Lying_Triceps_Extension",
+  "Tríceps testa halteres":          "Cable_Lying_Triceps_Extension",
+  "Tríceps francês halteres":        "Decline_Dumbbell_Triceps_Extension",
+  "Tríceps francês barra":           "Cable_Lying_Triceps_Extension",
+  "Kick back tríceps halteres":      "Tricep_Dumbbell_Kickback",
+  "Mergulho no banco":               "Bench_Dips",
+  "Paralelas":                       "Bench_Dips",
   // QUADRÍCEPS
-  "Agachamento livre":"barbell squat","Agachamento sumô barra":"sumo squat",
-  "Agachamento sumô halteres":"dumbbell sumo squat","Agachamento búlgaro halteres":"dumbbell bulgarian split squat",
-  "Agachamento hack máquina":"hack squat","Leg press 45°":"leg press",
-  "Leg press 180° unilateral":"leg press","Cadeira extensora":"leg extension",
-  "Cadeira extensora unilateral":"leg extension","Passada avançada halteres":"dumbbell lunge",
-  "Afundo com halteres":"dumbbell lunge","Afundo com barra":"barbell lunge",
+  "Agachamento livre":               "Barbell_Full_Squat",
+  "Agachamento sumô barra":          "Dumbbell_Sumo_Squat",
+  "Agachamento sumô halteres":       "Dumbbell_Sumo_Squat",
+  "Agachamento búlgaro halteres":    "Barbell_Side_Split_Squat",
+  "Agachamento hack máquina":        "Hack_Squat",
+  "Leg press 45°":                   "Leg_Press",
+  "Leg press 180° unilateral":       "Leg_Press",
+  "Cadeira extensora":               "Leg_Extensions",
+  "Cadeira extensora unilateral":    "Leg_Extensions",
+  "Passada avançada halteres":       "Dumbbell_Lunges",
+  "Afundo com halteres":             "Dumbbell_Lunges",
+  "Afundo com barra":                "Barbell_Lunge",
   // POSTERIOR
-  "Stiff":"romanian deadlift","Stiff com halteres":"dumbbell romanian deadlift",
-  "Stiff unilateral halteres":"dumbbell romanian deadlift","Levantamento terra":"barbell deadlift",
-  "Mesa flexora":"lying leg curl","Mesa flexora deitada":"lying leg curl",
-  "Cadeira flexora":"seated leg curl","Cadeira flexora unilateral":"lying leg curl",
-  "Flexora unilateral em pé":"standing leg curl",
+  "Stiff":                           "Romanian_Deadlift",
+  "Stiff com halteres":              "Romanian_Deadlift",
+  "Stiff unilateral halteres":       "Romanian_Deadlift",
+  "Levantamento terra":              "Axle_Deadlift",
+  "Mesa flexora":                    "Lying_Leg_Curls",
+  "Mesa flexora deitada":            "Lying_Leg_Curls",
+  "Cadeira flexora":                 "Seated_Leg_Curl",
+  "Cadeira flexora unilateral":      "Lying_Leg_Curls",
+  "Flexora unilateral em pé":        "Lying_Leg_Curls",
   // GLÚTEO
-  "Hip thrust barra":"barbell hip thrust","Hip thrust máquina":"barbell hip thrust",
-  "Elevação pélvica com barra":"barbell hip thrust","Glúteo 4 apoios cabo":"cable hip extension",
-  "Abdução em pé polia":"cable hip abduction",
+  "Hip thrust barra":                "Barbell_Hip_Thrust",
+  "Hip thrust máquina":              "Barbell_Hip_Thrust",
+  "Elevação pélvica com barra":      "Barbell_Hip_Thrust",
+  "Glúteo 4 apoios cabo":            "Cable_Hip_Extension",
+  "Abdução em pé polia":             "Cable_Hip_Abduction",
   // PANTURRILHA
-  "Panturrilha em pé máquina":"calf press","Panturrilha sentado máquina":"seated calf raise",
-  "Panturrilha em pé barra livre":"standing barbell calf raise",
+  "Panturrilha em pé máquina":       "Calf_Press",
+  "Panturrilha sentado máquina":     "Seated_Calf_Raise",
+  "Panturrilha em pé barra livre":   "Standing_Calf_Raises",
   // ABDUTORES/ADUTORES
-  "Cadeira abdutora":"hip abduction","Cadeira adutora":"adductor",
+  "Cadeira abdutora":                "Adductor",
+  "Cadeira adutora":                 "Adductor",
   // ABDÔMEN
-  "Abdômen supra":"crunch","Abdômen infra":"hanging leg raise",
-  "Abdômen supra declinado":"decline crunch","Abdômen infra na paralela":"hanging leg raise",
-  "Prancha isométrica":"plank",
-  // LOMBAR
-  "Passada avançada halteres":"dumbbell lunge",
+  "Abdômen supra":                   "Ab_Crunch_Machine",
+  "Abdômen infra":                   "Hanging_Leg_Raise",
+  "Abdômen supra declinado":         "Decline_Crunch",
+  "Abdômen infra na paralela":       "Hanging_Leg_Raise",
+  "Prancha isométrica":              "Plank",
 };
 
-// Busca GIF na ExerciseDB (RapidAPI) com cache em memória
-async function fetchExerciseDBGif(exName) {
-  if (GIF_CACHE[exName] !== undefined) return GIF_CACHE[exName];
-  const query = EX_EN_MAP[exName];
-  if (!query) { GIF_CACHE[exName] = null; return null; }
-  try {
-    // Tenta endpoint v2 primeiro, depois v1 como fallback
-    const urls = [
-      `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(query)}?limit=1&offset=0`,
-      `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(query)}`,
-    ];
-    for (const url of urls) {
-      const res = await fetch(url, {
-        headers: { 'x-rapidapi-key': EXERCISEDB_KEY, 'x-rapidapi-host': EXERCISEDB_HOST }
-      });
-      if (!res.ok) {
-        console.warn('[ExerciseDB] HTTP', res.status, url);
-        continue;
-      }
-      const data = await res.json();
-      console.log('[ExerciseDB] Response for', exName, ':', JSON.stringify(data).slice(0,200));
-      // API pode retornar array direto ou {exercises:[...]}
-      const list = Array.isArray(data) ? data : (data.exercises || data.data || []);
-      const gif = list[0]?.gifUrl || list[0]?.gif || null;
-      if (gif) { GIF_CACHE[exName] = gif; return gif; }
-    }
-    GIF_CACHE[exName] = null; return null;
-  } catch(e) {
-    console.warn('[ExerciseDB] Error for', exName, e.message);
-    GIF_CACHE[exName] = null; return null;
-  }
-}
+// Cache de verificação se frame 1 existe (alguns exercícios só têm 0.jpg)
+const FRAME1_CACHE = {};
 
-// Fallback: URL estática do yuhonas (JPG)
-const EX_GIF_MAP = {
-  "Supino reto barra":"Barbell_Bench_Press/0.jpg","Supino reto halteres":"Dumbbell_Bench_Press/0.jpg",
-  "Supino inclinado barra":"Barbell_Incline_Bench_Press/0.jpg","Supino inclinado halteres":"Dumbbell_Incline_Bench_Press/0.jpg",
-  "Supino declinado barra":"Barbell_Decline_Bench_Press/0.jpg","Supino declinado halteres":"Dumbbell_Decline_Bench_Press/0.jpg",
-  "Crossover polia alta":"Cable_Crossover/0.jpg","Crucifixo reto halteres":"Dumbbell_Flyes/0.jpg",
-  "Crucifixo inclinado halteres":"Dumbbell_Incline_Flyes/0.jpg","Peck deck":"Pec_Deck_Fly/0.jpg",
-  "Flexão de braço":"Push-Up/0.jpg","Pullover halteres":"Dumbbell_Pullover/0.jpg",
-  "Desenvolvimento barra":"Barbell_Shoulder_Press/0.jpg","Desenvolvimento halteres":"Dumbbell_Shoulder_Press/0.jpg",
-  "Arnold press halteres":"Arnold_Dumbbell_Press/0.jpg","Elevação lateral halteres":"Dumbbell_Lateral_Raise/0.jpg",
-  "Elevação lateral polia":"Cable_Lateral_Raise/0.jpg","Elevação frontal barra":"Barbell_Front_Raise/0.jpg",
-  "Elevação frontal halteres":"Dumbbell_Front_Raise/0.jpg","Face Pull (corda)":"Cable_Face_Pull/0.jpg",
-  "Crucifixo inverso halteres":"Dumbbell_Bent_Over_Lateral_Raise/0.jpg","Crucifixo inverso máquina":"Reverse_Fly/0.jpg",
-  "Encolhimento barra":"Barbell_Shrug/0.jpg","Encolhimento halteres":"Dumbbell_Shrug/0.jpg",
-  "Remada alta barra":"Barbell_Upright_Row/0.jpg","Barra fixa":"Pull-up/0.jpg",
-  "Puxada alta aberta":"Wide-Grip_Lat_Pulldown/0.jpg","Puxada fechada":"Close-Grip_Front_Lat_Pulldown/0.jpg",
-  "Pulldown":"Wide-Grip_Lat_Pulldown/0.jpg","Puxada triângulo":"Close-Grip_Front_Lat_Pulldown/0.jpg",
-  "Remada curvada barra":"Barbell_Bent_Over_Row/0.jpg","Remada curvada halteres":"Dumbbell_Bent_Over_Row/0.jpg",
-  "Remada unilateral halteres":"Dumbbell_One-Arm_Row/0.jpg","Remada serrote halteres":"Dumbbell_One-Arm_Row/0.jpg",
-  "Remada articulada":"Seated_Cable_Row/0.jpg","Remada baixa polia":"Seated_Cable_Row/0.jpg",
-  "Remada cavalinho":"Barbell_Bent_Over_Row/0.jpg","Hiperextensão lombar":"Hyperextensions_Back_Extensions/0.jpg",
-  "Extensão lombar máquina":"Hyperextensions_Back_Extensions/0.jpg","Rosca direta barra":"Barbell_Curl/0.jpg",
-  "Rosca direta halteres":"Dumbbell_Curl/0.jpg","Rosca direta polia":"Cable_Curl_With_Bar/0.jpg",
-  "Rosca alternada halteres":"Dumbbell_Alternate_Bicep_Curl/0.jpg","Rosca inclinada halteres":"Dumbbell_Incline_Curl/0.jpg",
-  "Rosca concentrada halteres":"Dumbbell_Concentration_Curls/0.jpg","Rosca martelo halteres":"Dumbbell_Hammer_Curl/0.jpg",
-  "Rosca Scott máquina":"Barbell_Preacher_Curl/0.jpg","Rosca 21":"Barbell_Curl/0.jpg",
-  "Rosca 45° halteres":"Dumbbell_Incline_Curl/0.jpg","Tríceps pulley corda":"Triceps_Pushdown/0.jpg",
-  "Tríceps pulley barra reta":"Triceps_Pushdown/0.jpg","Tríceps testa barra W":"Barbell_Lying_Triceps_Extension/0.jpg",
-  "Tríceps testa halteres":"Lying_Tricep_Press/0.jpg","Tríceps francês halteres":"Dumbbell_Tricep_Extension/0.jpg",
-  "Tríceps francês barra":"Barbell_Lying_Triceps_Extension/0.jpg","Kick back tríceps halteres":"Dumbbell_Kickback/0.jpg",
-  "Mergulho no banco":"Bench_Dips/0.jpg","Paralelas":"Dips/0.jpg",
-  "Agachamento livre":"Barbell_Full_Squat/0.jpg","Agachamento sumô barra":"Sumo_Squat/0.jpg",
-  "Agachamento sumô halteres":"Dumbbell_Sumo_Squat/0.jpg","Agachamento búlgaro halteres":"Dumbbell_Bulgarian_Split_Squat/0.jpg",
-  "Agachamento hack máquina":"Hack_Squat/0.jpg","Leg press 45°":"Leg_Press/0.jpg",
-  "Cadeira extensora":"Leg_Extensions/0.jpg","Passada avançada halteres":"Dumbbell_Lunge/0.jpg",
-  "Afundo com halteres":"Dumbbell_Lunge/0.jpg","Afundo com barra":"Barbell_Lunge/0.jpg",
-  "Stiff":"Romanian_Deadlift/0.jpg","Stiff com halteres":"Dumbbell_Romanian_Deadlift/0.jpg",
-  "Levantamento terra":"Barbell_Deadlift/0.jpg","Mesa flexora":"Lying_Leg_Curl/0.jpg",
-  "Mesa flexora deitada":"Lying_Leg_Curl/0.jpg","Cadeira flexora":"Seated_Leg_Curl/0.jpg",
-  "Hip thrust barra":"Barbell_Hip_Thrust/0.jpg","Elevação pélvica com barra":"Barbell_Hip_Thrust/0.jpg",
-  "Glúteo 4 apoios cabo":"Cable_Hip_Extension/0.jpg","Panturrilha em pé máquina":"Calf_Press/0.jpg",
-  "Panturrilha sentado máquina":"Seated_Calf_Raise/0.jpg","Panturrilha em pé barra livre":"Standing_Barbell_Calf_Raise/0.jpg",
-  "Cadeira abdutora":"Adductor/0.jpg","Cadeira adutora":"Adductor/0.jpg",
-  "Abdômen supra":"Crunch/0.jpg","Abdômen infra":"Hanging_Leg_Raise/0.jpg",
-  "Abdômen supra declinado":"Decline_Crunch/0.jpg","Abdômen infra na paralela":"Hanging_Leg_Raise/0.jpg",
-  "Prancha isométrica":"Plank/0.jpg",
-};
-function getFallbackUrl(exName) {
-  const slug = EX_GIF_MAP[exName];
-  return slug ? `${GIF_BASE}/${slug}` : null;
-}
-
-// useExGif: tenta ExerciseDB primeiro, fallback para JPG estático
+// useExGif: slug direto do mapa, alterna 0.jpg/1.jpg a 800ms
 function useExGif(exName) {
-  const [gifUrl, setGifUrl] = useState(() => getFallbackUrl(exName));
-  const [loading, setLoading] = useState(true);
-  const [isGif, setIsGif] = useState(false);
+  const slug = EX_SLUG_MAP[exName] || null;
+  const [frame, setFrame] = useState(0);
+  const [hasFrame1, setHasFrame1] = useState(true);
+  const loading = false;
 
+  // Verifica se 1.jpg existe (só na primeira vez por slug)
   useEffect(() => {
-    if (!exName) { setLoading(false); return; }
-    // Se já está no cache, usa direto
-    if (GIF_CACHE[exName] !== undefined) {
-      if (GIF_CACHE[exName]) { setGifUrl(GIF_CACHE[exName]); setIsGif(true); }
-      else { setGifUrl(getFallbackUrl(exName)); setIsGif(false); }
-      setLoading(false);
+    if (!slug) return;
+    if (FRAME1_CACHE[slug] !== undefined) {
+      setHasFrame1(FRAME1_CACHE[slug]);
       return;
     }
-    // Busca na API
-    setLoading(true);
-    fetchExerciseDBGif(exName).then(url => {
-      if (url) { setGifUrl(url); setIsGif(true); }
-      else { setGifUrl(getFallbackUrl(exName)); setIsGif(false); }
-      setLoading(false);
-    });
-  }, [exName]);
+    const img = new Image();
+    img.onload  = () => { FRAME1_CACHE[slug] = true;  setHasFrame1(true); };
+    img.onerror = () => { FRAME1_CACHE[slug] = false; setHasFrame1(false); };
+    img.src = YUHONAS_BASE + '/' + slug + '/1.jpg';
+  }, [slug]);
 
-  return { gifUrl, loading, isGif };
+  // Alterna frames
+  useEffect(() => {
+    if (!slug) return;
+    const t = setInterval(() => setFrame(f => (f === 0 && hasFrame1) ? 1 : 0), 800);
+    return () => clearInterval(t);
+  }, [slug, hasFrame1]);
+
+  const gifUrl = slug ? YUHONAS_BASE + '/' + slug + '/' + frame + '.jpg' : null;
+  return { gifUrl, loading, slug, frame, hasFrame1 };
 }
 
 // ── Dicas de execução ────────────────────────────────────────────────────────
@@ -735,11 +704,72 @@ const EXEC_TIPS = {
   "Hip thrust máquina": "Ajuste o banco na altura correta. Empurre com quadril, não com lombar. Glúteo em contração máxima no topo.",
 };
 
+// ── GifAnimBlock — bloco de animação reutilizável ───────────────────────────
+const GifAnimBlock = ({slug, exName, height='280px'}) => {
+  const [frame, setFrame] = useState(0);
+  const [hasFrame1, setHasFrame1] = useState(true);
+  const [img0Err, setImg0Err] = useState(false);
+  const [img1Err, setImg1Err] = useState(false);
+
+  useEffect(() => {
+    setFrame(0); setImg0Err(false); setImg1Err(false); setHasFrame1(true);
+    if (!slug) return;
+    const img = new Image();
+    img.onload  = () => setHasFrame1(true);
+    img.onerror = () => setHasFrame1(false);
+    img.src = YUHONAS_BASE + '/' + slug + '/1.jpg';
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    const t = setInterval(() => setFrame(f => (f === 0 && hasFrame1 && !img1Err) ? 1 : 0), 800);
+    return () => clearInterval(t);
+  }, [slug, hasFrame1, img1Err]);
+
+  const ex = EXS.find(e=>e.name===exName);
+  const GRP_COLOR = {"Peito":"#e74c3c","Ombro":"#e67e22","Costas":"#27ae60","Bíceps":"#2980b9","Tríceps":"#8e44ad","Quadríceps":"#16a085","Posterior de Coxa":"#d35400","Glúteo":"#c0392b","Trapézio":"#7f8c8d","Panturrilha":"#1abc9c","Abdômen":"#f39c12"};
+  const grpColor = GRP_COLOR[ex?.primary] || '#e31b23';
+
+  if (!slug || img0Err) return (
+    <div style={{borderRadius:'14px',border:'1px solid #1e1e1e',background:'#080808',
+      height,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+      <div style={{fontSize:'2.5rem',opacity:.3}}>🏋️</div>
+      <div style={{fontSize:'.8rem',color:'#444',fontWeight:600}}>Sem animação</div>
+    </div>
+  );
+
+  return (
+    <div style={{borderRadius:'14px',overflow:'hidden',border:`1px solid ${grpColor}22`,background:'#000',height,position:'relative'}}>
+      <img src={YUHONAS_BASE+'/'+slug+'/0.jpg'} alt={exName}
+        style={{width:'100%',height:'100%',objectFit:'cover',position:'absolute',inset:0,display:frame===0?'block':'none'}}
+        onError={()=>setImg0Err(true)}/>
+      <img src={YUHONAS_BASE+'/'+slug+'/1.jpg'} alt={exName}
+        style={{width:'100%',height:'100%',objectFit:'cover',position:'absolute',inset:0,display:frame===1?'block':'none'}}
+        onError={()=>setImg1Err(true)}/>
+      {/* Gradiente bottom */}
+      <div style={{position:'absolute',bottom:0,left:0,right:0,height:'60px',
+        background:'linear-gradient(transparent,rgba(0,0,0,.6))',pointerEvents:'none'}}/>
+      {/* Badge */}
+      <div style={{position:'absolute',bottom:'10px',right:'10px',
+        background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',
+        borderRadius:'6px',padding:'3px 9px',
+        display:'flex',alignItems:'center',gap:'5px'}}>
+        <div style={{width:'6px',height:'6px',borderRadius:'50%',background:grpColor,boxShadow:`0 0 4px ${grpColor}`}}/>
+        <span style={{fontSize:'.6rem',fontWeight:700,color:'#fff',letterSpacing:'.06em'}}>ANIMAÇÃO</span>
+      </div>
+      {/* Nome do músculo top-left */}
+      <div style={{position:'absolute',top:'10px',left:'10px',
+        padding:'3px 8px',background:`${grpColor}cc`,borderRadius:'5px',
+        fontSize:'.58rem',fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:'.07em'}}>
+        {ex?.primary}
+      </div>
+    </div>
+  );
+};
+
 // ── ExerciseDetail — tela completa de detalhes ──────────────────────────────
 const ExerciseDetail = ({exName, onClose, history}) => {
-  const {gifUrl} = useExGif(exName);
   const ex = EXS.find(e=>e.name===exName);
-  const [imgError, setImgError] = useState(false);
 
   const stats = useMemo(()=>{
     if(!history||typeof history!=='object') return {sessions:0,bestWeight:0,totalSets:0,lastDate:null};
@@ -779,17 +809,13 @@ const ExerciseDetail = ({exName, onClose, history}) => {
 
       <div style={{padding:'1rem',display:'grid',gap:'1rem',maxWidth:'480px',margin:'0 auto'}}>
 
-        {/* GIF */}
-        <div style={{background:'#000',borderRadius:'14px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'240px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-          {gifUrl&&!imgError
-            ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain',display:'block'}}
-                onError={()=>setImgError(true)}/>
-            : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-                <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🎬</div>
-                <div style={{fontSize:'.85rem',fontWeight:600}}>Animação não disponível</div>
-              </div>
-          }
-        </div>
+        {/* GIF animado */}
+        {(()=>{
+          const gifSlug = EX_SLUG_MAP[exName] || null;
+          return (
+            <GifAnimBlock slug={gifSlug} exName={exName}/>
+          );
+        })()}
 
         {/* Stats */}
         {stats.sessions>0&&(
@@ -855,49 +881,137 @@ const ExerciseDetail = ({exName, onClose, history}) => {
   );
 };
 
-// ── ExGifModal — modal compacto só com GIF ──────────────────────────────────
+// ── ExGifModal — modal de execução redesenhado ──────────────────────────────
 const ExGifModal = ({exName, onClose}) => {
-  const {gifUrl, loading, isGif} = useExGif(exName);
-  const [imgError, setImgError] = useState(false);
+  const {slug, frame} = useExGif(exName);
+  const ex = EXS.find(e=>e.name===exName);
+  const [img0Err, setImg0Err] = useState(false);
+  const [img1Err, setImg1Err] = useState(false);
+  const tip = EXEC_TIPS[exName];
+
+  const url0 = slug ? YUHONAS_BASE+'/'+slug+'/0.jpg' : null;
+  const url1 = slug ? YUHONAS_BASE+'/'+slug+'/1.jpg' : null;
+  const hasImg = slug && !img0Err;
+
+  // Cores por grupo
+  const GRP_COLOR = {
+    "Peito":"#e74c3c","Ombro":"#e67e22","Costas":"#27ae60",
+    "Bíceps":"#2980b9","Tríceps":"#8e44ad","Quadríceps":"#16a085",
+    "Posterior de Coxa":"#d35400","Glúteo":"#c0392b","Trapézio":"#7f8c8d",
+    "Panturrilha":"#1abc9c","Abdômen":"#f39c12",
+  };
+  const grpColor = GRP_COLOR[ex?.primary] || '#e31b23';
+
   return (
     <Modal onClose={onClose}>
-      <div style={{marginBottom:'.75rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>{exName}</div>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.85rem',gap:'.5rem'}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:'.55rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.12em',color:grpColor,marginBottom:'3px'}}>
+            {ex?.primary || 'Execução'}
+          </div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.35rem',textTransform:'uppercase',letterSpacing:'.02em',color:'var(--color-text)',lineHeight:1.1}}>{exName}</div>
+          {ex && <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'4px'}}>{ex.equipment} · {ex.difficulty}</div>}
         </div>
-        {isGif&&!imgError&&<span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'5px',padding:'2px 8px',fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800,letterSpacing:'.06em'}}>GIF</span>}
+        {hasImg && (
+          <div style={{flexShrink:0,padding:'.22rem .55rem',background:`${grpColor}22`,border:`1px solid ${grpColor}44`,borderRadius:'6px',fontSize:'.58rem',fontWeight:800,color:grpColor,textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>
+            ANIMAÇÃO
+          </div>
+        )}
       </div>
-      <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'200px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {loading
-          ? <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-              <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
-              <div style={{fontSize:'.78rem'}}>Carregando...</div>
+
+      {/* Imagem animada */}
+      <div style={{
+        borderRadius:'12px',overflow:'hidden',
+        border:`1px solid ${hasImg ? grpColor+'33' : '#1e1e1e'}`,
+        background:'#000',
+        aspectRatio:'4/3',
+        display:'flex',alignItems:'center',justifyContent:'center',
+        position:'relative',
+      }}>
+        {slug && !img0Err ? (
+          <>
+            <img src={url0} alt={exName}
+              style={{width:'100%',height:'100%',objectFit:'cover',display:frame===0?'block':'none',transition:'opacity .1s'}}
+              onError={()=>setImg0Err(true)}/>
+            {url1 && <img src={url1} alt={exName}
+              style={{width:'100%',height:'100%',objectFit:'cover',display:frame===1?'block':'none',transition:'opacity .1s'}}
+              onError={()=>setImg1Err(true)}/>}
+            {/* Badge animação */}
+            <div style={{position:'absolute',bottom:'8px',right:'8px',
+              background:'rgba(0,0,0,.7)',backdropFilter:'blur(4px)',
+              borderRadius:'6px',padding:'3px 8px',
+              fontSize:'.6rem',fontWeight:700,color:'#fff',letterSpacing:'.05em',
+              display:'flex',alignItems:'center',gap:'5px'}}>
+              <div style={{width:'6px',height:'6px',borderRadius:'50%',background:grpColor,animation:'pulse 1s ease-in-out infinite'}}/>
+              LIVE
             </div>
-          : gifUrl&&!imgError
-            ? <img src={gifUrl} alt={exName} style={{width:'100%',maxHeight:'340px',objectFit:'contain'}} onError={()=>setImgError(true)}/>
-            : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
-                <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🎬</div>
-                <div style={{fontSize:'.82rem'}}>Não disponível para este exercício</div>
-              </div>
-        }
+          </>
+        ) : (
+          <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:'.5rem',opacity:.4}}>🏋️</div>
+            <div style={{fontSize:'.8rem',fontWeight:600,opacity:.6}}>Sem animação disponível</div>
+            <div style={{fontSize:'.65rem',opacity:.4,marginTop:'4px'}}>{exName}</div>
+          </div>
+        )}
       </div>
+
+      {/* Músculos pills */}
+      {ex && (
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',marginTop:'.75rem'}}>
+          {[
+            {label:'Principal', val:ex.primary, color:grpColor},
+            {label:'Foco', val:ex.subgroup, color:'#facc15'},
+            {label:'Equip.', val:ex.equipment, color:'#4ade80'},
+          ].filter(i=>i.val).map(item=>(
+            <div key={item.label} style={{padding:'.22rem .6rem',background:`${item.color}12`,border:`1px solid ${item.color}30`,borderRadius:'20px',display:'flex',alignItems:'center',gap:'.3rem'}}>
+              <div style={{width:'5px',height:'5px',borderRadius:'50%',background:item.color,flexShrink:0}}/>
+              <span style={{fontSize:'.62rem',color:item.color,fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>{item.label}</span>
+              <span style={{fontSize:'.7rem',color:'var(--color-text)',fontWeight:600}}>{item.val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dica de execução */}
+      {tip && (
+        <div style={{marginTop:'.75rem',padding:'.7rem .85rem',
+          background:'rgba(255,255,255,.03)',
+          border:'1px solid #1e1e1e',
+          borderLeft:`3px solid ${grpColor}`,
+          borderRadius:'0 8px 8px 0'}}>
+          <div style={{fontSize:'.55rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.1em',color:grpColor,marginBottom:'.35rem'}}>Execução correta</div>
+          <p style={{fontSize:'.78rem',color:'var(--color-text-sub)',lineHeight:1.55,margin:0}}>{tip}</p>
+        </div>
+      )}
     </Modal>
   );
 };
 
-// ── ExGifThumb — miniatura na lista ─────────────────────────────────────────
+// ── ExGifThumb — thumbnail com preview real + overlay play ──────────────────
 const ExGifThumb = ({exName, onClick}) => {
-  const {gifUrl, loading} = useExGif(exName);
-  const [imgError, setImgError] = useState(false);
+  const slug = EX_SLUG_MAP[exName] || null;
+  const previewUrl = slug ? YUHONAS_BASE + '/' + slug + '/0.jpg' : null;
+  const [imgErr, setImgErr] = useState(false);
   return (
-    <button onClick={onClick} style={{width:'52px',height:'52px',borderRadius:'8px',overflow:'hidden',background:'rgba(0,0,0,.4)',border:'1px solid var(--color-border)',flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0,position:'relative'}}>
-      {loading
-        ? <span style={{fontSize:'.8rem',color:'#333'}}>⟳</span>
-        : gifUrl&&!imgError
-          ? <img src={gifUrl} alt={exName} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={()=>setImgError(true)}/>
-          : <span style={{fontSize:'1rem'}}>🎬</span>
+    <button onClick={onClick} title={"Ver execução: "+exName}
+      style={{width:'52px',height:'52px',borderRadius:'10px',overflow:'hidden',
+        background:'#111',border:'1px solid #2a2a2a',
+        flexShrink:0,cursor:'pointer',padding:0,position:'relative',display:'block'}}>
+      {previewUrl && !imgErr
+        ? <img src={previewUrl} alt={exName}
+            style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
+            onError={()=>setImgErr(true)}/>
+        : <div style={{width:'100%',height:'100%',background:'rgba(227,27,35,.08)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <span style={{fontSize:'1rem'}}>💪</span>
+          </div>
       }
+      {/* overlay escuro + triângulo play */}
+      <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(227,27,35,.85)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{width:0,height:0,borderTop:'4px solid transparent',borderBottom:'4px solid transparent',borderLeft:'7px solid #fff',marginLeft:'2px'}}/>
+        </div>
+      </div>
     </button>
   );
 };
@@ -1231,7 +1345,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.5.3
+          DarkSet · V5.5.4
         </div>
       </div>
     </>
@@ -3589,7 +3703,12 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>{activePlan.name} · {day}</div>
             <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginTop:'.15rem'}}>
               <button onClick={()=>setSessionDetail(current.name)} style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1,color:'var(--color-text)',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'left'}}>{current.name}</button>
-              <button onClick={()=>setSessionGif(current.name)} style={{flexShrink:0,background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'7px',padding:'.28rem .55rem',fontSize:'.75rem',color:'var(--color-accent)',cursor:'pointer',fontWeight:700,lineHeight:1}}>🎬</button>
+              <button onClick={()=>setSessionGif(current.name)} style={{flexShrink:0,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'8px',padding:'.28rem .6rem',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',lineHeight:1}}>
+                <div style={{width:'14px',height:'14px',borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <div style={{width:0,height:0,borderTop:'3px solid transparent',borderBottom:'3px solid transparent',borderLeft:'5px solid #fff',marginLeft:'1px'}}/>
+                </div>
+                <span style={{fontSize:'.65rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.05em'}}>Ver</span>
+              </button>
             </div>
           </div>
           <div style={{textAlign:'right'}}>
@@ -4267,7 +4386,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.3</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.4</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
@@ -4701,7 +4820,7 @@ root.render(<App/>);
           try{ await auth.signInWithPopup(provider); }
           catch(e){
             if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
-              await auth.signInWithRedirect(provider);
+              await auth.signInWithPopup(provider); // Safari: always popup
             } else { throw e; }
           }
         },
@@ -4711,7 +4830,7 @@ root.render(<App/>);
           try{ await auth.signInWithPopup(provider); }
           catch(e){
             if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
-              await auth.signInWithRedirect(provider);
+              await auth.signInWithPopup(provider); // Safari: always popup
             } else { throw e; }
           }
         },
@@ -4759,7 +4878,7 @@ root.render(<App/>);
         }catch(_){}
       });
 
-      auth.getRedirectResult().catch(function(){});
+      // signInWithPopup used — no redirect result needed
     }catch(e){ console.warn('DSAuth init error', e); }
 
     // Inicia observadores após Firebase pronto
