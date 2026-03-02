@@ -84,6 +84,35 @@
     nav.ds-nav{ overflow-x:auto; -webkit-overflow-scrolling: touch; gap:.4rem; scrollbar-width: none; display:flex; }
     nav.ds-nav::-webkit-scrollbar{ display:none; }
     @media (max-width: 480px){ nav.ds-nav button{ flex:0 0 auto } }
+
+    /* DRAWER */
+    .ds-drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;backdrop-filter:blur(2px);}
+    .ds-drawer{
+      position:fixed;left:0;top:0;bottom:0;width:280px;max-width:85vw;
+      background:#0a0a0a;border-right:1px solid rgba(227,27,35,.15);
+      z-index:901;display:flex;flex-direction:column;
+      transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+      overflow-y:auto;
+    }
+    .ds-drawer.open{transform:translateX(0);}
+    .ds-drawer-item{
+      display:flex;align-items:center;gap:.85rem;padding:.8rem 1.1rem;
+      background:transparent;border:none;cursor:pointer;
+      font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;
+      text-transform:uppercase;letter-spacing:.04em;color:#666;
+      border-left:3px solid transparent;transition:all .15s;text-align:left;width:100%;
+    }
+    .ds-drawer-item:hover{color:#ccc;background:rgba(255,255,255,.03);}
+    .ds-drawer-item.active{color:#fff;border-left-color:var(--color-accent);background:rgba(227,27,35,.06);}
+    .ds-drawer-item .ds-drawer-icon{font-size:1.3rem;width:28px;text-align:center;flex-shrink:0;}
+    .ds-drawer-section{font-size:.58rem;color:#333;text-transform:uppercase;letter-spacing:.1em;padding:.75rem 1.1rem .3rem;font-weight:700;}
+    .ds-hamburger{background:none;border:none;cursor:pointer;padding:.35rem;display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+    .ds-hamburger span{display:block;width:20px;height:2px;background:#888;border-radius:1px;transition:all .2s;}
+    .ds-hamburger:hover span{background:#fff;}
+    [data-theme="light"] .ds-drawer{background:#f5f5f5;border-right-color:#ddd;}
+    [data-theme="light"] .ds-drawer-item{color:#666;}
+    [data-theme="light"] .ds-drawer-item.active{color:#e31b23;background:rgba(227,27,35,.06);}
+    [data-theme="light"] .ds-drawer-section{color:#aaa;}
     header.ds-hdr{
       position: sticky; top: 0; z-index: 30;
       backdrop-filter: blur(16px) saturate(180%);
@@ -1077,6 +1106,60 @@ const LockIcon=({className=""})=>(
   </svg>
 );
 
+// ── Drawer Menu ──────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  {section: null,       icon:'🏠', label:'Início',      screen:'home'},
+  {section: 'TREINO',   icon:'🏋️', label:'Treino',      screen:'session'},
+  {section: null,       icon:'🏃', label:'Cardio',      screen:'cardio'},
+  {section: null,       icon:'🎵', label:'Beats',       screen:'beats'},
+  {section: 'FICHAS',   icon:'📋', label:'Minhas Fichas',screen:'plans'},
+  {section: null,       icon:'⚙️', label:'Montar Ficha',screen:'builder'},
+  {section: 'PROGRESSO',icon:'📈', label:'Histórico',   screen:'history'},
+  {section: null,       icon:'📏', label:'Medidas',     screen:'measures'},
+  {section: 'SOCIAL',   icon:'👥', label:'Squad',       screen:'community'},
+  {section: null,       icon:'🏟️', label:'Modo Academia',screen:'gym'},
+  {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
+];
+
+const Drawer = ({open, onClose, screen, goto, prefs}) => {
+  const nav = (s) => { goto(s); onClose(); };
+  return (
+    <>
+      {open && <div className="ds-drawer-overlay" onClick={onClose}/>}
+      <div className={"ds-drawer"+(open?' open':'')}>
+        {/* Header */}
+        <div style={{padding:'1.25rem 1.1rem .75rem',borderBottom:'1px solid rgba(227,27,35,.1)',display:'flex',alignItems:'center',gap:'.85rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',lineHeight:1,textTransform:'uppercase'}}>
+            DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+          </div>
+          {prefs.name && <div style={{fontSize:'.78rem',color:'#555',marginLeft:'auto',textAlign:'right',lineHeight:1.3}}>{prefs.name}</div>}
+        </div>
+        {/* Items */}
+        <div style={{flex:1,paddingBottom:'1rem'}}>
+          {NAV_ITEMS.map((item,i) => (
+            <div key={i}>
+              {item.section && <div className="ds-drawer-section">{item.section}</div>}
+              <button
+                className={"ds-drawer-item"+(screen===item.screen?' active':'')}
+                onClick={() => nav(item.screen)}
+              >
+                <span className="ds-drawer-icon">{item.icon}</span>
+                <span>{item.label}</span>
+                {screen===item.screen && <span style={{marginLeft:'auto',width:'6px',height:'6px',borderRadius:'50%',background:'var(--color-accent)',flexShrink:0}}/>}
+              </button>
+            </div>
+          ))}
+        </div>
+        {/* Footer */}
+        <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
+          DarkSet · V5.5.0
+        </div>
+      </div>
+    </>
+  );
+};
+
+
 const LogoRow=()=>(
   <div className="flex items-center gap-2">
     <div style={{lineHeight:1}}>
@@ -1131,7 +1214,7 @@ const PreviewBox=({label="Execução do exercício", onClick, disabled})=>{
   );
 };
 // Home
-const Home=({goto,plans,history,prefs})=>{
+const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
   const active=plans.list.find(p=>p.id===plans.activeId)||null;
   const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
   const today=new Date();
@@ -1179,6 +1262,25 @@ const Home=({goto,plans,history,prefs})=>{
 
   // Total de treinos no histórico
   const totalSessions=entries.length;
+
+  // Próximo dia de treino da ficha ativa
+  const nextTrainDay = (() => {
+    if (!active) return null;
+    const byDay = active.byDay || {};
+    const dayOrder = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+    const todayIdx = (today.getDay()+6)%7; // 0=seg
+    for (let i=1; i<=7; i++) {
+      const d = dayOrder[(todayIdx+i)%7];
+      if (byDay[d] && byDay[d].length > 0) return {day:d, exs:byDay[d]};
+    }
+    // hoje também conta
+    const todayName = dayOrder[todayIdx];
+    if (byDay[todayName] && byDay[todayName].length > 0) return {day:'Hoje', exs:byDay[todayName]};
+    return null;
+  })();
+
+  // Spotify favorito
+  const spotifyUrl = (prefs.playlists&&prefs.playlists[0]?.url) || prefs.spotifyUrl || null;
 
   const dayNames=["D","S","T","Q","Q","S","S"];
 
@@ -1261,6 +1363,47 @@ const Home=({goto,plans,history,prefs})=>{
             </div>
         }
       </div>
+
+      {/* Próximo treino */}
+      {nextTrainDay && (
+        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>
+            Próximo treino · <span style={{color:'var(--color-accent)'}}>{nextTrainDay.day}</span>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
+            {nextTrainDay.exs.slice(0,6).map((ex,i)=>(
+              <span key={i} style={{fontSize:'.7rem',background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.2rem .55rem',color:'#888',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600,textTransform:'uppercase'}}>
+                {typeof ex==='string'?ex:ex.name||'?'}
+              </span>
+            ))}
+            {nextTrainDay.exs.length>6 && <span style={{fontSize:'.7rem',color:'#444',padding:'.2rem .3rem'}}>+{nextTrainDay.exs.length-6}</span>}
+          </div>
+          <button onClick={()=>goto('session')} style={{marginTop:'.75rem',background:'none',border:'none',padding:0,color:'var(--color-accent)',fontSize:'.75rem',fontWeight:700,cursor:'pointer',textTransform:'uppercase',letterSpacing:'.04em'}}>
+            Iniciar este treino →
+          </button>
+        </div>
+      )}
+
+      {/* Atalho Beats */}
+      {spotifyUrl ? (
+        <button onClick={()=>window.open(spotifyUrl,'_blank')} style={{background:'rgba(29,185,84,.08)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+          <span style={{fontSize:'1.6rem'}}>🎵</span>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#1DB954'}}>Minha Playlist</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>Abre no Spotify</div>
+          </div>
+          <span style={{color:'#1DB954',fontSize:'1.3rem'}}>▶</span>
+        </button>
+      ) : (
+        <button onClick={()=>goto('beats')} style={{background:'rgba(29,185,84,.05)',border:'1px solid rgba(29,185,84,.12)',borderRadius:'10px',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+          <span style={{fontSize:'1.6rem'}}>🎵</span>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#1DB954'}}>DarkBeats</div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>Salve sua playlist favorita</div>
+          </div>
+          <span style={{color:'#444',fontSize:'1.3rem'}}>▶</span>
+        </button>
+      )}
 
       {/* Conta */}
       <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
@@ -3245,24 +3388,35 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
           <div style={{fontSize:'.75rem',color:'#555',marginBottom:'1rem',textTransform:'uppercase',letterSpacing:'.05em'}}>Adicione exercícios conforme vai treinando</div>
 
           {/* Search */}
-          <div style={{position:'relative',marginBottom:'1rem'}}>
+          <div style={{marginBottom: showFreeSearch && freeSuggestions.length > 0 ? '0' : '1rem'}}>
             <div className="flex gap-2">
               <input
                 style={{background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'#fff',flex:1}}
-                placeholder="Buscar exercício…"
+                placeholder="Buscar exercício… (ex: Supino)"
                 value={freeSearch}
                 onChange={e => {setFreeSearch(e.target.value); setShowFreeSearch(true);}}
                 onFocus={() => setShowFreeSearch(true)}
+                onBlur={() => setTimeout(()=>setShowFreeSearch(false), 150)}
               />
               <Button variant="ghost" onClick={() => {if (freeSearch.trim()) freeAddExercise(freeSearch.trim());}}>+ Add</Button>
             </div>
             {showFreeSearch && freeSuggestions.length > 0 && (
-              <div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',marginTop:'4px',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'8px',overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,.5)'}}>
+              <div style={{
+                background:'#0d0d0d',border:'1px solid #2a2a2a',
+                borderTop:'none',borderRadius:'0 0 10px 10px',
+                maxHeight:'260px',overflowY:'auto',
+                boxShadow:'0 12px 32px rgba(0,0,0,.7)',
+                marginBottom:'1rem'
+              }}>
+                <div style={{padding:'.35rem .75rem',fontSize:'.58rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid #1a1a1a'}}>
+                  {freeSuggestions.length} resultado{freeSuggestions.length!==1?'s':''}
+                </div>
                 {freeSuggestions.map(e => (
-                  <button key={e.id} style={{width:'100%',textAlign:'left',padding:'.65rem 1rem',background:'transparent',border:'none',borderBottom:'1px solid #111',cursor:'pointer',color:'#ddd',fontSize:'.85rem'}}
+                  <button key={e.id}
+                    style={{width:'100%',textAlign:'left',padding:'.6rem 1rem',background:'transparent',border:'none',borderBottom:'1px solid #111',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.5rem'}}
                     onMouseDown={() => freeAddExercise(e.name)}>
-                    <span style={{fontWeight:600}}>{e.name}</span>
-                    <span style={{color:'#444',marginLeft:'.5rem',fontSize:'.75rem'}}>{e.primary}</span>
+                    <span style={{fontWeight:600,fontSize:'.85rem',color:'#ddd'}}>{e.name}</span>
+                    <span style={{color:'#444',fontSize:'.72rem',flexShrink:0}}>{e.primary}</span>
                   </button>
                 ))}
               </div>
@@ -3885,6 +4039,7 @@ function App(){
   const [viewerPlanId,setViewerPlanId]=useState(null);
   const [prCelebration,setPrCelebration]=useState(null);
   const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem('darkset.onboarded'));
+  const [drawerOpen,setDrawerOpen]=useState(false);
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
 
@@ -3979,21 +4134,14 @@ function App(){
           })()}
         </div>
       )}
-      <header className="ds-hdr">
-        <LogoRow/>
-        <nav className="ds-nav flex gap-2">
-          <button className={"ds-nav-btn"+(screen==="home"?" active":"")} onClick={()=>goto("home")}>Início</button>
-          <button className={"ds-nav-btn"+(screen==="plans"?" active":"")} onClick={()=>goto("plans")}>Fichas</button>
-          <button className={"ds-nav-btn"+(screen==="builder"?" active":"")} onClick={()=>goto("builder",plans.activeId||(plans.list[0]?.id??null))}>Montar</button>
-          <button className={"ds-nav-btn"+(screen==="session"?" active":"")} onClick={()=>goto("session")}>Treino</button>
-          <button className={"ds-nav-btn"+(screen==="cardio"?" active":"")} onClick={()=>goto("cardio")}>Cardio</button>
-          <button className={"ds-nav-btn"+(screen==="community"?" active":"")} onClick={()=>goto("community")}>Squad</button>
-          <button className={"ds-nav-btn"+(screen==="beats"?" active":"")} onClick={()=>goto("beats")}>Beats</button>
-
-          <button className={"ds-nav-btn"+(screen==="measures"?" active":"")} onClick={()=>goto("measures")}>Medidas</button>
-          <button className={"ds-nav-btn"+(screen==="history"?" active":"")} onClick={()=>goto("history")}>Histórico</button>
-          <button className={"ds-nav-btn"+(screen==="profile"?" active":"")} onClick={()=>goto("profile")}>Perfil</button>
-        </nav>
+      <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs}/>
+      <header className="ds-hdr" style={{justifyContent:'space-between'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+          <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu">
+            <span/><span/><span/>
+          </button>
+          <LogoRow/>
+        </div>
         {syncLabel&&(
           <div style={{fontSize:'.62rem',color:syncColor,fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',whiteSpace:'nowrap',flexShrink:0,display:'flex',alignItems:'center',gap:'.3rem'}}>
             {syncStatus==='saving'||syncStatus==='syncing'?<span style={{display:'inline-block',width:'6px',height:'6px',borderRadius:'50%',background:syncColor,animation:'pulse 1s infinite'}}></span>:null}
@@ -4002,7 +4150,7 @@ function App(){
         )}
       </header>
 
-      {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs}/>}
+      {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs} setDrawerOpen={setDrawerOpen}/>}
       {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
       {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
       {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
@@ -4013,7 +4161,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.4.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.0</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
