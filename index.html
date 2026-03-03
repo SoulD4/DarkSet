@@ -529,42 +529,29 @@ const YUHONAS_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db
 // Mapa direto PT-BR → slug da pasta no yuhonas (verificado)
 // null = sem imagem disponível na biblioteca
 const EX_IMG_MAP = {
+  // ── PEITO ─────────────────────────────────────────────────────────────
   "Crossover polia alta":"Cable_Crossover",
-  "Crucifixo inclinado halteres":"Dumbbell_Flyes",
-  "Crucifixo Máquina":"Pec_Deck_Fly",
+  "Crucifixo inclinado halteres":"Incline_Dumbbell_Flyes",
+  "Crucifixo Máquina":"Chest_Fly_Machine",
   "Crucifixo reto halteres":"Dumbbell_Flyes",
   "Flexão de braço":"Pushups",
   "Pullover halteres":"Dumbbell_Pullover",
-  "Supino declinado barra":"Barbell_Decline_Bench_Press",
-  "Supino declinado halteres":"Dumbbell_Decline_Bench_Press",
+  "Supino declinado barra":"Decline_Barbell_Bench_Press",
+  "Supino declinado halteres":"Decline_Dumbbell_Bench_Press",
   "Supino inclinado Articulado":"Dumbbell_Incline_Bench_Press",
-  "Supino inclinado barra":"Barbell_Incline_Bench_Press",
+  "Supino inclinado barra":"Barbell_Incline_Bench_Press_-_Medium_Grip",
   "Supino inclinado halteres":"Dumbbell_Incline_Bench_Press",
-  "Supino inclinado máquina":"Dumbbell_Incline_Bench_Press",
+  "Supino inclinado máquina":"Lever_Incline_Chest_Press",
   "Supino reto barra":"Barbell_Bench_Press",
   "Supino reto halteres":"Dumbbell_Bench_Press",
-  "Supino reto máquina":"Barbell_Bench_Press",
-  "Arnold press halteres":"Arnold_Dumbbell_Press",
-  "Crucifixo inverso halteres":"Dumbbell_Rear_Delt_Row",
-  "Crucifixo inverso máquina":"Reverse_Fly",
-  "Crucifixo inverso polia":"Reverse_Fly",
-  "Desenvolvimento barra":"Barbell_Shoulder_Press",
-  "Desenvolvimento halteres":"Dumbbell_Shoulder_Press",
-  "Desenvolvimento máquina":"Dumbbell_Shoulder_Press",
-  "Elevação frontal barra":"Barbell_Front_Raise",
-  "Elevação frontal halteres":"Dumbbell_Front_Raise",
-  "Elevação lateral halteres":"Dumbbell_Lateral_Raise",
-  "Elevação lateral polia":"Cable_Lateral_Raise",
-  "Elevação lateral unilateral polia":"Cable_Lateral_Raise",
-  "Face Pull (corda)":"Face_Pull",
-  "Encolhimento barra":"Barbell_Shrug",
-  "Encolhimento halteres":"Dumbbell_Shrug",
-  "Remada alta barra":"Barbell_Upright_Row",
+  "Supino reto máquina":"Lever_Chest_Press",
+  // ── COSTAS ────────────────────────────────────────────────────────────
   "Barra fixa":"Pullups",
   "Hiperextensão lombar":"Hyperextensions__Back_Extensions_",
   "Extensão lombar máquina":"Hyperextensions__Back_Extensions_",
   "Pulldown":"Wide-Grip_Lat_Pulldown",
   "Puxada alta aberta":"Wide-Grip_Lat_Pulldown",
+  "Puxada alta aberta polia":"Wide-Grip_Lat_Pulldown",
   "Puxada alta unilateral":"Wide-Grip_Lat_Pulldown",
   "Puxada fechada":"Close-Grip_Front_Lat_Pulldown",
   "Puxada triângulo":"Close-Grip_Front_Lat_Pulldown",
@@ -574,68 +561,93 @@ const EX_IMG_MAP = {
   "Remada baixa unilateral":"Seated_Cable_Rows",
   "Remada cavalinho":"Barbell_Bent_Over_Row",
   "Remada curvada barra":"Barbell_Bent_Over_Row",
-  "Remada curvada halteres":"Bent_Over_Two-Dumbbell_Row",
   "Remada serrote halteres":"Dumbbell_One-Arm_Row",
   "Remada unilateral halteres":"Dumbbell_One-Arm_Row",
+  "Remada máquina":"Seated_Cable_Rows",
+  // ── OMBRO ─────────────────────────────────────────────────────────────
+  "Desenvolvimento barra":"Barbell_Shoulder_Press",
+  "Desenvolvimento halteres":"Dumbbell_Shoulder_Press",
+  "Desenvolvimento máquina":"Lever_Seated_Military_Press",
+  "Elevação frontal barra":"Front_Plate_Raise",
+  "Elevação frontal halteres":"Dumbbell_Front_Raise",
+  "Elevação frontal polia":"Cable_Front_Raise",
+  "Elevação lateral halteres":"Dumbbell_Lateral_Raise",
+  "Elevação lateral máquina":"Lever_Lateral_Raise",
+  "Elevação lateral polia":"Cable_Lateral_Raise",
+  "Elevação lateral unilateral polia":"Cable_Lateral_Raise",
+  "Crucifixo inverso máquina":"Reverse_Fly",
+  "Crucifixo inverso polia":"Reverse_Fly",
+  "Encolhimento barra":"Barbell_Shrug",
+  "Encolhimento halteres":"Dumbbell_Shrug",
+  // ── BÍCEPS ────────────────────────────────────────────────────────────
   "Rosca 21":"Barbell_Curl",
   "Rosca 45° halteres":"Alternate_Incline_Dumbbell_Curl",
-  "Rosca alternada halteres":"Alternate_Hammer_Curl",
   "Rosca concentrada halteres":"Concentration_Curls",
   "Rosca direta barra":"Barbell_Curl",
-  "Rosca direta halteres":"Dumbbell_Alternate_Bicep_Curl",
-  "Rosca direta polia":"Cable_Curl_With_Bar",
+  "Rosca direta barra W":"EZ-Bar_Curl",
+  "Rosca direta halteres":"Dumbbell_Bicep_Curl",
   "Rosca inclinada halteres":"Alternate_Incline_Dumbbell_Curl",
   "Rosca martelo corda":"Hammer_Curls",
   "Rosca martelo halteres":"Hammer_Curls",
-  "Rosca Scott máquina":"Barbell_Preacher_Curl",
-  "Kick back tríceps halteres":"Dumbbell_Tricep_Kickback",
-  "Mergulho no banco":"Triceps_Dips",
-  "Paralelas":"Dips_-_Chest_Version",
+  "Rosca polia baixa":"Cable_Hammer_Curls_-_Rope_Attachment",
+  "Rosca scott barra W":"EZ-Bar_Preacher_Curl",
+  "Rosca scott halteres":"Seated_Zottman_Curl",
+  // ── TRÍCEPS ───────────────────────────────────────────────────────────
+  "Tríceps coice halteres":"Dumbbell_Kickback",
   "Tríceps francês barra":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
   "Tríceps francês halteres":"Lying_Triceps_Press",
+  "Tríceps mergulho":"Dips_-_Triceps_Version",
   "Tríceps pulley barra reta":"Triceps_Pushdown",
-  "Tríceps pulley corda":"Triceps_Pushdown_-_Rope_Attachment",
+  "Tríceps pulley barra W":"Triceps_Pushdown_-_V-Bar_Attachment",
+  "Tríceps pulley corda":"Triceps_Pushdown",
   "Tríceps pulley polia":"Triceps_Pushdown",
   "Tríceps testa barra W":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
   "Tríceps testa halteres":"Lying_Triceps_Press",
-  "Rosca inversa barra":"Zottman_Curl",
-  "Rosca punho barra":"Wrist_Roller",
-  "Afundo com barra":"Barbell_Lunge",
+  "Tríceps unilateral polia":"Triceps_Pushdown",
+  // ── PERNAS ────────────────────────────────────────────────────────────
   "Afundo com halteres":"Dumbbell_Lunge",
-  "Agachamento búlgaro halteres":"Dumbbell_Bulgarian_Split_Squat",
+  "Afundo máquina":"Smith_Machine_Squat",
+  "Agachamento barra":"Barbell_Squat",
   "Agachamento hack máquina":"Hack_Squat",
-  "Agachamento livre":"Barbell_Full_Squat",
-  "Agachamento sumô barra":"Sumo_Squat",
-  "Agachamento sumô halteres":"Dumbbell_Sumo_Squat",
+  "Agachamento livre":"Bodyweight_Squat",
+  "Agachamento sumô":"Sumo_Squat",
   "Cadeira extensora":"Leg_Extensions",
   "Cadeira extensora unilateral":"Leg_Extensions",
-  "Leg press 45°":"Leg_Press",
-  "Leg press 180° unilateral":"Leg_Press",
-  "Passada avançada halteres":"Dumbbell_Lunge",
   "Cadeira flexora":"Lying_Leg_Curls",
   "Cadeira flexora unilateral":"Lying_Leg_Curls",
-  "Flexora unilateral em pé":"Standing_Leg_Curl",
-  "Levantamento terra":"Barbell_Deadlift",
+  "Leg press 45°":"Leg_Press",
+  "Leg press 180°":"Leg_Press",
+  "Leg press 180° unilateral":"Leg_Press",
   "Mesa flexora":"Lying_Leg_Curls",
-  "Stiff":"Romanian_Deadlift",
+  "Passada avançada halteres":"Dumbbell_Lunge",
+  "Stiff barra":"Romanian_Deadlift",
   "Stiff com halteres":"Dumbbell_Romanian_Deadlift",
   "Stiff unilateral halteres":"Dumbbell_Romanian_Deadlift",
+  // ── GLÚTEO ────────────────────────────────────────────────────────────
   "Abdução em pé polia":"Hip_Abduction_Machine",
-  "Elevação pélvica com barra":"Barbell_Hip_Thrust",
-  "Glúteo 4 apoios cabo":"Donkey_Kickbacks",
-  "Hip thrust barra":"Barbell_Hip_Thrust",
   "Cadeira abdutora":"Hip_Abduction_Machine",
-  "Cadeira adutora":"Hip_Adduction",
-  "Panturrilha em pé barra livre":"Standing_Barbell_Calf_Raise",
-  "Panturrilha em pé máquina":"Calf_Press",
+  "Elevação pélvica com barra":"Barbell_Hip_Thrust",
+  "Hip thrust barra":"Barbell_Hip_Thrust",
+  "Glúteo coice polia":"Donkey_Calf_Raises",
+  "Glúteo na máquina":"Hip_Abduction_Machine",
+  // ── PANTURRILHA ───────────────────────────────────────────────────────
+  "Panturrilha em pé máquina":"Standing_Calf_Raises",
   "Panturrilha sentado máquina":"Seated_Calf_Raise",
-  "Abdômen infra":"Lying_Leg_Raise",
-  "Abdômen infra na paralela":"Hanging_Leg_Raise",
-  "Abdômen supra":"Crunches",
-  "Abdômen supra declinado":"Decline_Crunch",
-  "Prancha isométrica":"Plank",
+  "Panturrilha step":"Standing_Calf_Raises",
+  // ── CORE ──────────────────────────────────────────────────────────────
+  "Abdominal crunch":"Crunches",
+  "Abdominal infra":"Leg_Raises",
+  "Abdominal máquina":"Crunches",
+  "Prancha abdominal":"Plank",
+  "Abdominal oblíquo":"Side_Crunch",
+  "Dead bug":"Crunches",
+  // ── COMPOSTOS ─────────────────────────────────────────────────────────
+  "Levantamento terra":"Barbell_Deadlift",
+  "Levantamento terra sumô":"Sumo_Deadlift",
+  "Agachamento frontal":"Front_Barbell_Squat",
+  "Clean e jerk":"Power_Clean",
+  "Terra romeno":"Romanian_Deadlift",
 };
-
 // Sem imagem na biblioteca yuhonas (confirmado):
 const EX_NO_IMG = new Set([
   "Supino reto máquina","Supino inclinado máquina","Supino inclinado Articulado",
@@ -1309,7 +1321,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.7.3
+          DarkSet · V5.7.4
         </div>
       </div>
     </>
@@ -4972,23 +4984,29 @@ const BarcodeScanner = ({onResult, onClose}) => {
   const [nameResults, setNameResults] = useState([]);
   const [showNameSearch, setShowNameSearch] = useState(false);
 
-  const searchByName = async (query) => {
-    if (!query.trim()) return;
-    setStatus('searching');
+  const [nameLoading, setNameLoading] = useState(false);
+  const [nameNotFound, setNameNotFound] = useState(false);
+
+  const searchByName = async (queryArg) => {
+    const q = (queryArg !== undefined ? queryArg : nameSearch).trim();
+    if (!q) return;
+    setNameLoading(true); setNameNotFound(false); setNameResults([]);
     try {
       const r = await fetch(
-        'https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(query)+
-        '&search_simple=1&action=process&json=1&page_size=8&fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity,code'
+        'https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(q)+
+        '&search_simple=1&action=process&json=1&page_size=10' +
+        '&fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity,code'
       );
+      if (!r.ok) throw new Error('HTTP '+r.status);
       const data = await r.json();
       const products = (data.products||[]).filter(p => p.product_name||p.product_name_pt);
-      if (!products.length) { setStatus('notfound'); return; }
-      setNameResults(products);
-      setShowNameSearch(true);
-      setStatus('scanning');
+      if (!products.length) { setNameNotFound(true); }
+      else { setNameResults(products); }
     } catch(e) {
-      setStatus('notfound');
+      console.warn('name search error', e);
+      setNameNotFound(true);
     }
+    setNameLoading(false);
   };
 
   const selectNameResult = (p) => {
@@ -5214,19 +5232,23 @@ const BarcodeScanner = ({onResult, onClose}) => {
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'#eee'}}>🔍 Buscar Alimento</div>
           <div style={{display:'flex',gap:'.4rem'}}>
             <input value={nameSearch} onChange={e=>setNameSearch(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&searchByName(nameSearch)}
+              onKeyDown={e=>e.key==='Enter'&&searchByName()}
               placeholder="Ex: banana, frango grelhado, whey..."
               autoFocus
               style={{flex:1,background:'rgba(255,255,255,.07)',border:'1px solid #333',borderRadius:'8px',padding:'.5rem .7rem',color:'#eee',fontSize:'.9rem'}}/>
-            <button onClick={()=>searchByName(nameSearch)}
+            <button onClick={()=>searchByName()}
               style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.85rem',cursor:'pointer'}}>
               Buscar
             </button>
           </div>
           <div style={{flex:1,overflowY:'auto',display:'grid',gap:'.35rem'}}>
-            {nameResults.length===0
-              ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.8rem'}}>Digite o nome e pressione Buscar</div>
-              : nameResults.map((p,i)=>{
+            {nameLoading
+              ? <div style={{textAlign:'center',padding:'2rem',color:'#555',fontSize:'.82rem'}}>⟳ Buscando...</div>
+              : nameNotFound
+                ? <div style={{textAlign:'center',padding:'2rem',color:'#555',fontSize:'.82rem'}}>Nenhum resultado. Tente outro nome ou preencha manualmente.</div>
+              : nameResults.length===0
+                ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.8rem'}}>Digite o nome e pressione Buscar</div>
+                : nameResults.map((p,i)=>{
                   const n2=p.nutriments||{};
                   const tryN2=(...ks)=>{for(const k of ks){const v=parseFloat(n2[k]||0);if(v>0)return v;}return 0;};
                   const cal2=tryN2('energy-kcal_100g','energy-kcal')||(tryN2('energy_100g')/4.184);
@@ -6008,7 +6030,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.3</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.4</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
