@@ -1302,7 +1302,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.7.1
+          DarkSet · V5.7.2
         </div>
       </div>
     </>
@@ -2677,231 +2677,320 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // COMUNIDADE — Firebase-backed social/ranking
 // ═══════════════════════════════════════════════════════════════════════════
-const Community = ({history, setToast, prefs}) => {
-  const uid = (() => { try { return JSON.parse(localStorage.getItem('darkset.user'))?.uid || null; } catch(_) { return null; } })();
-  const SQUAD_KEY = 'darkset.squad.v1';
 
-  const [tab, setTab]           = useState('feed');  // feed | ranking | chat | checkin
-  const [squad, setSquad]       = useState(() => { try { return JSON.parse(localStorage.getItem(SQUAD_KEY)) || null; } catch(_) { return null; } });
+const Community = ({history, setToast, prefs}) => {
+  const getUID = () => { try { return JSON.parse(localStorage.getItem('darkset.user'))?.uid || null; } catch(_) { return null; } };
+  const uid    = getUID();
+  const db     = () => window._db || null;
+
+  // ── Firestore helpers ──────────────────────────────────────────────────
+  // squads/{code}           → { name, code, pass, createdAt, creatorUid }
+  // squads/{code}/members/{uid} → { uid, name, avatar, joinedAt, role }
+  // squads/{code}/chat/{msgId}  → { uid, name, avatar, text, ts }
+  // squads/{code}/checkins/{date_uid} → { uid, name, avatar, ts, hadWorkout, date }
+
+  const squadRef  = (code) => db()?.collection('squads').doc(code.toUpperCase());
+  const membRef   = (code, u) => squadRef(code)?.collection('members').doc(u);
+  const chatRef   = (code) => squadRef(code)?.collection('chat');
+  const cinRef    = (code) => squadRef(code)?.collection('checkins');
+
+  // ── State ──────────────────────────────────────────────────────────────
+  const [tab, setTab]         = useState('feed');
+  const [squad, setSquad]     = useState(() => { try { return JSON.parse(localStorage.getItem('ds.squad')) || null; } catch(_) { return null; } });
+  const [loading, setLoading] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [chatLog, setChatLog] = useState([]);
+  const [checkins, setCheckins] = useState([]);  // flat array
+  const [chatMsg, setChatMsg]   = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin]     = useState(false);
   const [squadName, setSquadName]   = useState('');
-  const [squadCode, setSquadCode]   = useState('');
   const [squadPass, setSquadPass]   = useState('');
   const [joinCode, setJoinCode]     = useState('');
   const [joinPass, setJoinPass]     = useState('');
-  const [chatMsg, setChatMsg]       = useState('');
-  const [chatLog, setChatLog]       = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.chat')) || []; } catch(_) { return []; } });
-  const [checkins, setCheckins]     = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.checkins')) || {}; } catch(_) { return {}; } });
-  const [members, setMembers]       = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.members')) || []; } catch(_) { return []; } });
+  const [chatUnsub, setChatUnsub]   = useState(null);
+  const [cinUnsub, setCinUnsub]     = useState(null);
+  const [membUnsub, setMembUnsub]   = useState(null);
+  const [notLogged, setNotLogged]   = useState(!uid);
 
-  const saveAll = (sq, mb, ch, ci) => {
-    if(sq !== undefined) { setSquad(sq); try { localStorage.setItem(SQUAD_KEY, JSON.stringify(sq)); } catch(_) {} }
-    if(mb !== undefined) { setMembers(mb); try { localStorage.setItem('darkset.squad.members', JSON.stringify(mb)); } catch(_) {} }
-    if(ch !== undefined) { setChatLog(ch); try { localStorage.setItem('darkset.squad.chat', JSON.stringify(ch)); } catch(_) {} }
-    if(ci !== undefined) { setCheckins(ci); try { localStorage.setItem('darkset.squad.checkins', JSON.stringify(ci)); } catch(_) {} }
-  };
-
-  const myName = prefs.name || 'Você';
+  const myName   = prefs.name   || 'Usuário';
   const myAvatar = prefs.avatarUrl || null;
   const todayKey = new Date().toISOString().slice(0,10);
 
-  // Generate share code
-  const genCode = () => Math.random().toString(36).slice(2,8).toUpperCase();
+  // ── Live listeners ─────────────────────────────────────────────────────
+  const startListeners = React.useCallback((code) => {
+    if (!db()) return;
 
-  const createSquad = () => {
-    if (!squadName.trim()) { setToast('Digite um nome'); return; }
-    const code = genCode();
-    const newSquad = { name: squadName.trim(), code, pass: squadPass.trim(), createdAt: Date.now() };
-    const newMember = { uid: uid||'local_'+Date.now(), name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'admin' };
-    saveAll(newSquad, [newMember], chatLog, checkins);
-    setShowCreate(false);
-    setToast('Squad criado! Código: ' + code);
-  };
+    // Members
+    const uM = squadRef(code).collection('members')
+      .onSnapshot(snap => {
+        setMembers(snap.docs.map(d => d.data()));
+      }, () => {});
+    setMembUnsub(() => uM);
 
-  const joinSquad = () => {
-    if (!joinCode.trim()) { setToast('Digite o código'); return; }
-    // Simulate joining (in production this would hit Firebase)
-    const found = { name: 'Squad ' + joinCode.toUpperCase(), code: joinCode.toUpperCase(), pass: joinPass, createdAt: Date.now() };
-    const newMember = { uid: uid||'local_'+Date.now(), name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'member' };
-    saveAll(found, [...members, newMember], chatLog, checkins);
-    setShowJoin(false);
-    setToast('Entrou no squad!');
-  };
+    // Chat (last 60 msgs ordered by ts)
+    const uC = chatRef(code).orderBy('ts','asc').limitToLast(60)
+      .onSnapshot(snap => {
+        setChatLog(snap.docs.map(d => d.data()));
+      }, () => {});
+    setChatUnsub(() => uC);
 
-  const sendChat = () => {
-    if (!chatMsg.trim()) return;
-    const msg = { id: Date.now(), uid: uid||'local', name: myName, avatar: myAvatar, text: chatMsg.trim(), ts: Date.now() };
-    const newLog = [...chatLog, msg].slice(-100); // keep last 100
-    saveAll(undefined, undefined, newLog, undefined);
-    setChatMsg('');
-  };
-
-  const doCheckin = () => {
-    if (checkins[todayKey]?.some(c => c.uid === (uid||'local'))) { setToast('Já fez check-in hoje!'); return; }
-    const ci = { uid: uid||'local', name: myName, avatar: myAvatar, ts: Date.now(), hadWorkout: !!history[todayKey] };
-    const todayCis = [...(checkins[todayKey] || []), ci];
-    const newCheckins = { ...checkins, [todayKey]: todayCis };
-    saveAll(undefined, undefined, undefined, newCheckins);
-    setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!');
-  };
-
-  // Ranking: last 30 days
-  const ranking = useMemo(() => {
+    // Check-ins (last 30 days)
     const since = new Date(); since.setDate(since.getDate()-30);
-    const sinceKey = since.toISOString().slice(0,10);
+    const sinceStr = since.toISOString().slice(0,10);
+    const uCi = cinRef(code).where('date','>=',sinceStr)
+      .onSnapshot(snap => {
+        setCheckins(snap.docs.map(d => d.data()));
+      }, () => {});
+    setCinUnsub(() => uCi);
+  }, []);
+
+  const stopListeners = () => {
+    chatUnsub?.(); setChatUnsub(null);
+    cinUnsub?.();  setCinUnsub(null);
+    membUnsub?.(); setMembUnsub(null);
+  };
+
+  // Attach listeners when squad loads
+  useEffect(() => {
+    if (squad?.code) startListeners(squad.code);
+    return () => stopListeners();
+  }, [squad?.code]);
+
+  // ── Create squad ───────────────────────────────────────────────────────
+  const createSquad = async () => {
+    if (!uid) { setToast('Faça login primeiro'); return; }
+    if (!db()) { setToast('Firebase não conectado'); return; }
+    if (!squadName.trim()) { setToast('Digite um nome'); return; }
+    setLoading(true);
+    try {
+      const code = Math.random().toString(36).slice(2,8).toUpperCase();
+      const sq = { name: squadName.trim(), code, pass: squadPass.trim(), createdAt: Date.now(), creatorUid: uid };
+      await squadRef(code).set(sq);
+      await membRef(code, uid).set({ uid, name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'admin' });
+      localStorage.setItem('ds.squad', JSON.stringify(sq));
+      setSquad(sq);
+      setShowCreate(false);
+      setToast('Squad criado! Código: ' + code);
+    } catch(e) {
+      setToast('Erro ao criar squad: ' + (e.message||e.code));
+    } finally { setLoading(false); }
+  };
+
+  // ── Join squad ─────────────────────────────────────────────────────────
+  const joinSquad = async () => {
+    if (!uid) { setToast('Faça login primeiro'); return; }
+    if (!db()) { setToast('Firebase não conectado'); return; }
+    if (!joinCode.trim()) { setToast('Digite o código'); return; }
+    setLoading(true);
+    try {
+      const code = joinCode.trim().toUpperCase();
+      const snap = await squadRef(code).get();
+      if (!snap.exists) { setToast('Squad não encontrado'); setLoading(false); return; }
+      const sq = snap.data();
+      if (sq.pass && sq.pass !== joinPass.trim()) { setToast('Senha incorreta'); setLoading(false); return; }
+      await membRef(code, uid).set({ uid, name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'member' });
+      localStorage.setItem('ds.squad', JSON.stringify(sq));
+      setSquad(sq);
+      setShowJoin(false);
+      setToast('Entrou no squad ' + sq.name + '!');
+    } catch(e) {
+      setToast('Erro: ' + (e.message||e.code));
+    } finally { setLoading(false); }
+  };
+
+  // ── Leave squad ────────────────────────────────────────────────────────
+  const leaveSquad = async () => {
+    if (!confirm('Sair do squad?')) return;
+    if (uid && db()) {
+      try { await membRef(squad.code, uid).delete(); } catch(_) {}
+    }
+    stopListeners();
+    localStorage.removeItem('ds.squad');
+    setSquad(null);
+    setMembers([]); setChatLog([]); setCheckins([]);
+    setToast('Saiu do squad');
+  };
+
+  // ── Send chat ──────────────────────────────────────────────────────────
+  const sendChat = async () => {
+    if (!chatMsg.trim() || !squad || !uid || !db()) return;
+    const msg = { uid, name: myName, avatar: myAvatar, text: chatMsg.trim(), ts: Date.now() };
+    setChatMsg('');
+    try { await chatRef(squad.code).add(msg); } catch(_) {}
+  };
+
+  // ── Check-in ───────────────────────────────────────────────────────────
+  const doCheckin = async () => {
+    if (!squad || !uid || !db()) return;
+    const alreadyDone = checkins.some(ci => ci.uid === uid && ci.date === todayKey);
+    if (alreadyDone) { setToast('Já fez check-in hoje!'); return; }
+    const ci = { uid, name: myName, avatar: myAvatar, ts: Date.now(), date: todayKey, hadWorkout: !!history[todayKey] };
+    try {
+      await cinRef(squad.code).doc(todayKey + '_' + uid).set(ci);
+      setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!');
+    } catch(_) {}
+  };
+
+  // ── Derived data ───────────────────────────────────────────────────────
+  const ranking = useMemo(() => {
     const scores = {};
-    Object.entries(checkins).forEach(([date, cis]) => {
-      if (date < sinceKey) return;
-      cis.forEach(ci => {
-        if (!scores[ci.uid]) scores[ci.uid] = { name: ci.name, avatar: ci.avatar, days: 0, workouts: 0 };
-        scores[ci.uid].days++;
-        if (ci.hadWorkout) scores[ci.uid].workouts++;
-      });
+    checkins.forEach(ci => {
+      if (!scores[ci.uid]) scores[ci.uid] = { uid: ci.uid, name: ci.name, avatar: ci.avatar, days: 0, workouts: 0 };
+      scores[ci.uid].days++;
+      if (ci.hadWorkout) scores[ci.uid].workouts++;
     });
-    // Add self if has history
-    const myUid = uid||'local';
-    if (!scores[myUid]) scores[myUid] = { name: myName, avatar: myAvatar, days: 0, workouts: 0 };
-    Object.entries(history).forEach(([date]) => {
-      if (date >= sinceKey) scores[myUid].workouts = Math.max(scores[myUid].workouts, (scores[myUid].workouts||0));
-    });
-    return Object.entries(scores).sort((a,b) => b[1].workouts - a[1].workouts || b[1].days - a[1].days)
-      .map(([uid, data], i) => ({...data, uid, rank: i+1}));
-  }, [checkins, history]);
-
-  const todayCheckins = checkins[todayKey] || [];
-  const myCheckedToday = todayCheckins.some(c => c.uid === (uid||'local'));
-  const myWorkoutToday = !!history[todayKey];
-
-  const fmtTime = (ts) => { const d = new Date(ts); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); };
-  const fmtDate = (ts) => new Date(ts).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'});
-
-  // Feed: recent checkins across all days
-  const feedItems = useMemo(() => {
-    const items = [];
-    Object.entries(checkins).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,7).forEach(([date, cis]) => {
-      cis.forEach(ci => items.push({...ci, date}));
-    });
-    return items.sort((a,b) => b.ts - a.ts).slice(0, 30);
+    return Object.values(scores).sort((a,b) => b.workouts - a.workouts || b.days - a.days);
   }, [checkins]);
 
-  if (!squad) {
-    return (
-      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
-            DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
-          </div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Treine junto, evolua junto</div>
-        </div>
-        <div style={{display:'grid',gap:'1rem'}}>
-          <button onClick={()=>setShowCreate(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
-            <div style={{position:'absolute',right:'-10px',top:'-10px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1}}>+</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#fff'}}>Criar Squad</div>
-            <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.65)',marginTop:'.25rem'}}>Crie um grupo e convide amigos com código</div>
-          </button>
-          <button onClick={()=>setShowJoin(true)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>Entrar com Código</div>
-            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'.25rem'}}>Digite o código do squad que um amigo criou</div>
-          </button>
-        </div>
+  const todayCi = checkins.filter(ci => ci.date === todayKey);
+  const myCheckedIn = todayCi.some(ci => ci.uid === uid);
 
-        {showCreate && (
-          <Modal onClose={()=>setShowCreate(false)}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Criar Squad</div>
-            <div style={{display:'grid',gap:'.6rem'}}>
-              <input value={squadName} onChange={e=>setSquadName(e.target.value)} placeholder="Nome do squad..." style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
-              <div>
-                <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'3px'}}>Senha (opcional)</div>
-                <input value={squadPass} onChange={e=>setSquadPass(e.target.value)} placeholder="Deixe vazio para squad aberto" type="password" style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
-              </div>
-              <button onClick={createSquad} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer'}}>Criar</button>
-            </div>
-          </Modal>
-        )}
-        {showJoin && (
-          <Modal onClose={()=>setShowJoin(false)}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Entrar no Squad</div>
-            <div style={{display:'grid',gap:'.6rem'}}>
-              <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} placeholder="Código do squad (ex: AB3X9K)" style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',letterSpacing:'.1em',fontWeight:700}}/>
-              <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha (se houver)" type="password" style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
-              <button onClick={joinSquad} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer'}}>Entrar</button>
-            </div>
-          </Modal>
-        )}
+  const fmtTime = ts => { const d = new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+  const fmtDate = str => { if(!str) return ''; const [y,m,d] = str.split('-'); return `${d}/${m}`; };
+
+  // Feed: all recent check-ins sorted by ts desc
+  const feed = useMemo(() => [...checkins].sort((a,b) => b.ts - a.ts).slice(0, 40), [checkins]);
+
+  // ── Not logged in ──────────────────────────────────────────────────────
+  if (!uid) return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div></div>
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.5rem',textAlign:'center'}}>
+        <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🔐</div>
+        <div style={{fontWeight:700,marginBottom:'.35rem'}}>Login necessário</div>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)'}}>Faça login no seu perfil para usar o Squad</div>
       </div>
-    );
-  }
+    </div>
+  );
 
+  // ── No squad — landing ─────────────────────────────────────────────────
+  if (!squad) return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Treine junto, evolua junto</div>
+      </div>
+
+      <button onClick={()=>setShowCreate(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',right:'-12px',top:'-12px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1,pointerEvents:'none'}}>+</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff'}}>Criar Squad</div>
+        <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.65)',marginTop:'.2rem'}}>Crie um grupo e convide amigos com código</div>
+      </button>
+
+      <button onClick={()=>setShowJoin(true)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase'}}>Entrar com Código</div>
+        <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'.2rem'}}>Digite o código do squad que alguém criou</div>
+      </button>
+
+      {!db() && (
+        <div style={{background:'rgba(248,113,113,.07)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'10px',padding:'.75rem',fontSize:'.73rem',color:'#f87171',textAlign:'center'}}>
+          ⚠️ Firebase não conectado. Aguarde ou recarregue a página.
+        </div>
+      )}
+
+      {showCreate && (
+        <Modal onClose={()=>setShowCreate(false)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Criar Squad</div>
+          <div style={{display:'grid',gap:'.6rem'}}>
+            <input value={squadName} onChange={e=>setSquadName(e.target.value)} placeholder="Nome do squad..." autoFocus
+              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
+            <div>
+              <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'3px'}}>Senha (opcional — deixe vazio para squad aberto)</div>
+              <input value={squadPass} onChange={e=>setSquadPass(e.target.value)} placeholder="Senha..." type="password"
+                style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
+            </div>
+            <button onClick={createSquad} disabled={loading}
+              style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer',opacity:loading?.6:1}}>
+              {loading ? 'Criando...' : 'Criar Squad'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showJoin && (
+        <Modal onClose={()=>setShowJoin(false)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Entrar no Squad</div>
+          <div style={{display:'grid',gap:'.6rem'}}>
+            <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} placeholder="Código (ex: AB3X9K)" autoFocus
+              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',letterSpacing:'.1em',fontWeight:700,width:'100%'}}/>
+            <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha (se houver)" type="password"
+              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
+            <button onClick={joinSquad} disabled={loading}
+              style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer',opacity:loading?.6:1}}>
+              {loading ? 'Entrando...' : 'Entrar'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+
+  // ── Squad dashboard ────────────────────────────────────────────────────
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
-            {squad.name}
-          </div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',lineHeight:1}}>{squad.name}</div>
           <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
-            Código: <span style={{color:'var(--color-accent)',fontWeight:700,letterSpacing:'.08em'}}>{squad.code}</span>
+            Código: <span style={{color:'var(--color-accent)',fontWeight:700,letterSpacing:'.1em'}}>{squad.code}</span>
             {squad.pass && <span style={{marginLeft:'.5rem',color:'#4ade80',fontSize:'.6rem'}}>🔒 Privado</span>}
+            <span style={{marginLeft:'.5rem',color:'#555'}}>· {members.length} membro{members.length!==1?'s':''}</span>
           </div>
         </div>
-        <button onClick={()=>{if(confirm('Sair do squad?')){saveAll(null,[],'',{});setToast('Saiu do squad');}}}
-          style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.35rem .7rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
+        <button onClick={leaveSquad} style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'8px',padding:'.35rem .7rem',color:'#f87171',fontSize:'.7rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
       </div>
 
-      {/* Check-in do dia */}
+      {/* Check-in button */}
       <button onClick={doCheckin} style={{
-        background: myCheckedToday ? 'rgba(74,222,128,.06)' : 'var(--color-accent)',
-        border: myCheckedToday ? '1px solid rgba(74,222,128,.3)' : 'none',
-        borderRadius:'12px', padding:'1rem', cursor:'pointer',
+        background: myCheckedIn ? 'rgba(74,222,128,.06)' : 'var(--color-accent)',
+        border: myCheckedIn ? '1px solid rgba(74,222,128,.3)' : 'none',
+        borderRadius:'12px', padding:'.9rem 1rem', cursor:'pointer',
         display:'flex', alignItems:'center', justifyContent:'space-between'
       }}>
         <div style={{textAlign:'left'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:myCheckedToday?'#4ade80':'#fff'}}>
-            {myCheckedToday ? '✓ Check-in feito!' : '📍 Fazer Check-in Hoje'}
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:myCheckedIn?'#4ade80':'#fff'}}>
+            {myCheckedIn ? '✓ Check-in feito hoje!' : '📍 Fazer Check-in'}
           </div>
-          <div style={{fontSize:'.72rem',color:myCheckedToday?'rgba(74,222,128,.7)':'rgba(255,255,255,.6)',marginTop:'2px'}}>
-            {myCheckedToday ? (myWorkoutToday?'Com treino registrado':'Sem treino') : 'Marque sua presença no squad'}
+          <div style={{fontSize:'.7rem',color:myCheckedIn?'rgba(74,222,128,.6)':'rgba(255,255,255,.55)',marginTop:'1px'}}>
+            {myCheckedIn ? (history[todayKey]?'Com treino':'Sem treino hoje') : 'Marque presença no squad'}
           </div>
         </div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:myCheckedToday?'#4ade80':'#fff'}}>
-          {todayCheckins.length}
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:myCheckedIn?'#4ade80':'#fff'}}>
+          {todayCi.length}
         </div>
       </button>
 
       {/* Tabs */}
       <div style={{display:'flex',background:'rgba(255,255,255,.04)',borderRadius:'10px',padding:'3px',gap:'3px'}}>
-        {[['feed','📰 Feed'],['ranking','🏆 Ranking'],['chat','💬 Chat']].map(([t,label])=>(
-          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'.4rem',borderRadius:'8px',border:'none',
+        {[['feed','📰 Feed'],['ranking','🏆 Rank'],['chat','💬 Chat'],['members','👥 Membros']].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'.38rem',borderRadius:'7px',border:'none',
             background:tab===t?'rgba(255,255,255,.1)':'transparent',
             color:tab===t?'var(--color-text)':'var(--color-text-sub)',
-            fontWeight:700,fontSize:'.72rem',cursor:'pointer'}}>
-            {label}
+            fontWeight:700,fontSize:'.68rem',cursor:'pointer',letterSpacing:'-.01em'}}>
+            {l}
           </button>
         ))}
       </div>
 
       {/* FEED */}
       {tab==='feed' && (
-        <div style={{display:'grid',gap:'.5rem'}}>
-          {feedItems.length===0
+        <div style={{display:'grid',gap:'.4rem'}}>
+          {feed.length===0
             ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
-                Sem atividade ainda. Façam check-in!
+                Nenhuma atividade ainda. Façam check-in!
               </div>
-            : feedItems.map((item,i) => (
-              <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.75rem'}}>
-                {item.avatar
-                  ? <img src={item.avatar} style={{width:'36px',height:'36px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
-                  : <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'var(--color-accent)',flexShrink:0}}>{item.name.slice(0,2).toUpperCase()}</div>
-                }
+            : feed.map((ci,i)=>(
+              <div key={ci.uid+ci.ts+i} style={{display:'flex',alignItems:'center',gap:'.65rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.65rem .85rem'}}>
+                {ci.avatar
+                  ? <img src={ci.avatar} style={{width:'34px',height:'34px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+                  : <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:'var(--color-accent)',flexShrink:0}}>{(ci.name||'?').slice(0,2).toUpperCase()}</div>}
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:'.86rem',fontWeight:700}}>{item.name}</div>
-                  <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>
-                    {item.hadWorkout ? '💪 Treinou e fez check-in' : '✅ Fez check-in'} · {fmtDate(item.ts)}
-                  </div>
+                  <div style={{fontSize:'.84rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ci.name}</div>
+                  <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{ci.hadWorkout?'💪 Treinou':'✅ Check-in'} · {fmtDate(ci.date)}</div>
                 </div>
-                <div style={{fontSize:'.7rem',color:'#555',flexShrink:0}}>{fmtTime(item.ts)}</div>
+                <div style={{fontSize:'.66rem',color:'#555',flexShrink:0}}>{fmtTime(ci.ts)}</div>
               </div>
             ))
           }
@@ -2910,35 +2999,27 @@ const Community = ({history, setToast, prefs}) => {
 
       {/* RANKING */}
       {tab==='ranking' && (
-        <div style={{display:'grid',gap:'.5rem'}}>
-          <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Últimos 30 dias</div>
+        <div style={{display:'grid',gap:'.4rem'}}>
+          <div style={{fontSize:'.58rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Últimos 30 dias — por treinos</div>
           {ranking.length===0
-            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
-                Façam check-in para aparecer no ranking!
-              </div>
-            : ranking.map((m,i) => {
+            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>Façam check-in para aparecer!</div>
+            : ranking.map((m,i)=>{
               const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-              const isMe = m.uid===(uid||'local');
+              const isMe = m.uid===uid;
               return (
-                <div key={m.uid} style={{display:'flex',alignItems:'center',gap:'.75rem',
-                  background:isMe?'rgba(227,27,35,.06)':'var(--color-card)',
+                <div key={m.uid} style={{display:'flex',alignItems:'center',gap:'.65rem',
+                  background:isMe?'rgba(227,27,35,.05)':'var(--color-card)',
                   border:isMe?'1px solid rgba(227,27,35,.2)':'1px solid var(--color-border)',
-                  borderRadius:'10px',padding:'.7rem .85rem'}}>
-                  <div style={{width:'28px',textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:i<3?'#facc15':'#555',flexShrink:0}}>
-                    {medal || (i+1)}
-                  </div>
+                  borderRadius:'10px',padding:'.6rem .85rem'}}>
+                  <div style={{width:'26px',textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:i<3?'#facc15':'#555',flexShrink:0}}>{medal||i+1}</div>
                   {m.avatar
-                    ? <img src={m.avatar} style={{width:'32px',height:'32px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
-                    : <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'#555',flexShrink:0}}>{m.name.slice(0,2).toUpperCase()}</div>
-                  }
+                    ? <img src={m.avatar} style={{width:'30px',height:'30px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+                    : <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',fontWeight:700,color:'#555',flexShrink:0}}>{(m.name||'?').slice(0,2).toUpperCase()}</div>}
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:'.86rem',fontWeight:700,color:isMe?'var(--color-accent)':'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
-                    <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{m.workouts} treinos · {m.days} check-ins</div>
+                    <div style={{fontSize:'.84rem',fontWeight:700,color:isMe?'var(--color-accent)':'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
+                    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.workouts} treino{m.workouts!==1?'s':''} · {m.days} check-in{m.days!==1?'s':''}</div>
                   </div>
-                  <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555'}}>{m.workouts}</div>
-                    <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase'}}>treinos</div>
-                  </div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555',flexShrink:0}}>{m.workouts}</div>
                 </div>
               );
             })
@@ -2949,39 +3030,59 @@ const Community = ({history, setToast, prefs}) => {
       {/* CHAT */}
       {tab==='chat' && (
         <div style={{display:'grid',gap:'.5rem'}}>
-          <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.5rem',maxHeight:'50vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:'.4rem'}}>
+          <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.5rem',height:'52vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:'.35rem'}} id="chatBox">
             {chatLog.length===0
-              ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.82rem'}}>Nenhuma mensagem ainda. Sejam o primeiro!</div>
-              : chatLog.map((msg,i) => {
-                const isMe = msg.uid===(uid||'local');
+              ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#444',fontSize:'.82rem'}}>Seja o primeiro a mandar mensagem!</div>
+              : chatLog.map((msg,i)=>{
+                const isMe = msg.uid===uid;
                 return (
-                  <div key={msg.id||i} style={{display:'flex',flexDirection:isMe?'row-reverse':'row',gap:'.4rem',alignItems:'flex-end'}}>
+                  <div key={msg.ts+i} style={{display:'flex',flexDirection:isMe?'row-reverse':'row',gap:'.35rem',alignItems:'flex-end'}}>
                     {!isMe && (msg.avatar
-                      ? <img src={msg.avatar} style={{width:'24px',height:'24px',borderRadius:'50%',flexShrink:0}} alt=""/>
-                      : <div style={{width:'24px',height:'24px',borderRadius:'50%',background:'rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.65rem',fontWeight:700,flexShrink:0}}>{msg.name.slice(0,1)}</div>
-                    )}
+                      ? <img src={msg.avatar} style={{width:'22px',height:'22px',borderRadius:'50%',flexShrink:0}} alt=""/>
+                      : <div style={{width:'22px',height:'22px',borderRadius:'50%',background:'rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.6rem',fontWeight:700,flexShrink:0}}>{(msg.name||'?').slice(0,1)}</div>)}
                     <div style={{maxWidth:'75%'}}>
-                      {!isMe && <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',marginBottom:'2px',paddingLeft:'4px'}}>{msg.name}</div>}
-                      <div style={{background:isMe?'var(--color-accent)':'rgba(255,255,255,.07)',borderRadius:isMe?'12px 12px 3px 12px':'12px 12px 12px 3px',padding:'.45rem .7rem'}}>
-                        <div style={{fontSize:'.84rem',color:isMe?'#fff':'var(--color-text)',lineHeight:1.4}}>{msg.text}</div>
+                      {!isMe && <div style={{fontSize:'.58rem',color:'#555',marginBottom:'2px',paddingLeft:'4px'}}>{msg.name}</div>}
+                      <div style={{background:isMe?'var(--color-accent)':'rgba(255,255,255,.07)',borderRadius:isMe?'12px 12px 3px 12px':'12px 12px 12px 3px',padding:'.4rem .65rem'}}>
+                        <div style={{fontSize:'.84rem',color:isMe?'#fff':'var(--color-text)',lineHeight:1.4,wordBreak:'break-word'}}>{msg.text}</div>
                       </div>
-                      <div style={{fontSize:'.58rem',color:'#555',marginTop:'2px',textAlign:isMe?'right':'left',paddingLeft:isMe?0:'4px'}}>{fmtTime(msg.ts)}</div>
+                      <div style={{fontSize:'.56rem',color:'#444',marginTop:'2px',textAlign:isMe?'right':'left',paddingLeft:isMe?0:'4px'}}>{fmtTime(msg.ts)}</div>
                     </div>
                   </div>
                 );
               })
             }
           </div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <input value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendChat()}
-              placeholder="Mensagem..." style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
-            <button onClick={sendChat} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>→</button>
+          <div style={{display:'flex',gap:'.4rem'}}>
+            <input value={chatMsg} onChange={e=>setChatMsg(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendChat()}
+              placeholder="Mensagem..." maxLength={500}
+              style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .7rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
+            <button onClick={sendChat} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.95rem',cursor:'pointer'}}>→</button>
           </div>
+        </div>
+      )}
+
+      {/* MEMBERS */}
+      {tab==='members' && (
+        <div style={{display:'grid',gap:'.4rem'}}>
+          <div style={{fontSize:'.58rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>{members.length} membro{members.length!==1?'s':''}</div>
+          {members.map((m,i)=>(
+            <div key={m.uid||i} style={{display:'flex',alignItems:'center',gap:'.65rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.6rem .85rem'}}>
+              {m.avatar
+                ? <img src={m.avatar} style={{width:'34px',height:'34px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+                : <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.9rem',color:'#555',flexShrink:0}}>{(m.name||'?').slice(0,2).toUpperCase()}</div>}
+              <div style={{flex:1}}>
+                <div style={{fontSize:'.84rem',fontWeight:700}}>{m.name}{m.uid===uid?' (você)':''}</div>
+                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.role==='admin'?'👑 Admin':'Membro'}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 };
+
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4791,96 +4892,146 @@ const MEAL_ICONS = ['🍳','🥗','🍱','🍎','🥛','🍕','🥩','🥦','�
 
 // ── BarcodeScanner: câmera nativa + Open Food Facts ──────────────────────────
 const BarcodeScanner = ({onResult, onClose}) => {
-  const videoRef        = React.useRef(null);
-  const canvasRef       = React.useRef(null);
-  const streamRef       = React.useRef(null);
-  const rafRef          = React.useRef(null);
-  const [status, setStatus]   = React.useState('requesting'); // requesting|scanning|searching|notfound|done
-  const [manualCode, setManualCode] = React.useState('');
-  const [camErr, setCamErr]   = React.useState(false);
+  const videoRef  = React.useRef(null);
+  const streamRef = React.useRef(null);
+  const rafRef    = React.useRef(null);
+  const fileRef   = React.useRef(null);
 
-  // ── Busca Open Food Facts ──────────────────────────────────────────────────
+  const [status, setStatus]       = useState('requesting');
+  // requesting | scanning | searching | ai_analyzing | preview | notfound
+  const [manualCode, setManualCode] = useState('');
+  const [camErr, setCamErr]         = useState(false);
+  const [preview, setPreview]       = useState(null);
+  const [editPrev, setEditPrev]     = useState({});
+  const [aiError, setAiError]       = useState('');
+  const [portion, setPortion]       = useState('100'); // grams per portion for per-100g products
+
+  const num = v => { const x = parseFloat(String(v||0).replace(',','.')); return isFinite(x)?x:0; };
+
+  // ── Open Food Facts ──────────────────────────────────────────────────────
   const fetchProduct = React.useCallback(async (barcode) => {
     setStatus('searching');
+    setPreview(null);
     try {
-      const r    = await fetch('https://world.openfoodfacts.org/api/v2/product/'+barcode+'?fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity');
+      const r = await fetch(
+        'https://world.openfoodfacts.org/api/v2/product/'+barcode+
+        '?fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity'
+      );
       const data = await r.json();
-      if (data.status !== 1 || !data.product) {
+      if (!data || (data.status !== 1 && data.status !== '1') || !data.product) {
         setStatus('notfound'); return;
       }
       const p = data.product;
       const n = p.nutriments || {};
-      // Prefer per-100g values (most reliable)
-      const cal  = Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || (n['energy_100g']||0)/4.184 || 0);
-      const prot = Math.round(n['proteins_100g']        || n.proteins        || 0);
-      const carb = Math.round(n['carbohydrates_100g']   || n.carbohydrates   || 0);
-      const fat  = Math.round(n['fat_100g']             || n.fat             || 0);
-      const name = p.product_name_pt || p.product_name || 'Produto escaneado';
-      onResult({
+
+      // Per-100g is most reliable. Show values per 100g, let user adjust portion.
+      const cal  = num(n['energy-kcal_100g'] || n['energy-kcal'] || (num(n['energy_100g'])/4.184));
+      const prot = num(n['proteins_100g']      || n['proteins']);
+      const carb = num(n['carbohydrates_100g'] || n['carbohydrates']);
+      const fat  = num(n['fat_100g']           || n['fat']);
+      const name = p.product_name_pt || p.product_name || 'Produto ' + barcode;
+      const brand = (p.brands||'').split(',')[0].trim();
+      const servQty = num(p.serving_quantity) || 100;
+
+      const result = {
         name,
-        calories: String(cal),
-        protein:  String(prot),
-        carbs:    String(carb),
-        fat:      String(fat),
-        note:     (p.brands||'').split(',')[0].trim() + (p.serving_size ? ' · porção: '+p.serving_size : ''),
-        icon:     '🛒',
-      });
+        cal100: cal, prot100: prot, carb100: carb, fat100: fat,
+        calories: String(Math.round(cal  * servQty/100)),
+        protein:  String(Math.round(prot * servQty/100)),
+        carbs:    String(Math.round(carb * servQty/100)),
+        fat:      String(Math.round(fat  * servQty/100)),
+        note: brand + (p.serving_size ? ' · porção: '+p.serving_size : ''),
+        icon: '🛒',
+        per100g: true,
+        servQty,
+      };
+      setPortion(String(servQty));
+      setPreview(result);
+      setEditPrev({...result});
+      setStatus('preview');
     } catch(e) {
+      console.warn('OFF error', e);
       setStatus('notfound');
     }
-  }, [onResult]);
+  }, []);
 
-  // ── Câmera via BarcodeDetector API nativa ─────────────────────────────────
+  // ── Análise por foto com Claude API ─────────────────────────────────────
+  const analyzePhoto = async (file) => {
+    stopCamera();
+    setStatus('ai_analyzing');
+    setAiError('');
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 400,
+          system: 'Você é nutricionista especializado em análise de alimentos. Analise a foto e estime os macronutrientes da porção VISÍVEL. Responda APENAS em JSON sem markdown:\n{"name":"nome do prato/alimento","calories":número,"protein":número,"carbs":número,"fat":número,"note":"ex: estimativa por IA, valores aproximados"}\nValores: calories em kcal, demais em gramas. Se for embalagem, leia os dados da tabela nutricional.',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+              { type: 'text', text: 'Estime as calorias e macros desta porção.' }
+            ]
+          }]
+        })
+      });
+      const data = await response.json();
+      const text = (data.content?.[0]?.text || '').replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(text);
+      const result = {
+        name:     String(parsed.name || 'Alimento analisado'),
+        calories: String(Math.round(num(parsed.calories))),
+        protein:  String(Math.round(num(parsed.protein))),
+        carbs:    String(Math.round(num(parsed.carbs))),
+        fat:      String(Math.round(num(parsed.fat))),
+        note:     String(parsed.note || 'Estimativa por IA · valores aproximados'),
+        icon: '🤖', per100g: false,
+      };
+      setPreview(result);
+      setEditPrev({...result});
+      setStatus('preview');
+    } catch(e) {
+      setAiError('Não foi possível analisar. Verifique a foto ou preencha manualmente.');
+      setStatus('notfound');
+    }
+  };
+
+  // ── Câmera ───────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    const startCamera = async () => {
+    const start = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
         });
         if (cancelled) { stream.getTracks().forEach(t=>t.stop()); return; }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
         setStatus('scanning');
-
-        // Use BarcodeDetector if available (Chrome/Android)
         if ('BarcodeDetector' in window) {
-          const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] });
-          const detect = async () => {
+          const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','qr_code'] });
+          const tick = async () => {
             if (cancelled || !videoRef.current) return;
             try {
-              const codes = await detector.detect(videoRef.current);
-              if (codes.length > 0) {
-                stopCamera();
-                fetchProduct(codes[0].rawValue);
-                return;
-              }
-            } catch(e) {}
-            rafRef.current = requestAnimationFrame(detect);
+              const codes = await det.detect(videoRef.current);
+              if (codes.length) { stopCamera(); fetchProduct(codes[0].rawValue); return; }
+            } catch(_) {}
+            rafRef.current = requestAnimationFrame(tick);
           };
-          rafRef.current = requestAnimationFrame(detect);
+          rafRef.current = requestAnimationFrame(tick);
         }
-        // fallback: ZXing if loaded
-        else if (typeof ZXing !== 'undefined') {
-          const reader = new ZXing.BrowserMultiFormatReader();
-          reader.decodeFromVideoElement(videoRef.current).then(result => {
-            if (!cancelled) { stopCamera(); fetchProduct(result.getText()); }
-          }).catch(()=>{});
-        }
-        // else: user types manually (camera still shows for visual feedback)
-
-      } catch(e) {
-        if (!cancelled) setCamErr(true);
-      }
+      } catch(e) { if (!cancelled) { setCamErr(true); setStatus('notfound'); } }
     };
-    startCamera();
-    return () => {
-      cancelled = true;
-      stopCamera();
-    };
+    start();
+    return () => { cancelled = true; stopCamera(); };
   }, [fetchProduct]);
 
   const stopCamera = () => {
@@ -4888,87 +5039,183 @@ const BarcodeScanner = ({onResult, onClose}) => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current = null; }
   };
 
-  // ── Render — fullscreen sem Modal extra ───────────────────────────────────
+  // Recalculate macros when portion changes
+  const handlePortionChange = (v) => {
+    setPortion(v);
+    if (!preview?.per100g) return;
+    const g = num(v) || 100;
+    setEditPrev(p => ({
+      ...p,
+      calories: String(Math.round(num(preview.cal100)  * g/100)),
+      protein:  String(Math.round(num(preview.prot100) * g/100)),
+      carbs:    String(Math.round(num(preview.carb100) * g/100)),
+      fat:      String(Math.round(num(preview.fat100)  * g/100)),
+    }));
+  };
+
+  const accept = () => {
+    onResult({
+      name:     editPrev.name     || preview.name,
+      calories: editPrev.calories || '0',
+      protein:  editPrev.protein  || '0',
+      carbs:    editPrev.carbs    || '0',
+      fat:      editPrev.fat      || '0',
+      note:     editPrev.note     || '',
+      icon:     preview?.icon     || '🛒',
+    });
+  };
+
+  const inPreview = status === 'preview';
+  const inSearch  = status === 'searching' || status === 'ai_analyzing';
+
   return (
     <div style={{position:'fixed',inset:0,zIndex:10001,background:'#000',display:'flex',flexDirection:'column'}}>
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.85rem 1rem',background:'rgba(0,0,0,.8)',borderBottom:'1px solid #1a1a1a',flexShrink:0}}>
-        <button onClick={()=>{stopCamera();onClose();}} style={{background:'rgba(255,255,255,.08)',border:'1px solid #333',borderRadius:'8px',padding:'.4rem .75rem',color:'#aaa',fontSize:'.85rem',cursor:'pointer',fontWeight:700}}>← Voltar</button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff'}}>
-          📷 Scanner de <span style={{color:'var(--color-accent)'}}>Alimentos</span>
+      <div style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.65rem .85rem',background:'rgba(0,0,0,.9)',borderBottom:'1px solid #1a1a1a',flexShrink:0}}>
+        <button onClick={()=>{stopCamera();onClose();}}
+          style={{background:'rgba(255,255,255,.07)',border:'1px solid #333',borderRadius:'8px',padding:'.3rem .6rem',color:'#aaa',fontSize:'.8rem',cursor:'pointer',fontWeight:700}}>← Voltar</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:'#fff',flex:1}}>
+          📷 Scanner · <span style={{color:'var(--color-accent)'}}>Alimentos</span>
         </div>
+        {/* IA button */}
+        <button onClick={()=>fileRef.current?.click()}
+          style={{background:'rgba(99,102,241,.15)',border:'1px solid rgba(99,102,241,.35)',borderRadius:'8px',padding:'.3rem .6rem',color:'#818cf8',fontSize:'.72rem',fontWeight:800,cursor:'pointer',letterSpacing:'.03em'}}>
+          🤖 IA
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{display:'none'}}
+          onChange={e=>e.target.files?.[0] && analyzePhoto(e.target.files[0])}/>
       </div>
 
-      {/* Camera view */}
-      <div style={{flex:1,position:'relative',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',background:'#000'}}>
+      {/* Main area */}
+      <div style={{flex:1,position:'relative',overflow:'hidden',background:'#000',display:'flex',alignItems:'center',justifyContent:'center'}}>
         <video ref={videoRef} autoPlay playsInline muted
-          style={{width:'100%',height:'100%',objectFit:'cover',display:camErr?'none':'block'}}/>
+          style={{width:'100%',height:'100%',objectFit:'cover',
+            display:(camErr||inPreview||inSearch)?'none':'block'}}/>
 
         {/* Scan overlay */}
         {status==='scanning' && !camErr && (
           <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
-            <div style={{width:'72%',maxWidth:'300px',height:'120px',border:'2px solid var(--color-accent)',borderRadius:'12px',boxShadow:'0 0 0 2000px rgba(0,0,0,.5)',position:'relative'}}>
-              {/* Corner accents */}
-              {[['0','0'],['0','auto'],['auto','0'],['auto','auto']].map(([t,b],i)=>(
-                <div key={i} style={{position:'absolute',top:t==='0'?-2:'auto',bottom:b==='auto'?-2:'auto',left:i<2?-2:'auto',right:i>=2?-2:'auto',width:'20px',height:'20px',border:'3px solid var(--color-accent)',borderRadius:'3px',
-                  borderRight:i%2===0?'none':'3px solid var(--color-accent)',
-                  borderBottom:i<2?'none':'3px solid var(--color-accent)',
-                  borderLeft:i%2===0?'3px solid var(--color-accent)':'none',
-                  borderTop:i<2?'3px solid var(--color-accent)':'none'
-                }}/>
+            <div style={{width:'72%',maxWidth:'290px',height:'110px',border:'2px solid var(--color-accent)',borderRadius:'12px',boxShadow:'0 0 0 2000px rgba(0,0,0,.5)',position:'relative',overflow:'hidden'}}>
+              <div style={{position:'absolute',top:'50%',left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,rgba(227,27,35,.8),transparent)',animation:'scanline 1.8s ease-in-out infinite'}}/>
+            </div>
+            <div style={{marginTop:'.85rem',color:'rgba(255,255,255,.6)',fontSize:'.75rem'}}>Aponte para o código de barras</div>
+            <button onClick={()=>fileRef.current?.click()}
+              style={{marginTop:'.65rem',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:'8px',padding:'.3rem .75rem',color:'#818cf8',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>
+              🤖 Analisar foto por IA
+            </button>
+            <style>{`@keyframes scanline{0%,100%{top:20%}50%{top:80%}}`}</style>
+          </div>
+        )}
+
+        {/* Loading */}
+        {inSearch && (
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.75rem'}}>
+            <div style={{width:'40px',height:'40px',border:'3px solid rgba(227,27,35,.2)',borderTop:'3px solid var(--color-accent)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+            <div style={{color:'#888',fontSize:'.82rem'}}>{status==='ai_analyzing'?'🤖 Analisando com IA...':'Buscando produto...'}</div>
+          </div>
+        )}
+
+        {/* Camera error */}
+        {camErr && !inPreview && (
+          <div style={{textAlign:'center',padding:'2rem',color:'#666'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>📵</div>
+            <div style={{fontSize:'.82rem',color:'#555',marginBottom:'1rem'}}>Câmera não disponível</div>
+            <button onClick={()=>fileRef.current?.click()}
+              style={{background:'rgba(99,102,241,.15)',border:'1px solid rgba(99,102,241,.3)',borderRadius:'10px',padding:'.6rem 1.2rem',color:'#818cf8',fontSize:'.84rem',fontWeight:700,cursor:'pointer'}}>
+              🤖 Analisar por foto
+            </button>
+          </div>
+        )}
+
+        {/* PREVIEW — result from OFF or AI */}
+        {inPreview && preview && (
+          <div style={{position:'absolute',inset:0,overflowY:'auto',background:'#09090b',padding:'.85rem',display:'grid',gap:'.6rem',alignContent:'start'}}>
+            {/* Source badge */}
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+              <span style={{fontSize:'1.4rem'}}>{preview.icon}</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:'.88rem',color:'#eee'}}>
+                  {preview.icon==='🤖'?'Análise por IA':'Open Food Facts'}
+                </div>
+                <div style={{fontSize:'.62rem',color:'#555'}}>
+                  {preview.icon==='🤖'?'Valores estimados por IA':'Dados por 100g · ajuste a porção abaixo'}
+                </div>
+              </div>
+            </div>
+
+            {/* Portion adjuster (only for OFF per-100g) */}
+            {preview.per100g && (
+              <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'10px',padding:'.6rem .75rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                <div style={{fontSize:'.7rem',color:'#888',flex:1}}>
+                  Porção <span style={{color:'#555'}}>(g)</span>
+                </div>
+                <input type="number" value={portion} onChange={e=>handlePortionChange(e.target.value)}
+                  style={{width:'70px',background:'rgba(0,0,0,.4)',border:'1px solid #333',borderRadius:'7px',padding:'.35rem .5rem',color:'#eee',fontSize:'.9rem',fontWeight:700,textAlign:'center'}}/>
+                <div style={{fontSize:'.65rem',color:'#555'}}>gramas</div>
+              </div>
+            )}
+
+            {/* Macros visual bar */}
+            <div style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'10px',padding:'.65rem',display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',textAlign:'center'}}>
+              {[['🔥',editPrev.calories,'kcal'],['💪',editPrev.protein,'prot(g)'],['🌾',editPrev.carbs,'carb(g)'],['🥑',editPrev.fat,'gord(g)']].map(([ic,val,lbl])=>(
+                <div key={lbl}>
+                  <div style={{fontSize:'.85rem'}}>{ic}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'var(--color-text)',lineHeight:1}}>{val||'0'}</div>
+                  <div style={{fontSize:'.52rem',color:'#555',textTransform:'uppercase'}}>{lbl}</div>
+                </div>
               ))}
             </div>
-            <div style={{marginTop:'1rem',color:'rgba(255,255,255,.7)',fontSize:'.78rem',textAlign:'center'}}>Aponte para o código de barras</div>
-          </div>
-        )}
 
-        {/* States overlay */}
-        {status==='searching' && (
-          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1rem'}}>
-            <div style={{fontSize:'2rem',animation:'spin 1s linear infinite'}}>⟳</div>
-            <div style={{color:'#fff',fontSize:'.9rem'}}>Buscando produto...</div>
-          </div>
-        )}
-
-        {camErr && (
-          <div style={{textAlign:'center',padding:'2rem',color:'#aaa'}}>
-            <div style={{fontSize:'2rem',marginBottom:'.75rem'}}>📵</div>
-            <div style={{fontSize:'.85rem',marginBottom:'.5rem'}}>Câmera não disponível</div>
-            <div style={{fontSize:'.75rem',color:'#555'}}>Use o campo abaixo para digitar o código</div>
+            {/* Editable fields */}
+            {[['name','Nome','text'],['calories','Kcal','number'],['protein','Proteína (g)','number'],['carbs','Carboidratos (g)','number'],['fat','Gordura (g)','number'],['note','Nota','text']].map(([f,lbl,t])=>(
+              <div key={f}>
+                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'2px'}}>{lbl}</div>
+                <input type={t} value={editPrev[f]||''} onChange={e=>setEditPrev(p=>({...p,[f]:e.target.value}))}
+                  style={{width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'7px',padding:'.42rem .6rem',color:'#eee',fontSize:'.88rem'}}/>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Bottom panel */}
-      <div style={{background:'rgba(10,10,10,.97)',borderTop:'1px solid #1a1a1a',padding:'1rem',flexShrink:0}}>
+      {/* Bottom bar */}
+      <div style={{background:'rgba(8,8,10,.98)',borderTop:'1px solid #1a1a1a',padding:'.65rem .85rem',flexShrink:0}}>
         {status==='notfound' && (
-          <div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.25)',borderRadius:'8px',padding:'.6rem .75rem',marginBottom:'.75rem',color:'#f87171',fontSize:'.78rem',textAlign:'center'}}>
-            ⚠️ Produto não encontrado no Open Food Facts. Tente digitar o código ou preencha manualmente.
+          <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'8px',padding:'.45rem .7rem',marginBottom:'.55rem',color:'#f87171',fontSize:'.73rem',textAlign:'center'}}>
+            {aiError || '⚠️ Produto não encontrado. Digite o código manualmente ou use o botão 🤖 IA.'}
           </div>
         )}
 
-        <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>Ou digitar código de barras</div>
-        <div style={{display:'flex',gap:'.5rem'}}>
-          <input
-            value={manualCode}
-            onChange={e=>setManualCode(e.target.value.replace(/\D/g,''))}
-            onKeyDown={e=>e.key==='Enter'&&manualCode.length>5&&fetchProduct(manualCode)}
-            placeholder="Ex: 7891000100103"
-            inputMode="numeric"
-            style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'8px',padding:'.55rem .75rem',color:'#fff',fontSize:'.9rem'}}
-          />
-          <button
-            onClick={()=>manualCode.length>5&&fetchProduct(manualCode)}
-            style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontWeight:800,fontSize:'.85rem',cursor:'pointer',opacity:manualCode.length>5?1:0.4}}>
-            Buscar
-          </button>
-        </div>
-        <div style={{fontSize:'.6rem',color:'#333',marginTop:'.4rem',textAlign:'center'}}>Dados via Open Food Facts · por 100g</div>
+        {inPreview ? (
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <button onClick={()=>{setStatus(camErr?'notfound':'scanning');setPreview(null);}}
+              style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'9px',padding:'.55rem',color:'#666',fontSize:'.82rem',fontWeight:700,cursor:'pointer'}}>
+              Tentar de novo
+            </button>
+            <button onClick={accept}
+              style={{flex:2,background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.95rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.03em'}}>
+              ✓ Adicionar
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{fontSize:'.58rem',color:'#444',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.3rem'}}>Código de barras manual</div>
+            <div style={{display:'flex',gap:'.4rem'}}>
+              <input value={manualCode} onChange={e=>setManualCode(e.target.value.replace(/\D/g,''))}
+                onKeyDown={e=>e.key==='Enter'&&manualCode.length>4&&fetchProduct(manualCode)}
+                placeholder="Ex: 7891000100103" inputMode="numeric"
+                style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'8px',padding:'.45rem .6rem',color:'#eee',fontSize:'.88rem'}}/>
+              <button onClick={()=>manualCode.length>4&&fetchProduct(manualCode)}
+                style={{background:manualCode.length>4?'var(--color-accent)':'#1a1a1a',border:'none',borderRadius:'8px',padding:'.45rem .9rem',color:manualCode.length>4?'#fff':'#444',fontWeight:800,cursor:manualCode.length>4?'pointer':'default',fontSize:'.85rem',transition:'all .15s'}}>
+                Buscar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 };
-
 
 // ── PresetChecker: componente separado para checar refeições do preset ──────
 const PresetChecker = ({plan, viewDate, setDiet, todayStr}) => {
@@ -5681,7 +5928,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.1</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.2</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
@@ -5720,7 +5967,7 @@ root.render(<App/>);
   align-items:flex-end; justify-content:center;
 }
 .dc-sheet {
-  width:100%; max-width:540px; max-height:92vh;
+  width:100%; max-width:540px; height:92vh;
   background:#0c0c0e; border-radius:20px 20px 0 0;
   border-top:1px solid #1e1e22;
   display:flex; flex-direction:column; overflow:hidden;
@@ -5746,7 +5993,7 @@ root.render(<App/>);
   background:rgba(255,255,255,.04); color:#666;
 }
 .dc-tab.active { background:rgba(227,27,35,.15); color:#e31b23; border:1px solid rgba(227,27,35,.2); }
-.dc-body { flex:1; overflow-y:auto; padding:.75rem; display:grid; gap:.75rem; min-height:0; }
+.dc-body { flex:1; overflow-y:auto; padding:.75rem; display:grid; gap:.75rem; min-height:0; align-content:start; }
 .dc-card {
   background:#0f0f12; border:1px solid #1a1a1e; border-radius:12px;
   padding:.85rem; display:grid; gap:.6rem;
@@ -5766,7 +6013,7 @@ root.render(<App/>);
 .dc-select { background:rgba(0,0,0,.4);border:1px solid #1e1e1e;border-radius:8px;
   padding:.4rem .65rem;font-size:.8rem;color:#ccc;width:100%; }
 .dc-canvas-wrap { position:relative; height:180px; min-height:180px; overflow:hidden; }
-.dc-empty { text-align:center;padding:2rem;color:#333;font-size:.82rem; }
+.dc-empty { text-align:center;padding:3rem 2rem;color:#444;font-size:.82rem;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem; }
 .dc-formula { font-size:.65rem;color:#444;text-align:center;font-style:italic;margin-top:.25rem; }
 </style>
 
@@ -5975,25 +6222,27 @@ root.render(<App/>);
     const hasPeso = sorted.some(m=>m.peso);
     const hasGord = sorted.some(m=>m.gordura);
 
+    if(!hasPeso) {
+      document.getElementById('dcBody').innerHTML = '<div class="dc-empty" style="padding:3rem 2rem"><div style="font-size:2rem;margin-bottom:.75rem">⚖️</div><div>Sem dados de peso ainda.</div><div style="margin-top:.35rem;font-size:.72rem;color:#2a2a2a">Registre medições em DarkBody → Medidas</div></div>';
+      return;
+    }
     document.getElementById('dcBody').innerHTML = `
       <div class="dc-card">
         <div class="dc-card-title">Peso corporal (kg)</div>
-        ${hasPeso ? `<div class="dc-canvas-wrap"><canvas id="cPeso"></canvas></div>` : '<div class="dc-empty">Sem dados de peso. Registre em DarkBody.</div>'}
+        <div class="dc-canvas-wrap"><canvas id="cPeso"></canvas></div>
       </div>
       ${hasGord ? `
       <div class="dc-card">
         <div class="dc-card-title">% Gordura</div>
         <div class="dc-canvas-wrap"><canvas id="cGord"></canvas></div>
       </div>` : ''}
-      ${hasPeso ? `
+      ${hasPeso && hasGord ? `
       <div class="dc-card">
         <div class="dc-card-title">Massa magra estimada (kg)</div>
         <div class="dc-canvas-wrap"><canvas id="cMassa"></canvas></div>
         <div class="dc-formula">Massa magra = Peso × (1 − %Gordura/100)</div>
       </div>` : ''}
     `;
-
-    if(!hasPeso) return;
     const labels = sorted.filter(m=>m.peso).map(m=>toBR(m.date));
     const pesos = sorted.filter(m=>m.peso).map(m=>num(m.peso));
     mkChart('cPeso','line', labels, [{
@@ -6140,9 +6389,8 @@ root.render(<App/>);
     const diet     = get(LS.diet);
     const sorted   = [...measures].sort((a,b)=>a.date?.localeCompare(b.date));
 
-    if(sorted.length < 2) {
-      document.getElementById('dcBody').innerHTML = `
-        <div class="dc-empty">Precisa de ao menos 2 medições em DarkBody para ver análise de composição.</div>`;
+        if(sorted.length < 2) {
+      document.getElementById('dcBody').innerHTML = '<div class="dc-empty" style="padding:3rem 2rem"><div style="font-size:2rem;margin-bottom:.75rem">🔬</div><div>Precisa de ao menos 2 medições.</div><div style="margin-top:.35rem;font-size:.72rem;color:#2a2a2a">Registre peso + gordura em DarkBody para ver composição.</div></div>';
       return;
     }
 
@@ -6382,6 +6630,12 @@ root.render(<App/>);
     }catch(e){ console.warn('Firebase init failed', e); return; }
 
     // ---- DSAuth API ----
+    // NOTE: Firestore rules needed for squads (shared collection):
+    // Add to Firebase Console > Firestore > Rules:
+    //   match /squads/{squadCode}/{document=**} {
+    //     allow read: if request.auth != null;
+    //     allow write: if request.auth != null;
+    //   }
     try{
       var auth = window._auth;
       var db   = window._db;
