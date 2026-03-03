@@ -374,6 +374,8 @@
     .charts-actions{margin-left:auto}
     .charts-btn{background:#111;border:1px solid #1e1e1e;color:#eaeaea;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer}
   </style>
+  <!-- ZXing barcode scanner -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 </head>
 <body class="bg-bgDark text-textMain min-h-screen overflow-x-hidden">
 <div id="root"></div>
@@ -397,7 +399,6 @@ const EXS=[
   E("Crucifixo Máquina","Peito","Peitoral Medial","Máquina","iniciante"),
   E("Crucifixo reto halteres","Peito","Peitoral Medial","Halteres","iniciante"),
   E("Flexão de braço","Peito","Peitoral Medial","Peso corporal","iniciante"),
-  E("Peck deck","Peito","Peitoral Medial","Máquina","iniciante"),
   E("Pullover halteres","Peito","Peitoral Medial","Halteres"),
   E("Supino declinado barra","Peito","Peitoral Inferior","Barra"),
   E("Supino declinado halteres","Peito","Peitoral Inferior","Halteres"),
@@ -451,7 +452,6 @@ const EXS=[
   E("Rosca direta barra","Bíceps","Bíceps Braquial","Barra"),
   E("Rosca direta halteres","Bíceps","Bíceps Braquial","Halteres"),
   E("Rosca direta polia","Bíceps","Bíceps Braquial","Cabo/Crossover"),
-  E("Rosca inclinada halteres","Bíceps","Bíceps Braquial","Halteres"),
   E("Rosca martelo corda","Bíceps","Braquiorradial","Cabo/Crossover"),
   E("Rosca martelo halteres","Bíceps","Braquiorradial","Halteres"),
   E("Rosca Scott máquina","Bíceps","Bíceps Braquial","Máquina","iniciante"),
@@ -490,7 +490,6 @@ const EXS=[
   E("Flexora unilateral em pé","Posterior de Coxa","","Máquina"),
   E("Levantamento terra","Posterior de Coxa","","Barra"),
   E("Mesa flexora","Posterior de Coxa","","Máquina","iniciante"),
-  E("Mesa flexora deitada","Posterior de Coxa","","Máquina","iniciante"),
   E("Stiff","Posterior de Coxa","","Barra"),
   E("Stiff com halteres","Posterior de Coxa","","Halteres"),
   E("Stiff unilateral halteres","Posterior de Coxa","","Halteres"),
@@ -499,7 +498,6 @@ const EXS=[
   E("Elevação pélvica com barra","Glúteo","Glúteo Máximo","Barra"),
   E("Glúteo 4 apoios cabo","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
   E("Hip thrust barra","Glúteo","Glúteo Máximo","Barra"),
-  E("Hip thrust máquina","Glúteo","Glúteo Máximo","Máquina","iniciante"),
   // ── ABDUTORES / ADUTORES ──────────────────────────────────────────────────
   E("Cadeira abdutora","Abdutores","Geral","Máquina","iniciante"),
   E("Cadeira adutora","Adutores","Geral","Máquina","iniciante"),
@@ -526,165 +524,147 @@ const EXS=[
 // Mapeamentos corrigidos conforme diagnóstico (PARCIAL/SEM MATCH resolvidos)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const YUHONAS_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
+const YUHONAS_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
-// Mapa direto PT-BR → slug exato da pasta no yuhonas
-// Corrigido com base no diagnóstico: substituídos todos os PARCIAL por slugs verificados
-const EX_SLUG_MAP = {
-  // PEITO
-  "Supino reto barra":               "Barbell_Bench_Press",
-  "Supino reto halteres":            "Dumbbell_Bench_Press",
-  "Supino reto máquina":             "Barbell_Bench_Press",
-  "Supino inclinado barra":          "Barbell_Incline_Bench_Press",
-  "Supino inclinado halteres":       "Dumbbell_Incline_Bench_Press",
-  "Supino inclinado máquina":        "Barbell_Incline_Bench_Press",
-  "Supino inclinado Articulado":     "Dumbbell_Incline_Bench_Press",
-  "Supino declinado barra":          "Barbell_Decline_Bench_Press",
-  "Supino declinado halteres":       "Decline_Dumbbell_Bench_Press",
-  "Crossover polia alta":            "Cable_Crossover",
-  "Crucifixo reto halteres":         "Dumbbell_Flyes",
-  "Crucifixo inclinado halteres":    "Incline_Dumbbell_Flyes",
-  "Crucifixo Máquina":               "Dumbbell_Flyes",
-  "Peck deck":                       "Dumbbell_Flyes",
-  "Flexão de braço":                 "Push-Up",
-  "Pullover halteres":               "Bent-Arm_Dumbbell_Pullover",
-  // OMBRO
-  "Desenvolvimento barra":           "Barbell_Shoulder_Press",
-  "Desenvolvimento halteres":        "Dumbbell_Shoulder_Press",
-  "Desenvolvimento máquina":         "Dumbbell_Shoulder_Press",
-  "Arnold press halteres":           "Arnold_Press",
-  "Elevação lateral halteres":       "Dumbbell_Lateral_Raise",
-  "Elevação lateral polia":          "Cable_Seated_Lateral_Raise",
-  "Elevação lateral unilateral polia":"Cable_Seated_Lateral_Raise",
-  "Elevação frontal barra":          "Standing_Front_Barbell_Raise_Over_Head",
-  "Elevação frontal halteres":       "Front_Dumbbell_Raise",
-  "Face Pull (corda)":               "Face_Pull",
-  "Crucifixo inverso halteres":      "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
-  "Crucifixo inverso máquina":       "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
-  "Crucifixo inverso polia":         "Bent_Over_Dumbbell_Rear_Delt_Raise_Head_On_Bench",
-  // TRAPÉZIO
-  "Encolhimento barra":              "Barbell_Shrug",
-  "Encolhimento halteres":           "Dumbbell_Shrug",
-  "Remada alta barra":               "Upright_Row-Front_Barbell",
-  // COSTAS
-  "Barra fixa":                      "Band_Assisted_Pull-Up",
-  "Puxada alta aberta":              "Close-Grip_Front_Lat_Pulldown",
-  "Puxada fechada":                  "Close-Grip_Front_Lat_Pulldown",
-  "Pulldown":                        "Close-Grip_Front_Lat_Pulldown",
-  "Puxada triângulo":                "Close-Grip_Front_Lat_Pulldown",
-  "Puxada alta unilateral":          "Close-Grip_Front_Lat_Pulldown",
-  "Remada curvada barra":            "Barbell_Bent_Over_Row",
-  "Remada curvada halteres":         "Bent_Over_Two-Dumbbell_Row",
-  "Remada unilateral halteres":      "Seated_Cable_Rows",
-  "Remada serrote halteres":         "Seated_Cable_Rows",
-  "Remada articulada":               "Seated_Cable_Rows",
-  "Remada baixa polia":              "Seated_Cable_Rows",
-  "Remada baixa aberta polia":       "Seated_Cable_Rows",
-  "Remada baixa unilateral":         "Seated_Cable_Rows",
-  "Remada cavalinho":                "Barbell_Bent_Over_Row",
-  "Hiperextensão lombar":            "Back_Extension",
-  "Extensão lombar máquina":         "Back_Extension",
-  // BÍCEPS
-  "Rosca direta barra":              "Barbell_Curl",
-  "Rosca direta halteres":           "Dumbbell_Curl",
-  "Rosca direta polia":              "Cable_Hammer_Curls_-_Rope_Attachment",
-  "Rosca alternada halteres":        "Alternate_Hammer_Curl",
-  "Rosca inclinada halteres":        "Incline_Dumbbell_Curl",
-  "Rosca concentrada halteres":      "Concentration_Curls",
-  "Rosca martelo halteres":          "Alternate_Hammer_Curl",
-  "Rosca martelo corda":             "Alternate_Hammer_Curl",
-  "Rosca Scott máquina":             "Preacher_Curl",
-  "Rosca 21":                        "Barbell_Curl",
-  "Rosca 45° halteres":              "Incline_Dumbbell_Curl",
-  "Rosca inversa barra":             "Reverse_Barbell_Curl",
-  "Rosca punho barra":               "Barbell_Curl",
-  // TRÍCEPS
-  "Tríceps pulley corda":            "Triceps_Pushdown",
-  "Tríceps pulley barra reta":       "Triceps_Pushdown",
-  "Tríceps pulley polia":            "Triceps_Pushdown",
-  "Tríceps testa barra W":           "Cable_Lying_Triceps_Extension",
-  "Tríceps testa halteres":          "Cable_Lying_Triceps_Extension",
-  "Tríceps francês halteres":        "Decline_Dumbbell_Triceps_Extension",
-  "Tríceps francês barra":           "Cable_Lying_Triceps_Extension",
-  "Kick back tríceps halteres":      "Tricep_Dumbbell_Kickback",
-  "Mergulho no banco":               "Bench_Dips",
-  "Paralelas":                       "Bench_Dips",
-  // QUADRÍCEPS
-  "Agachamento livre":               "Barbell_Full_Squat",
-  "Agachamento sumô barra":          "Dumbbell_Sumo_Squat",
-  "Agachamento sumô halteres":       "Dumbbell_Sumo_Squat",
-  "Agachamento búlgaro halteres":    "Barbell_Side_Split_Squat",
-  "Agachamento hack máquina":        "Hack_Squat",
-  "Leg press 45°":                   "Leg_Press",
-  "Leg press 180° unilateral":       "Leg_Press",
-  "Cadeira extensora":               "Leg_Extensions",
-  "Cadeira extensora unilateral":    "Leg_Extensions",
-  "Passada avançada halteres":       "Dumbbell_Lunges",
-  "Afundo com halteres":             "Dumbbell_Lunges",
-  "Afundo com barra":                "Barbell_Lunge",
-  // POSTERIOR
-  "Stiff":                           "Romanian_Deadlift",
-  "Stiff com halteres":              "Romanian_Deadlift",
-  "Stiff unilateral halteres":       "Romanian_Deadlift",
-  "Levantamento terra":              "Barbell_Deadlift",
-  "Mesa flexora":                    "Lying_Leg_Curls",
-  "Mesa flexora deitada":            "Lying_Leg_Curls",
-  "Cadeira flexora":                 "Seated_Leg_Curl",
-  "Cadeira flexora unilateral":      "Lying_Leg_Curls",
-  "Flexora unilateral em pé":        "Lying_Leg_Curls",
-  // GLÚTEO
-  "Hip thrust barra":                "Barbell_Hip_Thrust",
-  "Hip thrust máquina":              "Barbell_Hip_Thrust",
-  "Elevação pélvica com barra":      "Barbell_Hip_Thrust",
-  "Glúteo 4 apoios cabo":            "Barbell_Hip_Thrust",
-  "Abdução em pé polia":             "Adductor",
-  // PANTURRILHA
-  "Panturrilha em pé máquina":       "Standing_Calf_Raises",
-  "Panturrilha sentado máquina":     "Seated_Calf_Raise",
-  "Panturrilha em pé barra livre":   "Standing_Calf_Raises",
-  // ABDUTORES/ADUTORES
-  "Cadeira abdutora":                "Adductor",
-  "Cadeira adutora":                 "Adductor",
-  // ABDÔMEN
-  "Abdômen supra":                   "Decline_Crunch",
-  "Abdômen infra":                   "Hanging_Leg_Raise",
-  "Abdômen supra declinado":         "Decline_Crunch",
-  "Abdômen infra na paralela":       "Hanging_Leg_Raise",
-  "Prancha isométrica":              "Plank",
+// Mapa direto PT-BR → slug da pasta no yuhonas (verificado)
+// null = sem imagem disponível na biblioteca
+const EX_IMG_MAP = {
+  "Crossover polia alta":"Cable_Crossover",
+  "Crucifixo inclinado halteres":"Dumbbell_Flyes",
+  "Crucifixo Máquina":"Pec_Deck_Fly",
+  "Crucifixo reto halteres":"Dumbbell_Flyes",
+  "Flexão de braço":"Pushups",
+  "Pullover halteres":"Dumbbell_Pullover",
+  "Supino declinado barra":"Barbell_Decline_Bench_Press",
+  "Supino declinado halteres":"Dumbbell_Decline_Bench_Press",
+  "Supino inclinado Articulado":"Dumbbell_Incline_Bench_Press",
+  "Supino inclinado barra":"Barbell_Incline_Bench_Press",
+  "Supino inclinado halteres":"Dumbbell_Incline_Bench_Press",
+  "Supino inclinado máquina":"Dumbbell_Incline_Bench_Press",
+  "Supino reto barra":"Barbell_Bench_Press",
+  "Supino reto halteres":"Dumbbell_Bench_Press",
+  "Supino reto máquina":"Barbell_Bench_Press",
+  "Arnold press halteres":"Arnold_Dumbbell_Press",
+  "Crucifixo inverso halteres":"Dumbbell_Rear_Delt_Row",
+  "Crucifixo inverso máquina":"Reverse_Fly",
+  "Crucifixo inverso polia":"Reverse_Fly",
+  "Desenvolvimento barra":"Barbell_Shoulder_Press",
+  "Desenvolvimento halteres":"Dumbbell_Shoulder_Press",
+  "Desenvolvimento máquina":"Dumbbell_Shoulder_Press",
+  "Elevação frontal barra":"Barbell_Front_Raise",
+  "Elevação frontal halteres":"Dumbbell_Front_Raise",
+  "Elevação lateral halteres":"Dumbbell_Lateral_Raise",
+  "Elevação lateral polia":"Cable_Lateral_Raise",
+  "Elevação lateral unilateral polia":"Cable_Lateral_Raise",
+  "Face Pull (corda)":"Face_Pull",
+  "Encolhimento barra":"Barbell_Shrug",
+  "Encolhimento halteres":"Dumbbell_Shrug",
+  "Remada alta barra":"Barbell_Upright_Row",
+  "Barra fixa":"Pullups",
+  "Hiperextensão lombar":"Hyperextensions__Back_Extensions_",
+  "Extensão lombar máquina":"Hyperextensions__Back_Extensions_",
+  "Pulldown":"Wide-Grip_Lat_Pulldown",
+  "Puxada alta aberta":"Wide-Grip_Lat_Pulldown",
+  "Puxada alta unilateral":"Wide-Grip_Lat_Pulldown",
+  "Puxada fechada":"Close-Grip_Front_Lat_Pulldown",
+  "Puxada triângulo":"Close-Grip_Front_Lat_Pulldown",
+  "Remada articulada":"Seated_Cable_Rows",
+  "Remada baixa aberta polia":"Seated_Cable_Rows",
+  "Remada baixa polia":"Seated_Cable_Rows",
+  "Remada baixa unilateral":"Seated_Cable_Rows",
+  "Remada cavalinho":"Barbell_Bent_Over_Row",
+  "Remada curvada barra":"Barbell_Bent_Over_Row",
+  "Remada curvada halteres":"Bent_Over_Two-Dumbbell_Row",
+  "Remada serrote halteres":"Dumbbell_One-Arm_Row",
+  "Remada unilateral halteres":"Dumbbell_One-Arm_Row",
+  "Rosca 21":"Barbell_Curl",
+  "Rosca 45° halteres":"Alternate_Incline_Dumbbell_Curl",
+  "Rosca alternada halteres":"Alternate_Hammer_Curl",
+  "Rosca concentrada halteres":"Concentration_Curls",
+  "Rosca direta barra":"Barbell_Curl",
+  "Rosca direta halteres":"Dumbbell_Alternate_Bicep_Curl",
+  "Rosca direta polia":"Cable_Curl_With_Bar",
+  "Rosca inclinada halteres":"Alternate_Incline_Dumbbell_Curl",
+  "Rosca martelo corda":"Hammer_Curls",
+  "Rosca martelo halteres":"Hammer_Curls",
+  "Rosca Scott máquina":"Barbell_Preacher_Curl",
+  "Kick back tríceps halteres":"Dumbbell_Tricep_Kickback",
+  "Mergulho no banco":"Triceps_Dips",
+  "Paralelas":"Dips_-_Chest_Version",
+  "Tríceps francês barra":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
+  "Tríceps francês halteres":"Lying_Triceps_Press",
+  "Tríceps pulley barra reta":"Triceps_Pushdown",
+  "Tríceps pulley corda":"Triceps_Pushdown_-_Rope_Attachment",
+  "Tríceps pulley polia":"Triceps_Pushdown",
+  "Tríceps testa barra W":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
+  "Tríceps testa halteres":"Lying_Triceps_Press",
+  "Rosca inversa barra":"Zottman_Curl",
+  "Rosca punho barra":"Wrist_Roller",
+  "Afundo com barra":"Barbell_Lunge",
+  "Afundo com halteres":"Dumbbell_Lunge",
+  "Agachamento búlgaro halteres":"Dumbbell_Bulgarian_Split_Squat",
+  "Agachamento hack máquina":"Hack_Squat",
+  "Agachamento livre":"Barbell_Full_Squat",
+  "Agachamento sumô barra":"Sumo_Squat",
+  "Agachamento sumô halteres":"Dumbbell_Sumo_Squat",
+  "Cadeira extensora":"Leg_Extensions",
+  "Cadeira extensora unilateral":"Leg_Extensions",
+  "Leg press 45°":"Leg_Press",
+  "Leg press 180° unilateral":"Leg_Press",
+  "Passada avançada halteres":"Dumbbell_Lunge",
+  "Cadeira flexora":"Lying_Leg_Curls",
+  "Cadeira flexora unilateral":"Lying_Leg_Curls",
+  "Flexora unilateral em pé":"Standing_Leg_Curl",
+  "Levantamento terra":"Barbell_Deadlift",
+  "Mesa flexora":"Lying_Leg_Curls",
+  "Stiff":"Romanian_Deadlift",
+  "Stiff com halteres":"Dumbbell_Romanian_Deadlift",
+  "Stiff unilateral halteres":"Dumbbell_Romanian_Deadlift",
+  "Abdução em pé polia":"Hip_Abduction_Machine",
+  "Elevação pélvica com barra":"Barbell_Hip_Thrust",
+  "Glúteo 4 apoios cabo":"Donkey_Kickbacks",
+  "Hip thrust barra":"Barbell_Hip_Thrust",
+  "Cadeira abdutora":"Hip_Abduction_Machine",
+  "Cadeira adutora":"Hip_Adduction",
+  "Panturrilha em pé barra livre":"Standing_Barbell_Calf_Raise",
+  "Panturrilha em pé máquina":"Calf_Press",
+  "Panturrilha sentado máquina":"Seated_Calf_Raise",
+  "Abdômen infra":"Lying_Leg_Raise",
+  "Abdômen infra na paralela":"Hanging_Leg_Raise",
+  "Abdômen supra":"Crunches",
+  "Abdômen supra declinado":"Decline_Crunch",
+  "Prancha isométrica":"Plank",
 };
 
-// Cache de verificação se frame 1 existe (alguns exercícios só têm 0.jpg)
-const FRAME1_CACHE = {};
+// Sem imagem na biblioteca yuhonas (confirmado):
+const EX_NO_IMG = new Set([
+  "Supino reto máquina","Supino inclinado máquina","Supino inclinado Articulado",
+  "Desenvolvimento máquina","Extensão lombar máquina",
+  "Agachamento sumô barra","Agachamento sumô halteres",
+  "Abdução em pé polia","Glúteo 4 apoios cabo",
+]);
 
-// useExGif: slug direto do mapa, alterna 0.jpg/1.jpg a 800ms
+function getImgSlug(exName) {
+  return EX_IMG_MAP[exName] || null;
+}
+
+// useExGif: carrega 2 fotos e alterna simulando animação
 function useExGif(exName) {
-  const slug = EX_SLUG_MAP[exName] || null;
+  const slug = getImgSlug(exName);
   const [frame, setFrame] = useState(0);
-  const [hasFrame1, setHasFrame1] = useState(true);
-  const loading = false;
+  const [img1Ok, setImg1Ok] = useState(true);
 
-  // Verifica se 1.jpg existe (só na primeira vez por slug)
   useEffect(() => {
+    setFrame(0); setImg1Ok(true);
     if (!slug) return;
-    if (FRAME1_CACHE[slug] !== undefined) {
-      setHasFrame1(FRAME1_CACHE[slug]);
-      return;
-    }
-    const img = new Image();
-    img.onload  = () => { FRAME1_CACHE[slug] = true;  setHasFrame1(true); };
-    img.onerror = () => { FRAME1_CACHE[slug] = false; setHasFrame1(false); };
-    img.src = YUHONAS_BASE + '/' + slug + '/1.jpg';
+    const t = setInterval(() => setFrame(f => f === 0 ? 1 : 0), 900);
+    return () => clearInterval(t);
   }, [slug]);
 
-  // Alterna frames
-  useEffect(() => {
-    if (!slug) return;
-    const t = setInterval(() => setFrame(f => (f === 0 && hasFrame1) ? 1 : 0), 800);
-    return () => clearInterval(t);
-  }, [slug, hasFrame1]);
-
-  const gifUrl = slug ? YUHONAS_BASE + '/' + slug + '/' + frame + '.jpg' : null;
-  return { gifUrl, loading, slug, frame, hasFrame1 };
+  const url0 = slug ? YUHONAS_BASE+'/'+slug+'/0.jpg' : null;
+  const url1 = slug && img1Ok ? YUHONAS_BASE+'/'+slug+'/1.jpg' : url0;
+  const gifUrl = frame === 0 ? url0 : url1;
+  return { gifUrl, loading: false, slug, frame, setImg1Ok, url0, url1 };
 }
 
 // ── Dicas de execução ────────────────────────────────────────────────────────
@@ -839,11 +819,16 @@ const ExerciseDetail = ({exName, onClose, history}) => {
 
       <div style={{padding:'1rem',display:'grid',gap:'1rem',maxWidth:'480px',margin:'0 auto'}}>
 
-        {/* GIF animado */}
+        {/* Imagem de execução */}
         {(()=>{
-          const gifSlug = EX_SLUG_MAP[exName] || null;
+          const slug = EX_IMG_MAP[exName] || null;
+          if (!slug) return null;
           return (
-            <GifAnimBlock slug={gifSlug} exName={exName}/>
+            <div style={{background:'#000',borderRadius:'12px',overflow:'hidden',border:'1px solid var(--color-border)',aspectRatio:'16/9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <img src={YUHONAS_BASE+'/'+slug+'/0.jpg'} alt={exName}
+                style={{width:'100%',height:'100%',objectFit:'contain'}}
+                onError={e=>e.target.style.display='none'}/>
+            </div>
           );
         })()}
 
@@ -913,114 +898,36 @@ const ExerciseDetail = ({exName, onClose, history}) => {
 
 // ── ExGifModal — modal de execução redesenhado ──────────────────────────────
 const ExGifModal = ({exName, onClose}) => {
-  const {slug, frame} = useExGif(exName);
-  const ex = EXS.find(e=>e.name===exName);
-  const [img0Err, setImg0Err] = useState(false);
-  const [img1Err, setImg1Err] = useState(false);
+  const {url0, url1, slug, frame, setImg1Ok} = useExGif(exName);
   const tip = EXEC_TIPS[exName];
-
-  const url0 = slug ? YUHONAS_BASE+'/'+slug+'/0.jpg' : null;
-  const url1 = slug ? YUHONAS_BASE+'/'+slug+'/1.jpg' : null;
-  const hasImg = slug && !img0Err;
-
-  // Cores por grupo
-  const GRP_COLOR = {
-    "Peito":"#e74c3c","Ombro":"#e67e22","Costas":"#27ae60",
-    "Bíceps":"#2980b9","Tríceps":"#8e44ad","Quadríceps":"#16a085",
-    "Posterior de Coxa":"#d35400","Glúteo":"#c0392b","Trapézio":"#7f8c8d",
-    "Panturrilha":"#1abc9c","Abdômen":"#f39c12",
-  };
-  const grpColor = GRP_COLOR[ex?.primary] || '#e31b23';
-
+  const [imgError, setImgError] = useState(false);
+  const currentUrl = frame === 0 ? url0 : url1;
   return (
     <Modal onClose={onClose}>
-      {/* Header */}
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.85rem',gap:'.5rem'}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:'.55rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.12em',color:grpColor,marginBottom:'3px'}}>
-            {ex?.primary || 'Execução'}
-          </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.35rem',textTransform:'uppercase',letterSpacing:'.02em',color:'var(--color-text)',lineHeight:1.1}}>{exName}</div>
-          {ex && <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'4px'}}>{ex.equipment} · {ex.difficulty}</div>}
-        </div>
-        {hasImg && (
-          <div style={{flexShrink:0,padding:'.22rem .55rem',background:`${grpColor}22`,border:`1px solid ${grpColor}44`,borderRadius:'6px',fontSize:'.58rem',fontWeight:800,color:grpColor,textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>
-            ANIMAÇÃO
-          </div>
-        )}
+      <div style={{marginBottom:'.6rem'}}>
+        <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Execução</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>{exName}</div>
       </div>
-
-      {/* Imagem animada */}
-      <div style={{
-        borderRadius:'12px',overflow:'hidden',
-        border:`1px solid ${hasImg ? grpColor+'33' : '#1e1e1e'}`,
-        background:'#000',
-        aspectRatio:'4/3',
-        display:'flex',alignItems:'center',justifyContent:'center',
-        position:'relative',
-      }}>
-        {slug && !img0Err ? (
-          <>
-            <img src={url0} alt={exName}
-              style={{width:'100%',height:'100%',objectFit:'cover',display:frame===0?'block':'none',transition:'opacity .1s'}}
-              onError={()=>setImg0Err(true)}/>
-            {url1 && <img src={url1} alt={exName}
-              style={{width:'100%',height:'100%',objectFit:'cover',display:frame===1?'block':'none',transition:'opacity .1s'}}
-              onError={()=>setImg1Err(true)}/>}
-            {/* Badge animação */}
-            <div style={{position:'absolute',bottom:'8px',right:'8px',
-              background:'rgba(0,0,0,.7)',backdropFilter:'blur(4px)',
-              borderRadius:'6px',padding:'3px 8px',
-              fontSize:'.6rem',fontWeight:700,color:'#fff',letterSpacing:'.05em',
-              display:'flex',alignItems:'center',gap:'5px'}}>
-              <div style={{width:'6px',height:'6px',borderRadius:'50%',background:grpColor,animation:'pulse 1s ease-in-out infinite'}}/>
-              LIVE
+      <div style={{background:'#000',borderRadius:'10px',overflow:'hidden',border:'1px solid var(--color-border)',minHeight:'160px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {slug && !imgError
+          ? <img src={currentUrl} alt={exName}
+              style={{width:'100%',maxHeight:'300px',objectFit:'contain'}}
+              onError={() => {
+                if (frame === 1) { setImg1Ok(false); }
+                else { setImgError(true); }
+              }}/>
+          : <div style={{textAlign:'center',color:'var(--color-text-sub)',padding:'2rem'}}>
+              <div style={{fontSize:'2rem',marginBottom:'.4rem'}}>🎬</div>
+              <div style={{fontSize:'.78rem'}}>Não disponível</div>
             </div>
-          </>
-        ) : (
-          <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
-            <div style={{fontSize:'2.5rem',marginBottom:'.5rem',opacity:.4}}>🏋️</div>
-            <div style={{fontSize:'.8rem',fontWeight:600,opacity:.6}}>Sem animação disponível</div>
-            <div style={{fontSize:'.65rem',opacity:.4,marginTop:'4px'}}>{exName}</div>
-          </div>
-        )}
+        }
       </div>
-
-      {/* Músculos pills */}
-      {ex && (
-        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',marginTop:'.75rem'}}>
-          {[
-            {label:'Principal', val:ex.primary, color:grpColor},
-            {label:'Foco', val:ex.subgroup, color:'#facc15'},
-            {label:'Equip.', val:ex.equipment, color:'#4ade80'},
-          ].filter(i=>i.val).map(item=>(
-            <div key={item.label} style={{padding:'.22rem .6rem',background:`${item.color}12`,border:`1px solid ${item.color}30`,borderRadius:'20px',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <div style={{width:'5px',height:'5px',borderRadius:'50%',background:item.color,flexShrink:0}}/>
-              <span style={{fontSize:'.62rem',color:item.color,fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>{item.label}</span>
-              <span style={{fontSize:'.7rem',color:'var(--color-text)',fontWeight:600}}>{item.val}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Dica de execução */}
-      {tip && (
-        <div style={{marginTop:'.75rem',padding:'.7rem .85rem',
-          background:'rgba(255,255,255,.03)',
-          border:'1px solid #1e1e1e',
-          borderLeft:`3px solid ${grpColor}`,
-          borderRadius:'0 8px 8px 0'}}>
-          <div style={{fontSize:'.55rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.1em',color:grpColor,marginBottom:'.35rem'}}>Execução correta</div>
-          <p style={{fontSize:'.78rem',color:'var(--color-text-sub)',lineHeight:1.55,margin:0}}>{tip}</p>
-        </div>
-      )}
+      {tip && <div style={{marginTop:'.6rem',background:'rgba(255,255,255,.04)',borderRadius:'8px',padding:'.5rem .7rem',fontSize:'.76rem',color:'var(--color-text-sub)',lineHeight:1.5}}>💡 {tip}</div>}
     </Modal>
   );
 };
-
-// ── ExGifThumb — thumbnail com preview real + overlay play ──────────────────
 const ExGifThumb = ({exName, onClick}) => {
-  const slug = EX_SLUG_MAP[exName] || null;
+  const slug = EX_IMG_MAP[exName] || null;
   const previewUrl = slug ? YUHONAS_BASE + '/' + slug + '/0.jpg' : null;
   const [imgErr, setImgErr] = useState(false);
   return (
@@ -1335,13 +1242,13 @@ const NAV_ITEMS = [
   {section: 'TREINO',   icon:'🏋️', label:'Treino',      screen:'session'},
   {section: null,       icon:'🏃', label:'Cardio',      screen:'cardio'},
   {section: null,       icon:'🎵', label:'Beats',       screen:'beats'},
+  {section: 'NUTRIÇÃO', icon:'🥗', label:'DarkDiet',    screen:'diet'},
   {section: 'FICHAS',   icon:'📋', label:'Minhas Fichas',screen:'plans'},
   {section: null,       icon:'⚙️', label:'Montar Ficha',screen:'builder'},
   {section: 'PROGRESSO',icon:'📈', label:'Histórico',   screen:'history'},
   {section: null,       icon:'📏', label:'Medidas',     screen:'measures'},
   {section: 'SOCIAL',   icon:'👥', label:'Squad',       screen:'community'},
-  {section: 'NUTRIÇÃO', icon:'🥗', label:'Dieta',       screen:'diet'},
-  {section: null,       icon:'🏟️', label:'Modo Academia',screen:'gym'},
+  {section: null,       icon:'🏟️', label:'DarkGym',     screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
 ];
 
@@ -1376,7 +1283,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.5.4
+          DarkSet · V5.6.3
         </div>
       </div>
     </>
@@ -2092,43 +1999,46 @@ const Builder=({planId,plans,setPlans,setToast})=>{
                 const added=!canAdd(ex);
                 rows.push(
                   <div key={ex.id} style={{
-                    display:'grid',gridTemplateColumns:'52px 1fr auto auto',alignItems:'center',gap:'.6rem',
+                    display:'grid',gridTemplateColumns:'52px 1fr',alignItems:'center',gap:'.6rem',
                     background:added?'rgba(227,27,35,.04)':'rgba(0,0,0,.25)',
                     border:added?'1px solid rgba(227,27,35,.15)':'1px solid #151515',
-                    borderRadius:'8px',padding:'.6rem .85rem',transition:'border-color .15s'
+                    borderRadius:'8px',padding:'.55rem .7rem',transition:'border-color .15s'
                   }}>
                     <ExGifThumb exName={ex.name} onClick={()=>setGifModal(ex.name)}/>
-                    <div>
-                      <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#e31b23':'var(--color-text)'}}>{ex.name}</div>
-                      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{ex.equipment} · {ex.difficulty} · <span onClick={()=>setDetailEx(ex.name)} style={{color:'var(--color-accent)',cursor:'pointer',fontWeight:700}}>ver detalhes</span></div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:'.84rem',fontWeight:700,color:added?'#e31b23':'var(--color-text)',lineHeight:1.2,marginBottom:'2px'}}>{ex.name}</div>
+                      <div style={{fontSize:'.6rem',color:'var(--color-text-sub)'}}>{ex.equipment} · {ex.difficulty} · <span onClick={e=>{e.stopPropagation();setDetailEx(ex.name);}} style={{color:'var(--color-accent)',cursor:'pointer',fontWeight:700}}>detalhes</span></div>
+                      {/* Select + Add button on same row */}
+                      <div style={{display:'flex',gap:'.4rem',marginTop:'.45rem',alignItems:'center'}}>
+                        {!added && (
+                          <select
+                            defaultValue="3"
+                            id={"sets_"+ex.id}
+                            style={{width:'3.2rem',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.25rem .2rem',fontSize:'.78rem',color:'var(--color-text)',textAlign:'center'}}
+                            onClick={ev=>ev.stopPropagation()}
+                          >
+                            {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}x</option>)}
+                          </select>
+                        )}
+                        <button
+                          onClick={()=>{
+                            if(added) return;
+                            const sel=document.getElementById("sets_"+ex.id);
+                            addEx(ex, sel?Number(sel.value):3);
+                          }}
+                          disabled={added}
+                          style={{
+                            flex:1,
+                            background:added?'rgba(227,27,35,.07)':'var(--color-accent)',
+                            border:added?'1px solid rgba(227,27,35,.2)':'none',
+                            borderRadius:'7px',padding:'.32rem .5rem',
+                            color:added?'var(--color-accent)':'#fff',
+                            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',
+                            textTransform:'uppercase',cursor:added?'default':'pointer',
+                        }}
+                      >{added?'✓ NA FICHA':'+ ADICIONAR'}</button>
+                      </div>
                     </div>
-                    {!added && (
-                      <select
-                        defaultValue="3"
-                        id={"sets_"+ex.id}
-                        style={{width:'3.2rem',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.8rem',color:'var(--color-text)',textAlign:'center'}}
-                        onClick={ev=>ev.stopPropagation()}
-                      >
-                        {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}x</option>)}
-                      </select>
-                    )}
-                    <button
-                      onClick={()=>{
-                        if(added) return;
-                        const sel=document.getElementById("sets_"+ex.id);
-                        addEx(ex, sel?Number(sel.value):3);
-                      }}
-                      disabled={added}
-                      style={{
-                        background:added?'transparent':'var(--color-accent)',
-                        border:added?'1px solid #1a1a1a':'none',
-                        borderRadius:'7px',padding:'.4rem .65rem',
-                        color:added?'#333':'#fff',
-                        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',
-                        textTransform:'uppercase',letterSpacing:'.04em',cursor:added?'default':'pointer',
-                        whiteSpace:'nowrap'
-                    }}
-                  >{added?'✓ Na ficha':'+ Add'}</button>
                   </div>
                 );
               });
@@ -3070,9 +2980,9 @@ const GymMode = ({prefs, setPrefs, setToast, goto}) => {
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
       <div>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-          MODO <span style={{color:'var(--color-accent)'}}>ACADEMIA</span>
+          DARK<span style={{color:'var(--color-accent)'}}>GYM</span>
         </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>Interface otimizada para treinar</div>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>Ativa timer de descanso automático · bloqueia tela · vibração · foco total</div>
       </div>
 
       {/* Toggle */}
@@ -3083,7 +2993,7 @@ const GymMode = ({prefs, setPrefs, setToast, goto}) => {
               {active ? '🏋️ Na academia' : 'Desligado'}
             </div>
             <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
-              {active ? 'Timer e interface otimizados' : 'Ative ao chegar na academia'}
+              {active ? 'Timer auto · tela ativa · vibração entre séries' : 'Ative ao chegar na academia'}
             </div>
           </div>
           <Switch checked={active} onChange={toggle}/>
@@ -4237,227 +4147,701 @@ const Profile=({prefs,setPrefs,history})=>{
 const DIET_LS = 'darkset.v1.diet';
 const MEAL_ICONS = ['🍳','🥗','🍱','🍎','🥛','🍕','🥩','🥦','🧃','🫙','🍌','🥤','🍚','🥚','🫐'];
 
+// ── BarcodeScanner: câmera + Open Food Facts ──────────────────────────────
+const BarcodeScanner = ({onResult, onClose}) => {
+  const videoRef = React.useRef(null);
+  const [status, setStatus] = React.useState('starting'); // starting | scanning | loading | error
+  const [errMsg, setErrMsg] = React.useState('');
+  const [manualCode, setManualCode] = React.useState('');
+  const streamRef = React.useRef(null);
+  const codeReaderRef = React.useRef(null);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    if (codeReaderRef.current) {
+      try { codeReaderRef.current.reset(); } catch(e) {}
+    }
+  };
+
+  const fetchProduct = async (barcode) => {
+    setStatus('loading');
+    try {
+      const r = await fetch('https://world.openfoodfacts.org/api/v0/product/'+barcode+'.json');
+      const data = await r.json();
+      if (data.status !== 1 || !data.product) {
+        setErrMsg('Produto não encontrado. Tente outro código ou preencha manualmente.');
+        setStatus('error'); return;
+      }
+      const p = data.product;
+      const n = p.nutriments || {};
+      const per = n['energy-kcal_serving'] ? 'serving' : '100g';
+      const suffix = per === 'serving' ? '_serving' : '_100g';
+      onResult({
+        name: p.product_name || p.product_name_pt || 'Produto escaneado',
+        calories: String(Math.round(n['energy-kcal'+suffix] || n['energy-kcal'] || 0)),
+        protein:  String(Math.round(n['proteins'+suffix] || n.proteins || 0)),
+        carbs:    String(Math.round(n['carbohydrates'+suffix] || n.carbohydrates || 0)),
+        fat:      String(Math.round(n['fat'+suffix] || n.fat || 0)),
+        note: p.brands ? p.brands.split(',')[0].trim() : '',
+        icon: '🛒',
+      });
+    } catch(e) {
+      setErrMsg('Erro ao buscar produto. Verifique sua conexão.');
+      setStatus('error');
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const start = async () => {
+      // Try to use ZXing if available, fallback to manual
+      if (typeof ZXing === 'undefined') {
+        setStatus('manual'); return;
+      }
+      try {
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        codeReaderRef.current = codeReader;
+        const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+        const deviceId = devices.length > 1 ? devices[devices.length-1].deviceId : (devices[0]?.deviceId);
+        if (!deviceId) { setStatus('manual'); return; }
+
+        const stream = await navigator.mediaDevices.getUserMedia({video:{deviceId,facingMode:'environment'}});
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+
+        setStatus('scanning');
+        codeReader.decodeFromVideoDevice(deviceId, videoRef.current, (result, err) => {
+          if (cancelled) return;
+          if (result) {
+            stopCamera();
+            fetchProduct(result.getText());
+          }
+        });
+      } catch(e) {
+        if (!cancelled) setStatus('manual');
+      }
+    };
+    start();
+    return () => { cancelled = true; stopCamera(); };
+  }, []);
+
+  const handleManual = () => {
+    if (!manualCode.trim()) return;
+    fetchProduct(manualCode.trim());
+  };
+
+  return (
+    <Modal onClose={()=>{stopCamera();onClose();}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>
+        📷 Scanner de Alimentos
+      </div>
+
+      {status==='starting' && (
+        <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
+          <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
+          <div style={{fontSize:'.82rem'}}>Iniciando câmera...</div>
+        </div>
+      )}
+
+      {status==='scanning' && (
+        <div style={{borderRadius:'10px',overflow:'hidden',background:'#000',marginBottom:'.75rem',position:'relative'}}>
+          <video ref={videoRef} autoPlay playsInline muted style={{width:'100%',maxHeight:'240px',objectFit:'cover',display:'block'}}/>
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
+            <div style={{width:'200px',height:'80px',border:'2px solid var(--color-accent)',borderRadius:'8px',boxShadow:'0 0 0 1000px rgba(0,0,0,.4)'}}/>
+          </div>
+        </div>
+      )}
+
+      {status==='loading' && (
+        <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
+          <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
+          <div style={{fontSize:'.82rem'}}>Buscando produto...</div>
+        </div>
+      )}
+
+      {status==='error' && (
+        <div style={{textAlign:'center',padding:'1.5rem',color:'#f87171',fontSize:'.82rem',marginBottom:'.5rem'}}>
+          ⚠️ {errMsg}
+        </div>
+      )}
+
+      {/* Manual barcode input - always visible */}
+      {(status==='manual' || status==='scanning' || status==='error') && (
+        <div style={{marginTop:status==='scanning'?0:'.5rem'}}>
+          <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'4px'}}>
+            {status==='scanning' ? 'Ou digite o código manualmente:' : 'Código de barras:'}
+          </div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input
+              value={manualCode}
+              onChange={e=>setManualCode(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&handleManual()}
+              placeholder="Ex: 7891000100103"
+              type="number"
+              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}
+            />
+            <button onClick={handleManual} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.82rem',cursor:'pointer'}}>
+              Buscar
+            </button>
+          </div>
+          <div style={{fontSize:'.62rem',color:'#555',marginTop:'.3rem'}}>Dados via Open Food Facts</div>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+// ── PresetChecker: componente separado para checar refeições do preset ──────
+const PresetChecker = ({plan, viewDate, setDiet, todayStr}) => {
+  const checkedKey = 'ds_ck_'+viewDate+'_'+(plan.name||'').replace(/\s/g,'');
+  const [checked, setChecked] = useState(() => load(checkedKey, []));
+
+  useEffect(() => { save(checkedKey, checked); }, [checked, checkedKey]);
+
+  const toggleCheck = (si) => {
+    setChecked(prev => {
+      const next = prev.includes(si) ? prev.filter(x=>x!==si) : [...prev, si];
+      // Sync checked slots → diet log for this day
+      const meals = (plan.slots||[])
+        .filter((_,i) => next.includes(i))
+        .map(slot => ({
+          name: slot.label || '',
+          time: slot.time || '',
+          icon: '🍳',
+          calories: String((slot.items||[]).reduce((a,it)=>a+(Number(it.calories)||0),0) || slot.calories || 0),
+          protein:  String((slot.items||[]).reduce((a,it)=>a+(Number(it.protein)||0),0)  || slot.protein  || 0),
+          carbs:    String((slot.items||[]).reduce((a,it)=>a+(Number(it.carbs)||0),0)    || slot.carbs    || 0),
+          fat:      String((slot.items||[]).reduce((a,it)=>a+(Number(it.fat)||0),0)      || slot.fat      || 0),
+          note: (slot.items||[]).map(i=>i.name).filter(Boolean).join(', '),
+        }));
+      setDiet(d => ({...d, [viewDate]: meals}));
+      return next;
+    });
+  };
+
+  const totalPlanCal = (plan.slots||[]).reduce((a,slot)=>
+    a + (slot.items||[]).reduce((b,it)=>b+(Number(it.calories)||0),0), 0);
+  const checkedCal = (plan.slots||[])
+    .filter((_,i)=>checked.includes(i))
+    .reduce((a,slot)=>a+(slot.items||[]).reduce((b,it)=>b+(Number(it.calories)||0),0),0);
+
+  return (
+    <div style={{display:'grid',gap:'.5rem'}}>
+      {/* Progress bar */}
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.7rem .85rem'}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.4rem'}}>
+          <span style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>Progresso do plano</span>
+          <span style={{fontSize:'.7rem',fontWeight:700,color:'var(--color-accent)'}}>{checked.length}/{(plan.slots||[]).length} refeições · {checkedCal} kcal</span>
+        </div>
+        <div style={{height:'5px',background:'rgba(255,255,255,.07)',borderRadius:'4px',overflow:'hidden'}}>
+          <div style={{height:'100%',width:(plan.slots?.length?Math.round(checked.length/(plan.slots.length)*100):0)+'%',background:'#4ade80',borderRadius:'4px',transition:'width .3s'}}/>
+        </div>
+      </div>
+      {/* Slots */}
+      {(plan.slots||[]).map((slot,si)=>{
+        const isChecked = checked.includes(si);
+        const slotCal = (slot.items||[]).reduce((a,it)=>a+(Number(it.calories)||0),0) || slot.calories || 0;
+        const slotItems = (slot.items||[]).filter(i=>i.name).map(i=>i.name).join(', ');
+        return (
+          <button key={si} onClick={()=>toggleCheck(si)}
+            style={{display:'grid',gridTemplateColumns:'28px 1fr auto',alignItems:'center',gap:'.6rem',
+              background:isChecked?'rgba(74,222,128,.06)':'var(--color-card)',
+              border:'1px solid '+(isChecked?'rgba(74,222,128,.3)':'var(--color-border)'),
+              borderRadius:'12px',padding:'.75rem .85rem',cursor:'pointer',textAlign:'left',transition:'all .2s'}}>
+            <div style={{width:'22px',height:'22px',borderRadius:'50%',border:'2px solid '+(isChecked?'#4ade80':'#333'),
+              background:isChecked?'#4ade80':'transparent',display:'flex',alignItems:'center',justifyContent:'center',
+              transition:'all .2s',flexShrink:0}}>
+              {isChecked && <span style={{color:'#000',fontSize:'.75rem',fontWeight:900}}>✓</span>}
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:'.86rem',color:isChecked?'#4ade80':'var(--color-text)',
+                textDecoration:isChecked?'line-through':'none'}}>{slot.label}</div>
+              {(slot.time||slotItems) && <div style={{fontSize:'.63rem',color:'var(--color-text-sub)',marginTop:'1px',
+                whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                {slot.time}{slot.time&&slotItems?' · ':''}{slotItems.slice(0,40)}
+              </div>}
+            </div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',
+              color:isChecked?'#4ade80':'var(--color-text-sub)',flexShrink:0}}>
+              {slotCal>0 ? slotCal+' kcal' : ''}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const Diet = ({setToast}) => {
   const todayStr = () => new Date().toISOString().slice(0,10);
-  const [diet, setDiet] = useState(() => load(DIET_LS, {}));
+  const [diet, setDiet]         = useState(() => load(DIET_LS, {}));
+  const [goals, setGoals]       = useState(() => load('ds_diet_goals', {calories:2000,protein:150,carbs:250,fat:65}));
+  const [plans, setDietPlans]   = useState(() => load('ds_diet_plans', []));
   const [viewDate, setViewDate] = useState(todayStr());
-  const [showAdd, setShowAdd] = useState(false);
-  const [editIdx, setEditIdx] = useState(null);
-  const [form, setForm] = useState({name:'',calories:'',protein:'',carbs:'',fat:'',time:'',icon:'🍳',note:''});
+  const [tab, setTab]           = useState('log');        // 'log' | 'plans' | 'goals'
+  const [showAdd, setShowAdd]   = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
+  const [editIdx, setEditIdx]   = useState(null);
+  const [form, setForm]         = useState({name:'',calories:'',protein:'',carbs:'',fat:'',time:'',icon:'🍳',note:''});
+  const [planForm, setPlanForm] = useState({name:'', meals:[]});
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [logMode, setLogMode]           = useState('free');   // 'free' | 'preset'
+  const [activePlanIdx, setActivePlanIdx] = useState(null);
+  const [showScanner, setShowScanner]   = useState(false);
+  const [scanLoading, setScanLoading]   = useState(false);
+  const [scanError, setScanError]       = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
 
   useEffect(() => save(DIET_LS, diet), [diet]);
+  useEffect(() => save('ds_diet_goals', goals), [goals]);
+  useEffect(() => save('ds_diet_plans', plans), [plans]);
 
   const dayMeals = diet[viewDate] || [];
+  const totals = useMemo(() => dayMeals.reduce((acc,m) => ({
+    calories: acc.calories+(Number(m.calories)||0),
+    protein:  acc.protein +(Number(m.protein)||0),
+    carbs:    acc.carbs   +(Number(m.carbs)||0),
+    fat:      acc.fat     +(Number(m.fat)||0),
+  }), {calories:0,protein:0,carbs:0,fat:0}), [dayMeals]);
 
-  const totals = useMemo(() => dayMeals.reduce((acc, m) => ({
-    calories: acc.calories + (Number(m.calories)||0),
-    protein:  acc.protein  + (Number(m.protein)||0),
-    carbs:    acc.carbs    + (Number(m.carbs)||0),
-    fat:      acc.fat      + (Number(m.fat)||0),
-  }), {calories:0, protein:0, carbs:0, fat:0}), [dayMeals]);
+  // Streak: dias consecutivos com ao menos 1 refeição
+  const streak = useMemo(() => {
+    let count = 0, d = new Date();
+    while(true) {
+      const k = d.toISOString().slice(0,10);
+      if (diet[k]?.length > 0) { count++; d.setDate(d.getDate()-1); }
+      else break;
+    }
+    return count;
+  }, [diet]);
+
+  // Últimos 7 dias para gráfico
+  const weekData = useMemo(() => {
+    const days = [];
+    for (let i=6; i>=0; i--) {
+      const d = new Date(); d.setDate(d.getDate()-i);
+      const k = d.toISOString().slice(0,10);
+      const cal = (diet[k]||[]).reduce((s,m)=>s+(Number(m.calories)||0),0);
+      days.push({ label: ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()], cal, today: i===0 });
+    }
+    return days;
+  }, [diet]);
+  const maxCal = Math.max(...weekData.map(d=>d.cal), goals.calories, 1);
 
   const resetForm = () => {
     const now = new Date();
-    setForm({name:'', calories:'', protein:'', carbs:'', fat:'',
-      time: String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
-      icon:'🍳', note:''});
+    setForm({name:'',calories:'',protein:'',carbs:'',fat:'',
+      time:String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
+      icon:'🍳',note:''});
     setEditIdx(null);
   };
 
   const openAdd = () => { resetForm(); setShowAdd(true); };
-  const openEdit = (idx) => { setForm({...dayMeals[idx]}); setEditIdx(idx); setShowAdd(true); };
-
+  const openEdit = (i) => { setForm({...dayMeals[i]}); setEditIdx(i); setShowAdd(true); };
   const saveMeal = () => {
-    if(!form.name.trim()) { setToast('Informe o nome da refeição'); return; }
+    if(!form.name.trim()) { setToast('Informe o nome'); return; }
     setDiet(d => {
       const arr = [...(d[viewDate]||[])];
-      if(editIdx !== null) arr[editIdx] = {...form};
+      if(editIdx!==null) arr[editIdx]={...form};
       else arr.push({...form});
-      arr.sort((a,b) => (a.time||'').localeCompare(b.time||''));
-      return {...d, [viewDate]: arr};
+      arr.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+      return {...d,[viewDate]:arr};
     });
     setShowAdd(false);
-    setToast(editIdx !== null ? 'Refeição atualizada ✓' : 'Refeição adicionada ✓');
+    setToast(editIdx!==null?'Refeição atualizada ✓':'Adicionado ✓');
+  };
+  const deleteMeal = (i) => {
+    if(!confirm('Excluir?')) return;
+    setDiet(d=>{const arr=[...(d[viewDate]||[])];arr.splice(i,1);return {...d,[viewDate]:arr};});
   };
 
-  const deleteMeal = (idx) => {
-    if(!confirm('Excluir esta refeição?')) return;
-    setDiet(d => { const arr=[...(d[viewDate]||[])]; arr.splice(idx,1); return {...d,[viewDate]:arr}; });
-    setToast('Refeição removida');
+  // Apply plan to current day
+  const applyPlan = (plan) => {
+    if(!confirm('Aplicar plano "'+plan.name+'" para hoje? Substitui as refeições atuais.')) return;
+    // Convert slots-based plan to day meals
+    const meals = (plan.slots || plan.meals || []).map(slot => ({
+      name: slot.label || slot.name || '',
+      time: slot.time || '',
+      icon: slot.icon || '🍳',
+      calories: slot.items ? String(slot.items.reduce((a,i)=>a+(Number(i.calories)||0),0)) : String(slot.calories||0),
+      protein:  slot.items ? String(slot.items.reduce((a,i)=>a+(Number(i.protein)||0),0))  : String(slot.protein||0),
+      carbs:    slot.items ? String(slot.items.reduce((a,i)=>a+(Number(i.carbs)||0),0))    : String(slot.carbs||0),
+      fat:      slot.items ? String(slot.items.reduce((a,i)=>a+(Number(i.fat)||0),0))      : String(slot.fat||0),
+      note: slot.items ? slot.items.map(i=>i.name).filter(Boolean).join(', ') : (slot.note||''),
+    })).filter(m => m.name);
+    setDiet(d=>({...d,[todayStr()]:meals}));
+    setToast('✅ Plano "'+plan.name+'" aplicado!');
+    setTab('log'); setViewDate(todayStr());
   };
 
-  const changeDate = (offset) => {
-    const d = new Date(viewDate+'T12:00:00'); d.setDate(d.getDate()+offset);
-    setViewDate(d.toISOString().slice(0,10));
-  };
+  const dateLabel = viewDate === todayStr() ? 'Hoje' : new Date(viewDate+'T12:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+  const pct = (v,g) => Math.min(100, g>0 ? Math.round(v/g*100) : 0);
 
-  const fmtDate = (iso) => {
-    const dt = new Date(iso+'T12:00:00');
-    const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    const [,m,d] = iso.split('-');
-    return days[dt.getDay()]+', '+d+' '+months[Number(m)-1];
-  };
-
-  const isToday = viewDate === todayStr();
+  const MacroBar = ({label, val, goal, color}) => (
+    <div style={{flex:1}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+        <span style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>{label}</span>
+        <span style={{fontSize:'.6rem',color:val>=goal?'#4ade80':'var(--color-text-sub)'}}>{val}<span style={{opacity:.5}}>/{goal}g</span></span>
+      </div>
+      <div style={{height:'4px',background:'rgba(255,255,255,.07)',borderRadius:'4px',overflow:'hidden'}}>
+        <div style={{height:'100%',width:pct(val,goal)+'%',background:color,borderRadius:'4px',transition:'width .4s'}}/>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem',paddingBottom:'2rem'}}>
-
-      {/* Navegação de data */}
-      <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em'}}>
-            🥗 <span style={{color:'var(--color-accent)'}}>Dieta</span>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'var(--color-accent)'}}>DIET</span>
           </div>
-          <button onClick={openAdd}
-            style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>
-            + Refeição
+          {streak > 0 && <div style={{fontSize:'.65rem',color:'#f59e0b',marginTop:'2px'}}>🔥 {streak} dia{streak!==1?'s':''} consecutivo{streak!==1?'s':''}</div>}
+        </div>
+        <button onClick={()=>setShowGoals(true)} style={{background:'rgba(255,255,255,.06)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .7rem',color:'var(--color-text-sub)',fontSize:'.72rem',cursor:'pointer'}}>⚙️ Metas</button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:'.4rem'}}>
+        {[['log','📋 Registro'],['plans','📄 Planos'],].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{flex:1,background:tab===k?'var(--color-accent)':'rgba(255,255,255,.05)',border:'none',borderRadius:'8px',padding:'.5rem',color:tab===k?'#fff':'var(--color-text-sub)',fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab==='log' && <>
+        {/* Mode toggle: Livre vs Preset */}
+        <div style={{display:'flex',background:'rgba(255,255,255,.04)',borderRadius:'10px',padding:'3px',gap:'3px'}}>
+          <button onClick={()=>setLogMode('free')} style={{flex:1,padding:'.42rem',borderRadius:'8px',border:'none',background:logMode==='free'?'rgba(255,255,255,.1)':'transparent',color:logMode==='free'?'var(--color-text)':'var(--color-text-sub)',fontWeight:700,fontSize:'.78rem',cursor:'pointer',transition:'all .2s'}}>
+            ✏️ Dieta livre
+          </button>
+          <button onClick={()=>setLogMode('preset')} style={{flex:1,padding:'.42rem',borderRadius:'8px',border:'none',background:logMode==='preset'?'var(--color-accent)':'transparent',color:logMode==='preset'?'#fff':'var(--color-text-sub)',fontWeight:700,fontSize:'.78rem',cursor:'pointer',transition:'all .2s'}}>
+            📋 Usar preset
           </button>
         </div>
 
         {/* Date nav */}
         <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-          <button onClick={()=>changeDate(-1)}
-            style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .7rem',color:'#888',cursor:'pointer',fontSize:'.9rem'}}>‹</button>
-          <div style={{flex:1,textAlign:'center'}}>
-            <div style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{fmtDate(viewDate)}</div>
-            {isToday && <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Hoje</div>}
-          </div>
-          <button onClick={()=>changeDate(1)} disabled={isToday}
-            style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.4rem .7rem',color:isToday?'#333':'#888',cursor:isToday?'default':'pointer',fontSize:'.9rem'}}>›</button>
+          <button onClick={()=>{const d=new Date(viewDate+'T12:00');d.setDate(d.getDate()-1);setViewDate(d.toISOString().slice(0,10));}} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',width:'34px',height:'34px',color:'var(--color-text)',cursor:'pointer',fontSize:'1rem'}}>‹</button>
+          <div style={{flex:1,textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>{dateLabel}</div>
+          <button onClick={()=>{const d=new Date(viewDate+'T12:00');d.setDate(d.getDate()+1);const t=todayStr();const nd=d.toISOString().slice(0,10);if(nd<=t)setViewDate(nd);}} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'8px',width:'34px',height:'34px',color:viewDate===todayStr()?'#333':'var(--color-text)',cursor:'pointer',fontSize:'1rem'}} disabled={viewDate===todayStr()}>›</button>
         </div>
-      </div>
 
-      {/* Resumo de macros */}
-      {dayMeals.length > 0 && (
-        <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
-          <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.65rem'}}>Resumo do dia</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.5rem',marginBottom:'.65rem'}}>
-            {[
-              {label:'Kcal', val:Math.round(totals.calories), color:'var(--color-accent)'},
-              {label:'Prot', val:Math.round(totals.protein)+'g', color:'#e74c3c'},
-              {label:'Carbs', val:Math.round(totals.carbs)+'g', color:'#f59e0b'},
-              {label:'Gord', val:Math.round(totals.fat)+'g', color:'#3b82f6'},
-            ].map(item => (
-              <div key={item.label} style={{textAlign:'center',padding:'.5rem .3rem',background:'rgba(0,0,0,.2)',borderRadius:'8px',border:`1px solid ${item.color}22`}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:item.color}}>{item.val||'—'}</div>
-                <div style={{fontSize:'.55rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>{item.label}</div>
+        {/* Calorias + macros resumo */}
+        <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1rem'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:'.5rem'}}>
+            <div>
+              <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Calorias</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',lineHeight:1,color:totals.calories>=goals.calories?'#4ade80':'var(--color-text)'}}>{totals.calories}</div>
+            </div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>meta: {goals.calories} kcal</div>
+          </div>
+          <div style={{height:'6px',background:'rgba(255,255,255,.07)',borderRadius:'6px',overflow:'hidden',marginBottom:'.85rem'}}>
+            <div style={{height:'100%',width:pct(totals.calories,goals.calories)+'%',background:totals.calories>goals.calories?'#f87171':'var(--color-accent)',borderRadius:'6px',transition:'width .4s'}}/>
+          </div>
+          <div style={{display:'flex',gap:'.75rem'}}>
+            <MacroBar label="Proteína" val={totals.protein} goal={goals.protein} color="#60a5fa"/>
+            <MacroBar label="Carbs"    val={totals.carbs}   goal={goals.carbs}   color="#f59e0b"/>
+            <MacroBar label="Gordura"  val={totals.fat}     goal={goals.fat}     color="#a78bfa"/>
+          </div>
+        </div>
+
+        {/* Gráfico semanal */}
+        <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1rem'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.75rem'}}>Calorias — últimos 7 dias</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:'4px',height:'64px'}}>
+            {weekData.map((d,i)=>(
+              <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
+                <div style={{width:'100%',borderRadius:'3px 3px 0 0',background:d.today?'var(--color-accent)':'rgba(255,255,255,.15)',height:Math.max(3,Math.round(d.cal/maxCal*52))+'px',transition:'height .3s'}}/>
+                <div style={{fontSize:'.55rem',color:d.today?'var(--color-accent)':'var(--color-text-sub)'}}>{d.label}</div>
               </div>
             ))}
           </div>
         </div>
-      )}
 
-      {/* Lista de refeições */}
-      {dayMeals.length > 0 && (
-        <div style={{display:'grid',gap:'.5rem'}}>
-          {dayMeals.map((meal, idx) => (
-            <div key={idx} className="ds-card" style={{padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-              <div style={{fontSize:'1.6rem',flexShrink:0}}>{meal.icon||'🍽️'}</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
-                  <span style={{fontWeight:700,fontSize:'.88rem',color:'var(--color-text)'}}>{meal.name}</span>
-                  {meal.time && <span style={{fontSize:'.6rem',color:'#444',fontWeight:600}}>· {meal.time}</span>}
-                </div>
-                <div style={{display:'flex',gap:'.5rem',marginTop:'3px',flexWrap:'wrap'}}>
-                  {meal.calories && <span style={{fontSize:'.7rem',color:'var(--color-accent)',fontWeight:700}}>{meal.calories} kcal</span>}
-                  {meal.protein  && <span style={{fontSize:'.65rem',color:'#888'}}>P: {meal.protein}g</span>}
-                  {meal.carbs    && <span style={{fontSize:'.65rem',color:'#888'}}>C: {meal.carbs}g</span>}
-                  {meal.fat      && <span style={{fontSize:'.65rem',color:'#888'}}>G: {meal.fat}g</span>}
-                </div>
-                {meal.note && <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px',fontStyle:'italic'}}>{meal.note}</div>}
+        {/* ── MODO LIVRE ── */}
+        {logMode==='free' && <>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Refeições ({dayMeals.length})</div>
+            <button onClick={openAdd} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.4rem .85rem',color:'#fff',fontWeight:800,fontSize:'.78rem',cursor:'pointer'}}>+ Adicionar</button>
+          </div>
+          {dayMeals.length===0
+            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.82rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
+                Nenhuma refeição registrada hoje
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:'4px',flexShrink:0}}>
-                <button onClick={()=>openEdit(idx)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .5rem',color:'#888',cursor:'pointer',fontSize:'.75rem'}}>✏️</button>
-                <button onClick={()=>deleteMeal(idx)} style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'6px',padding:'.3rem .5rem',color:'#e31b23',cursor:'pointer',fontSize:'.75rem'}}>✕</button>
+            : dayMeals.map((m,i)=>(
+              <div key={i} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.85rem'}}>
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'.5rem'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'.6rem',flex:1,minWidth:0}}>
+                    <span style={{fontSize:'1.3rem'}}>{m.icon||'🍳'}</span>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:'.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.name}</div>
+                      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{m.time||''} {m.note?'· '+m.note:''}</div>
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'var(--color-accent)'}}>{m.calories||0} kcal</div>
+                    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>P:{m.protein||0} C:{m.carbs||0} G:{m.fat||0}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:'.4rem',marginTop:'.6rem'}}>
+                  <button onClick={()=>openEdit(i)} style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.35rem',color:'var(--color-text-sub)',fontSize:'.72rem',cursor:'pointer'}}>✏️ Editar</button>
+                  <button onClick={()=>deleteMeal(i)} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.35rem .6rem',color:'#e31b23',fontSize:'.72rem',cursor:'pointer'}}>🗑</button>
+                </div>
               </div>
+            ))
+          }
+        </>}
+
+        {/* ── MODO PRESET ── */}
+        {logMode==='preset' && <>
+          {plans.length===0
+            ? <div style={{textAlign:'center',padding:'2rem 1rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',color:'var(--color-text-sub)',fontSize:'.82rem'}}>
+                <div style={{fontSize:'1.5rem',marginBottom:'.5rem'}}>📋</div>
+                Nenhum plano criado ainda.<br/>Crie um plano na aba <strong>Planos</strong> para usar aqui.
+              </div>
+            : <>
+                {/* Plan selector */}
+                <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+                  {plans.map((plan,pi)=>(
+                    <button key={pi} onClick={()=>setActivePlanIdx(pi===activePlanIdx?null:pi)}
+                      style={{padding:'.35rem .75rem',borderRadius:'8px',border:'1px solid '+(pi===activePlanIdx?'var(--color-accent)':'var(--color-border)'),background:pi===activePlanIdx?'rgba(227,27,35,.1)':'rgba(255,255,255,.04)',color:pi===activePlanIdx?'var(--color-accent)':'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>
+                      {plan.name}
+                    </button>
+                  ))}
+                </div>
+
+                {activePlanIdx!==null && plans[activePlanIdx] && (
+                  <PresetChecker
+                    plan={plans[activePlanIdx]}
+                    viewDate={viewDate}
+                    setDiet={setDiet}
+                    todayStr={todayStr}
+                  />
+                )}
+              </>
+          }
+        </>}
+      </>}
+
+      {tab==='plans' && <>
+        {/* Plans list */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Planos DarkDiet</div>
+          <button onClick={()=>{
+            setPlanForm({
+              name:'',
+              slots:[
+                {label:'Café da manhã', time:'07:00', items:[], checked:false},
+                {label:'Refeição 1',    time:'10:00', items:[], checked:false},
+                {label:'Almoço',        time:'12:30', items:[], checked:false},
+                {label:'Refeição 2',    time:'15:30', items:[], checked:false},
+                {label:'Jantar',        time:'19:00', items:[], checked:false},
+                {label:'Refeição 3',    time:'21:30', items:[], checked:false},
+              ]
+            });
+            setShowPlanForm(true);
+          }} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.4rem .85rem',color:'#fff',fontWeight:800,fontSize:'.78rem',cursor:'pointer'}}>+ Novo Plano</button>
+        </div>
+        {plans.length===0
+          ? <div style={{textAlign:'center',padding:'2rem 1rem',color:'var(--color-text-sub)',fontSize:'.82rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
+              <div style={{fontSize:'1.5rem',marginBottom:'.5rem'}}>📄</div>
+              Crie planos com refeições pré-definidas e aplique com um clique
+            </div>
+          : plans.map((plan,pi)=>{
+            const planCal = plan.slots ? plan.slots.reduce((a,s)=>a+s.items.reduce((b,it)=>b+(Number(it.calories)||0),0),0) : 0;
+            const slotCount = plan.slots ? plan.slots.length : 0;
+            return (
+              <div key={pi} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.9rem'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.5rem'}}>
+                  <div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase'}}>{plan.name}</div>
+                    <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{planCal} kcal · {slotCount} refeições</div>
+                  </div>
+                  <div style={{display:'flex',gap:'.35rem'}}>
+                    <button onClick={()=>{setPlanForm({...plan, _editIdx:pi});setShowPlanForm(true);}}
+                      style={{background:'rgba(255,255,255,.06)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.3rem .55rem',color:'var(--color-text-sub)',fontSize:'.72rem',cursor:'pointer'}}>✏️</button>
+                    <button onClick={()=>{setDietPlans(p=>p.filter((_,i)=>i!==pi));setToast('Plano removido');}}
+                      style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'7px',padding:'.3rem .5rem',color:'#e31b23',fontSize:'.72rem',cursor:'pointer'}}>🗑</button>
+                  </div>
+                </div>
+                {plan.slots && plan.slots.slice(0,3).map((slot,si)=>(
+                  <div key={si} style={{display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'3px'}}>
+                    <span style={{fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700,minWidth:'40px'}}>{slot.time}</span>
+                    <span style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>{slot.label}</span>
+                    {slot.items.length>0 && <span style={{fontSize:'.65rem',color:'#555'}}>· {slot.items.map(i=>i.name).join(', ').slice(0,30)}</span>}
+                  </div>
+                ))}
+                {plan.slots && plan.slots.length>3 && <div style={{fontSize:'.65rem',color:'#444',marginBottom:'.5rem'}}>+ {plan.slots.length-3} mais...</div>}
+                <button onClick={()=>applyPlan(plan)} style={{width:'100%',marginTop:'.5rem',background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontWeight:800,fontSize:'.82rem',cursor:'pointer'}}>▶ Aplicar hoje</button>
+              </div>
+            );
+          })
+        }
+      </>}
+      {/* Modal: Metas */}
+      {showGoals && (
+        <Modal onClose={()=>setShowGoals(false)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'1rem'}}>Metas diárias</div>
+          {[['calories','Calorias (kcal)'],['protein','Proteína (g)'],['carbs','Carboidratos (g)'],['fat','Gordura (g)']].map(([k,l])=>(
+            <div key={k} style={{marginBottom:'.7rem'}}>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'3px'}}>{l}</div>
+              <input type="number" value={goals[k]} onChange={e=>setGoals(g=>({...g,[k]:Number(e.target.value)}))}
+                style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
             </div>
           ))}
-        </div>
+          <button onClick={()=>{setShowGoals(false);setToast('Metas salvas ✓');}} style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.88rem',cursor:'pointer',marginTop:'.5rem'}}>Salvar metas</button>
+        </Modal>
       )}
 
-      {dayMeals.length === 0 && (
-        <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#222'}}>
-          <div style={{fontSize:'3rem',marginBottom:'.5rem',opacity:.3}}>🥗</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.4rem'}}>Dia Vazio</div>
-          <div style={{fontSize:'.78rem',color:'#333',marginBottom:'1.25rem'}}>Registre suas refeições e acompanhe sua nutrição</div>
-          <button onClick={openAdd} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
-            + Adicionar Refeição
-          </button>
-        </div>
-      )}
-
-      {/* Modal adicionar/editar */}
-      {showAdd && (
-        <div className="modal-bg" onClick={()=>setShowAdd(false)}>
-          <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'14px',padding:'1.25rem',maxWidth:'420px',width:'93%',maxHeight:'90vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:'1rem'}}>
-              {editIdx !== null ? 'Editar Refeição' : '+ Nova Refeição'}
-            </div>
-
-            {/* Ícone */}
-            <div style={{marginBottom:'.85rem'}}>
-              <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Ícone</div>
-              <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
-                {MEAL_ICONS.map(ic => (
-                  <button key={ic} onClick={()=>setForm(f=>({...f,icon:ic}))}
-                    style={{width:'36px',height:'36px',borderRadius:'8px',fontSize:'1.2rem',
-                      background:form.icon===ic?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',
-                      border:form.icon===ic?'1px solid var(--color-accent)':'1px solid #1e1e1e',cursor:'pointer'}}>
-                    {ic}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Nome + horário */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:'.5rem',marginBottom:'.6rem'}}>
-              <div>
-                <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Refeição *</div>
-                <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .8rem',fontSize:'.88rem',color:'var(--color-text)'}}
-                  placeholder="Ex: Café da manhã…" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
-              </div>
-              <div>
-                <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Horário</div>
-                <input type="time" style={{background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem .6rem',fontSize:'.88rem',color:'var(--color-text)',width:'7rem'}}
-                  value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
-              </div>
-            </div>
-
-            {/* Macros */}
-            <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem',fontWeight:700}}>Macros (opcional)</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'.6rem'}}>
-              {[
-                {key:'calories',label:'Kcal',color:'var(--color-accent)'},
-                {key:'protein', label:'Prot',color:'#e74c3c'},
-                {key:'carbs',   label:'Carbs',color:'#f59e0b'},
-                {key:'fat',     label:'Gord',color:'#3b82f6'},
-              ].map(({key,label,color}) => (
-                <div key={key}>
-                  <div style={{fontSize:'.55rem',color,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'3px',fontWeight:700}}>{label}</div>
-                  <input type="number" min="0"
-                    style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'7px',padding:'.45rem .4rem',fontSize:'.85rem',color:'var(--color-text)',textAlign:'center'}}
-                    placeholder="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/>
+      {/* Modal: Criar/Editar Plano */}
+      {showPlanForm && (
+        <Modal onClose={()=>setShowPlanForm(false)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>
+            {planForm._editIdx!==undefined ? 'Editar Plano' : 'Novo Plano DarkDiet'}
+          </div>
+          {/* Plan name */}
+          <div style={{marginBottom:'.85rem'}}>
+            <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'3px'}}>Nome do plano</div>
+            <input value={planForm.name} onChange={e=>setPlanForm(p=>({...p,name:e.target.value}))}
+              placeholder="Ex: Cutting, Bulking, Dia de descanso..."
+              style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
+          </div>
+          {/* Slots */}
+          <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'.5rem'}}>Refeições</div>
+          <div style={{display:'grid',gap:'.5rem',maxHeight:'55vh',overflowY:'auto',paddingRight:'2px'}}>
+            {(planForm.slots||[]).map((slot,si)=>(
+              <div key={si} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.6rem .75rem'}}>
+                {/* Slot header */}
+                <div style={{display:'flex',gap:'.4rem',alignItems:'center',marginBottom:'.45rem'}}>
+                  <input value={slot.time} type="text" placeholder="00:00" maxLength={5} onChange={e=>{
+                    setPlanForm(p=>{const s=[...p.slots];s[si]={...s[si],time:e.target.value};return {...p,slots:s};});
+                  }} style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.3rem .4rem',color:'var(--color-accent)',fontSize:'.78rem',fontWeight:700,width:'68px',textAlign:'center'}}/>
+                  <input value={slot.label} onChange={e=>{
+                    setPlanForm(p=>{const s=[...p.slots];s[si]={...s[si],label:e.target.value};return {...p,slots:s};});
+                  }} style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.3rem .5rem',color:'var(--color-text)',fontSize:'.82rem',fontWeight:700}}/>
+                  {/* Move up/down */}
+                  <button onClick={()=>{
+                    if(si===0) return;
+                    setPlanForm(p=>{const s=[...p.slots];[s[si-1],s[si]]=[s[si],s[si-1]];return {...p,slots:s};});
+                  }} disabled={si===0} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.28rem .4rem',color:si===0?'#2a2a2a':'#aaa',cursor:si===0?'default':'pointer',fontSize:'.85rem',opacity:si===0?0.3:1}}>↑</button>
+                  <button onClick={()=>{
+                    if(si>=(planForm.slots.length-1)) return;
+                    setPlanForm(p=>{const s=[...p.slots];[s[si],s[si+1]]=[s[si+1],s[si]];return {...p,slots:s};});
+                  }} disabled={si>=(planForm.slots||[]).length-1} style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.28rem .4rem',color:si>=(planForm.slots||[]).length-1?'#2a2a2a':'#aaa',cursor:'pointer',fontSize:'.85rem',opacity:si>=(planForm.slots||[]).length-1?0.3:1}}>↓</button>
+                  <button onClick={()=>{
+                    setPlanForm(p=>{const s=p.slots.filter((_,i)=>i!==si);return {...p,slots:s};});
+                  }} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'.28rem .45rem',color:'#e31b23',cursor:'pointer',fontSize:'.72rem'}}>✕</button>
                 </div>
-              ))}
-            </div>
+                {/* Items inside slot */}
+                {slot.items && slot.items.map((item,ii)=>(
+                  <div key={ii} style={{display:'flex',gap:'.35rem',alignItems:'center',marginBottom:'.3rem'}}>
+                    <input value={item.name} onChange={e=>{
+                      setPlanForm(p=>{const s=[...p.slots];const its=[...s[si].items];its[ii]={...its[ii],name:e.target.value};s[si]={...s[si],items:its};return {...p,slots:s};});
+                    }} placeholder="Alimento..." style={{flex:2,background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.28rem .45rem',color:'var(--color-text)',fontSize:'.76rem'}}/>
+                    <input value={item.calories} type="number" onChange={e=>{
+                      setPlanForm(p=>{const s=[...p.slots];const its=[...s[si].items];its[ii]={...its[ii],calories:e.target.value};s[si]={...s[si],items:its};return {...p,slots:s};});
+                    }} placeholder="kcal" style={{width:'52px',background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.28rem .35rem',color:'var(--color-accent)',fontSize:'.76rem'}}/>
+                    <button onClick={()=>{
+                      setPlanForm(p=>{const s=[...p.slots];const its=s[si].items.filter((_,i)=>i!==ii);s[si]={...s[si],items:its};return {...p,slots:s};});
+                    }} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:'.85rem',padding:'0 .2rem'}}>✕</button>
+                  </div>
+                ))}
+                {/* Add item to slot */}
+                <button onClick={()=>{
+                  setPlanForm(p=>{const s=[...p.slots];s[si]={...s[si],items:[...(s[si].items||[]),{name:'',calories:'',protein:'',carbs:'',fat:''}]};return {...p,slots:s};});
+                }} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'6px',padding:'.3rem .6rem',color:'var(--color-accent)',fontSize:'.72rem',fontWeight:700,cursor:'pointer',width:'100%',marginTop:'.3rem'}}>
+                  + alimento
+                </button>
+              </div>
+            ))}
+          </div>
+          {/* Add slot button */}
+          <button onClick={()=>{
+            setPlanForm(p=>({...p,slots:[...(p.slots||[]),{label:'Nova refeição',time:'12:00',items:[],checked:false}]}));
+          }} style={{width:'100%',marginTop:'.6rem',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'9px',padding:'.55rem',color:'var(--color-accent)',fontWeight:800,fontSize:'.82rem',cursor:'pointer'}}>
+            + Adicionar refeição
+          </button>
+          {/* Save */}
+          <button onClick={()=>{
+            if(!planForm.name.trim()){setToast('Informe o nome do plano');return;}
+            const {_editIdx,...planData} = planForm;
+            if(_editIdx!==undefined){
+              setDietPlans(p=>{const arr=[...p];arr[_editIdx]=planData;return arr;});
+              setToast('Plano atualizado ✓');
+            } else {
+              setDietPlans(p=>[...p,planData]);
+              setToast('Plano salvo ✓');
+            }
+            setShowPlanForm(false);
+          }} style={{width:'100%',marginTop:'.75rem',background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.7rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer'}}>
+            Salvar plano
+          </button>
+        </Modal>
+      )}
 
-            {/* Observação */}
-            <div style={{marginBottom:'1rem'}}>
-              <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem',fontWeight:700}}>Observação</div>
-              <input style={{width:'100%',background:'rgba(0,0,0,.45)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .8rem',fontSize:'.82rem',color:'var(--color-text)'}}
-                placeholder="Ex: Com azeite, sem sal…" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
-            </div>
+      {/* Scanner modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onClose={()=>setShowScanner(false)}
+          onResult={(product)=>{
+            setForm(f=>({...f,...product}));
+            setShowScanner(false);
+          }}
+        />
+      )}
 
-            <div style={{display:'flex',gap:'.5rem',justifyContent:'flex-end'}}>
-              <button onClick={()=>setShowAdd(false)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.55rem 1rem',color:'#888',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Cancelar</button>
-              <button onClick={saveMeal} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.25rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
-                {editIdx !== null ? 'Salvar' : 'Adicionar'}
-              </button>
+      {/* Modal: Adicionar/editar refeição */}
+      {showAdd && (
+        <Modal onClose={()=>setShowAdd(false)}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase'}}>{editIdx!==null?'Editar':'Nova'} Refeição</div>
+            {editIdx===null && <button onClick={()=>setShowScanner(true)}
+              style={{display:'flex',alignItems:'center',gap:'.35rem',background:'rgba(255,255,255,.07)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.38rem .7rem',color:'var(--color-text-sub)',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>
+              📷 Escanear
+            </button>}
+          </div>
+          {/* Icon + Name row */}
+          <div style={{display:'flex',gap:'.5rem',marginBottom:'.7rem'}}>
+            <select value={form.icon} onChange={e=>setForm(f=>({...f,icon:e.target.value}))}
+              style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem',color:'var(--color-text)',fontSize:'1.2rem',width:'56px'}}>
+              {['🍳','🥗','🍗','🥩','🐟','🥛','🍌','🍎','🥑','🍚','🥪','🧃','🥤','💊','🍫'].map(ic=><option key={ic} value={ic}>{ic}</option>)}
+            </select>
+            <input placeholder="Nome da refeição *" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
+          </div>
+          {/* Macros grid */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem',marginBottom:'.7rem'}}>
+            {[['calories','Calorias (kcal)'],['protein','Proteína (g)'],['carbs','Carbs (g)'],['fat','Gordura (g)']].map(([k,l])=>(
+              <div key={k}>
+                <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'2px'}}>{l}</div>
+                <input type="number" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}
+                  style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .6rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
+              </div>
+            ))}
+          </div>
+          {/* Time + Note */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:'.5rem',marginBottom:'1rem'}}>
+            <div>
+              <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'2px'}}>Horário</div>
+              <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}
+                style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .6rem',color:'var(--color-text)',fontSize:'.82rem'}}/>
+            </div>
+            <div>
+              <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'2px'}}>Nota (opcional)</div>
+              <input placeholder="Pré-treino, pós-treino..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}
+                style={{width:'100%',background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.45rem .6rem',color:'var(--color-text)',fontSize:'.82rem'}}/>
             </div>
           </div>
-        </div>
+          <button onClick={saveMeal} style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.88rem',cursor:'pointer'}}>
+            {editIdx!==null?'Salvar alterações':'Adicionar refeição'}
+          </button>
+        </Modal>
       )}
     </div>
   );
@@ -4619,7 +5003,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.5.4</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.6.3</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
@@ -4627,6 +5011,7 @@ function App(){
     </div>
   );
 }
+
 const root=ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App/>);
 
