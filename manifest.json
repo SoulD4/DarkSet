@@ -2,7 +2,7 @@
   "name": "DarkSet - Seu Treino",
   "short_name": "DarkSet",
   "description": "Acompanhe seus treinos, monte fichas personalizadas e evolua com o DarkSet.",
-  "id": "/",
+  "id": "/?source=pwa",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "fullscreen",
@@ -43,18 +43,18 @@
   ],
   "screenshots": [
     {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
+      "src": "/screenshots/screen1.png",
+      "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "DarkSet - Tela inicial"
+      "label": "DarkSet - Tela de Treino"
     },
     {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
+      "src": "/screenshots/screen2.png",
+      "sizes": "1080x1920",
       "type": "image/png",
-      "form_factor": "wide",
-      "label": "DarkSet - Visão geral"
+      "form_factor": "narrow",
+      "label": "DarkSet - Histórico e Evolução"
     }
   ]
 }
