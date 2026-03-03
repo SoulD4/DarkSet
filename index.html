@@ -1147,6 +1147,20 @@ window.DSSync = {
       if(cloudHistory) localStorage.setItem(LS.history, JSON.stringify(cloudHistory));
       if(cloudPrefs)   localStorage.setItem(LS.prefs,   JSON.stringify(cloudPrefs));
 
+      // Also pull extended data
+      const extKeys = ['diet','measures','cardio','squad','checkins','chat'];
+      const extLSMap = {
+        diet: 'darkset.v1.diet', measures: 'darkset.measures', cardio: 'darkset.cardio.history',
+        squad: 'darkset.squad.v1', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
+      };
+      const extResults = await Promise.allSettled(extKeys.map(k=>fsRead(uid,k)));
+      extKeys.forEach((k,i) => {
+        const r = extResults[i];
+        if(r.status==='fulfilled' && r.value) {
+          try { localStorage.setItem(extLSMap[k], JSON.stringify(r.value)); } catch(_) {}
+        }
+      });
+
       // Push directly into React state if setters are registered
       if(cloudPlans   && window._DS_SETTERS.plans)   window._DS_SETTERS.plans(cloudPlans);
       if(cloudHistory && window._DS_SETTERS.history) window._DS_SETTERS.history(cloudHistory);
@@ -1158,14 +1172,18 @@ window.DSSync = {
   },
   push: async function(uid){
     if(!uid||!window._db) return;
-    const plans   = JSON.parse(localStorage.getItem(LS.plans)||'null');
-    const history = JSON.parse(localStorage.getItem(LS.history)||'null');
-    const prefs   = JSON.parse(localStorage.getItem(LS.prefs)||'null');
+    const safe = k => { try{return JSON.parse(localStorage.getItem(k)||'null');}catch(_){return null;} };
     await Promise.all([
-      plans   ? fsWrite(uid,'plans',plans)   : null,
-      history ? fsWrite(uid,'history',history): null,
-      prefs   ? fsWrite(uid,'prefs',prefs)   : null,
-    ].filter(Boolean));
+      'plans','history','prefs','diet','measures','cardio','squad','checkins','chat'
+    ].map(key => {
+      const LSkey = {
+        plans: 'darkset.v3.plans', history: 'darkset.v3.history', prefs: 'darkset.v3.prefs',
+        diet: 'darkset.v1.diet', measures: 'darkset.measures', cardio: 'darkset.cardio.history',
+        squad: 'darkset.squad.v1', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
+      }[key];
+      const data = safe(LSkey);
+      return data ? fsWrite(uid, key, data) : null;
+    }).filter(Boolean));
   }
 };
 
@@ -1284,7 +1302,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.7.0
+          DarkSet · V5.7.1
         </div>
       </div>
     </>
@@ -3657,7 +3675,7 @@ function detectPR(exName, newSets, history) {
 }
 
 
-const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
+const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, onPR}) => {
   const activePlanId = plans.activeId || (plans.list[0]?.id ?? null);
   const activePlan = plans.list.find(p => p.id === activePlanId) || null;
   const [mode, setMode] = useState('plan'); // 'plan' | 'free'
@@ -4539,28 +4557,35 @@ const Profile=({prefs,setPrefs,history})=>{
 // DARKSET SELOS — Sistema de conquistas com identidade própria
 // ══════════════════════════════════════════════════════════════════════════
 const SELOS = [
-  // Assiduidade
-  {id:'ferro_1',     cat:'assiduidade', title:'Primeiro Sangue',   icon:'🩸', desc:'Primeiro treino registrado',          check:(h,prefs)=>Object.keys(h).length>=1},
-  {id:'ferro_7',     cat:'assiduidade', title:'Uma Semana Sólida', icon:'⛓️', desc:'7 treinos no histórico',              check:(h)=>Object.keys(h).length>=7},
-  {id:'ferro_30',    cat:'assiduidade', title:'Mês de Ferro',      icon:'🔩', desc:'30 treinos no histórico',             check:(h)=>Object.keys(h).length>=30},
-  {id:'ferro_100',   cat:'assiduidade', title:'Centenário',        icon:'💯', desc:'100 treinos no histórico',            check:(h)=>Object.keys(h).length>=100},
-  {id:'streak_7',    cat:'assiduidade', title:'Sequência Viva',    icon:'🔥', desc:'7 dias de streak',                   check:(h,p)=>calcStreak(h,p)>=7},
-  {id:'streak_30',   cat:'assiduidade', title:'Chama Eterna',      icon:'🌋', desc:'30 dias de streak',                  check:(h,p)=>calcStreak(h,p)>=30},
-  // Volume
-  {id:'vol_1t',      cat:'volume',      title:'Uma Tonelada',      icon:'⚖️', desc:'1 tonelada de volume total',         check:(h)=>calcTotalVol(h)>=1000},
-  {id:'vol_10t',     cat:'volume',      title:'Carregador',        icon:'🏗️', desc:'10 toneladas de volume',             check:(h)=>calcTotalVol(h)>=10000},
-  {id:'vol_100t',    cat:'volume',      title:'Máquina de Guerra',  icon:'⚙️', desc:'100 toneladas de volume',            check:(h)=>calcTotalVol(h)>=100000},
-  // Força
-  {id:'pr_1',        cat:'forca',       title:'Personal Record',   icon:'📍', desc:'Primeiro PR batido',                 check:(h)=>calcPRCount(h)>=1},
-  {id:'pr_10',       cat:'forca',       title:'Quebrador',         icon:'💥', desc:'10 PRs batidos',                     check:(h)=>calcPRCount(h)>=10},
-  {id:'pr_50',       cat:'forca',       title:'Lenda do Ferro',    icon:'🏅', desc:'50 PRs batidos',                     check:(h)=>calcPRCount(h)>=50},
+  // Assiduidade — escala severa
+  {id:'ferro_1',      cat:'assiduidade', title:'Primeira Gota de Sangue', icon:'🩸', desc:'Primeiro treino registrado',                          check:(h)=>Object.keys(h).length>=1},
+  {id:'ferro_20',     cat:'assiduidade', title:'Iniciado',                icon:'⛓️', desc:'20 treinos — apenas o começo',                        check:(h)=>Object.keys(h).length>=20},
+  {id:'ferro_50',     cat:'assiduidade', title:'Meio Ano de Dor',         icon:'🔩', desc:'50 treinos sem parar',                                check:(h)=>Object.keys(h).length>=50},
+  {id:'ferro_150',    cat:'assiduidade', title:'Veterano de Ferro',       icon:'⚔️', desc:'150 treinos — isso é dedicação real',                 check:(h)=>Object.keys(h).length>=150},
+  {id:'ferro_365',    cat:'assiduidade', title:'Um Ano de Ferro',         icon:'🏴', desc:'365 treinos ao longo da vida',                        check:(h)=>Object.keys(h).length>=365},
+  {id:'streak_14',    cat:'assiduidade', title:'Chama Acesa',             icon:'🔥', desc:'14 dias consecutivos de treino',                      check:(h,p)=>calcStreak(h,p)>=14},
+  {id:'streak_60',    cat:'assiduidade', title:'Fogo Que Não Apaga',      icon:'🌋', desc:'60 dias de streak — quase impossível',                check:(h,p)=>calcStreak(h,p)>=60},
+  {id:'streak_180',   cat:'assiduidade', title:'Eterno',                  icon:'♾️', desc:'180 dias consecutivos. Você é diferente.',            check:(h,p)=>calcStreak(h,p)>=180},
+  // Volume — números que doem
+  {id:'vol_5t',       cat:'volume',      title:'Primeiros Quilos',        icon:'⚖️', desc:'5 toneladas de volume acumulado',                     check:(h)=>calcTotalVol(h)>=5000},
+  {id:'vol_50t',      cat:'volume',      title:'Carregador',              icon:'🏗️', desc:'50 toneladas — você literalmente move montanhas',    check:(h)=>calcTotalVol(h)>=50000},
+  {id:'vol_250t',     cat:'volume',      title:'Máquina de Guerra',       icon:'⚙️', desc:'250 toneladas totais',                               check:(h)=>calcTotalVol(h)>=250000},
+  {id:'vol_1000t',    cat:'volume',      title:'Colossus',                icon:'🗿', desc:'1.000 toneladas. Humano? Duvido.',                    check:(h)=>calcTotalVol(h)>=1000000},
+  // Força — PRs são raros
+  {id:'pr_5',         cat:'forca',       title:'Quebrador',               icon:'📍', desc:'5 PRs batidos',                                       check:(h)=>calcPRCount(h)>=5},
+  {id:'pr_25',        cat:'forca',       title:'Obliterador',             icon:'💥', desc:'25 PRs ao longo da carreira',                         check:(h)=>calcPRCount(h)>=25},
+  {id:'pr_100',       cat:'forca',       title:'Lenda do Ferro',          icon:'🏅', desc:'100 PRs — apenas os melhores chegam aqui',            check:(h)=>calcPRCount(h)>=100},
+  {id:'pr_300',       cat:'forca',       title:'Imortal',                 icon:'🔱', desc:'300 PRs. Você redefiniu seus limites 300 vezes.',      check:(h)=>calcPRCount(h)>=300},
   // Diversidade
-  {id:'ex_10',       cat:'diversidade', title:'Explorador',        icon:'🗺️', desc:'Treinou 10 exercícios diferentes',   check:(h)=>countUniqueEx(h)>=10},
-  {id:'ex_30',       cat:'diversidade', title:'Arsenal Completo',  icon:'🔱', desc:'Treinou 30 exercícios diferentes',   check:(h)=>countUniqueEx(h)>=30},
-  {id:'cardio_1',    cat:'diversidade', title:'Pulmão de Aço',     icon:'💨', desc:'Primeiro cardio registrado',         check:(h,p,c)=>(c||0)>=1},
-  // Dedicação
-  {id:'cedo_1',      cat:'dedicacao',   title:'Madrugador',        icon:'🌅', desc:'Registrou treino antes das 7h',      check:(h)=>hasEarlyWorkout(h)},
-  {id:'semana_full', cat:'dedicacao',   title:'Semana Perfeita',   icon:'📅', desc:'Treinou todos os dias de treino em uma semana', check:(h,p)=>hasPerfectWeek(h,p)},
+  {id:'ex_15',        cat:'diversidade', title:'Explorador',              icon:'🗺️', desc:'15 exercícios diferentes treinados',                  check:(h)=>countUniqueEx(h)>=15},
+  {id:'ex_40',        cat:'diversidade', title:'Arsenal Completo',        icon:'🧰', desc:'40 exercícios diferentes — você conhece o ferro',     check:(h)=>countUniqueEx(h)>=40},
+  {id:'ex_80',        cat:'diversidade', title:'Mestre do Movimento',     icon:'🎯', desc:'80 exercícios únicos treinados',                      check:(h)=>countUniqueEx(h)>=80},
+  {id:'cardio_20',    cat:'diversidade', title:'Pulmão de Aço',           icon:'💨', desc:'20 sessões de cardio registradas',                    check:(h,p,cardioCount)=>(cardioCount||0)>=20},
+  // Dedicação — os mais difíceis
+  {id:'semana_full',  cat:'dedicacao',   title:'Semana Perfeita',         icon:'📅', desc:'Treinou todos os dias programados em uma semana',      check:(h,p)=>hasPerfectWeek(h,p)},
+  {id:'madrugador',   cat:'dedicacao',   title:'Enquanto o Mundo Dorme',  icon:'🌅', desc:'5 treinos antes das 7h da manhã',                     check:(h)=>countEarlyWorkouts(h)>=5},
+  {id:'mes_perfeito', cat:'dedicacao',   title:'Mês Inquebrável',         icon:'🔐', desc:'30 dias consecutivos sem falhar um dia de treino',     check:(h,p)=>calcStreak(h,p)>=30},
+  {id:'2anos',        cat:'dedicacao',   title:'O Ferro É Meu Lar',       icon:'🏠', desc:'730 treinos ao longo da vida — isso é estilo de vida', check:(h)=>Object.keys(h).length>=730},
 ];
 
 function calcStreak(history, prefs) {
@@ -4605,9 +4630,15 @@ function countUniqueEx(history) {
 }
 function hasEarlyWorkout(history) {
   return Object.entries(history).some(([,obj])=>{
-    const d = new Date(obj.startTime||Object.values(history)[0]?.startTime||'');
+    const d = new Date(obj.startTime||'');
     return !isNaN(d) && d.getHours() < 7;
   });
+}
+function countEarlyWorkouts(history) {
+  return Object.entries(history).filter(([,obj])=>{
+    const d = new Date(obj.startTime||'');
+    return !isNaN(d) && d.getHours() < 7;
+  }).length;
 }
 function hasPerfectWeek(history, prefs) {
   const trainDays = prefs?.trainDays || [1,2,3,4,5,6];
@@ -4628,6 +4659,17 @@ function hasPerfectWeek(history, prefs) {
 
 const catLabel = {assiduidade:'⛓️ Assiduidade', volume:'⚖️ Volume', forca:'💥 Força', diversidade:'🗺️ Diversidade', dedicacao:'📅 Dedicação'};
 
+const NIVEIS = [
+  {id:'cinza',     label:'Cinza',     icon:'⚪', minSelos:0,  color:'#555',   desc:'Todo ferro começa aqui'},
+  {id:'ferro',     label:'Ferro',     icon:'⬛', minSelos:2,  color:'#777',   desc:'O peso começou a fazer sentido'},
+  {id:'bronze',    label:'Bronze',    icon:'🟤', minSelos:5,  color:'#cd7f32',desc:'Você é consistente'},
+  {id:'prata',     label:'Prata',     icon:'⬜', minSelos:9,  color:'#c0c0c0',desc:'Disciplina acima da média'},
+  {id:'ouro',      label:'Ouro',      icon:'🟡', minSelos:13, color:'#facc15',desc:'Poucos chegam aqui'},
+  {id:'platina',   label:'Platina',   icon:'🔵', minSelos:16, color:'#38bdf8',desc:'Elite'},
+  {id:'obsidiana', label:'Obsidiana', icon:'🖤', minSelos:20, color:'#e31b23',desc:'Você não é humano'},
+  {id:'darkgod',   label:'DarkGod',   icon:'💀', minSelos:24, color:'linear-gradient(90deg,#e31b23,#facc15)',desc:'Lenda viva. Apenas existir é suficiente'},
+];
+
 const DarkSelos = ({history, prefs, cardioCount}) => {
   const unlocked = useMemo(() => {
     const set = new Set();
@@ -4636,8 +4678,14 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
   }, [history, prefs, cardioCount]);
 
   const pct = Math.round(unlocked.size / SELOS.length * 100);
-
   const cats = [...new Set(SELOS.map(s=>s.cat))];
+
+  // Current level
+  const currentLevel = [...NIVEIS].reverse().find(n => unlocked.size >= n.minSelos) || NIVEIS[0];
+  const nextLevel = NIVEIS.find(n => n.minSelos > unlocked.size);
+  const levelPct = nextLevel
+    ? Math.round((unlocked.size - currentLevel.minSelos) / (nextLevel.minSelos - currentLevel.minSelos) * 100)
+    : 100;
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
@@ -4648,13 +4696,58 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
         <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Conquistas do ferro</div>
       </div>
 
+      {/* Level card */}
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1.1rem',position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',right:'-15px',top:'-15px',fontSize:'5rem',opacity:.07,lineHeight:1}}>{currentLevel.icon}</div>
+        <div style={{display:'flex',alignItems:'center',gap:'.85rem',marginBottom:'.75rem'}}>
+          <div style={{fontSize:'2.5rem',lineHeight:1}}>{currentLevel.icon}</div>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',
+              background:currentLevel.color.startsWith('linear')?currentLevel.color:'none',
+              WebkitBackgroundClip:currentLevel.color.startsWith('linear')?'text':'unset',
+              WebkitTextFillColor:currentLevel.color.startsWith('linear')?'transparent':'unset',
+              color:currentLevel.color.startsWith('linear')?'transparent':currentLevel.color
+            }}>{currentLevel.label}</div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{currentLevel.desc}</div>
+          </div>
+        </div>
+        {nextLevel ? (
+          <>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.35rem'}}>
+              <div style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase'}}>Próximo nível: <span style={{color:'var(--color-text-sub)'}}>{nextLevel.icon} {nextLevel.label}</span></div>
+              <div style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700}}>{unlocked.size}/{nextLevel.minSelos} selos</div>
+            </div>
+            <div style={{height:'5px',background:'rgba(255,255,255,.06)',borderRadius:'4px',overflow:'hidden'}}>
+              <div style={{height:'100%',width:levelPct+'%',background:currentLevel.color.startsWith('linear')?'#e31b23':currentLevel.color,borderRadius:'4px',transition:'width .6s'}}/>
+            </div>
+          </>
+        ) : (
+          <div style={{fontSize:'.75rem',color:'#facc15',fontWeight:700}}>⚡ Nível máximo atingido</div>
+        )}
+      </div>
+
+      {/* All levels roadmap */}
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.85rem',display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.9rem'}}>
+        {NIVEIS.map((n,i)=>{
+          const done = unlocked.size >= n.minSelos;
+          const isCurrent = n.id === currentLevel.id;
+          return (
+            <div key={n.id} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',minWidth:'52px',opacity:done?1:0.3,transition:'opacity .3s'}}>
+              <div style={{fontSize:'1.4rem',filter:done?'none':'grayscale(100%)'}}>{n.icon}</div>
+              <div style={{fontSize:'.58rem',fontWeight:isCurrent?800:600,color:isCurrent?'var(--color-accent)':'#555',textTransform:'uppercase',textAlign:'center',lineHeight:1.2}}>{n.label}</div>
+              <div style={{fontSize:'.5rem',color:'#444'}}>{n.minSelos}</div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* Progress */}
       <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem'}}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.5rem'}}>
-          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>Progresso total</div>
+          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>Selos desbloqueados</div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'var(--color-accent)'}}>{unlocked.size}/{SELOS.length}</div>
         </div>
-        <div style={{height:'6px',background:'rgba(255,255,255,.07)',borderRadius:'6px',overflow:'hidden'}}>
+        <div style={{height:'5px',background:'rgba(255,255,255,.07)',borderRadius:'6px',overflow:'hidden'}}>
           <div style={{height:'100%',width:pct+'%',background:'var(--color-accent)',borderRadius:'6px',transition:'width .5s'}}/>
         </div>
         <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem',marginTop:'.75rem'}}>
@@ -5578,7 +5671,7 @@ function App(){
       {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs} setDrawerOpen={setDrawerOpen}/>}
       {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
       {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
-      {screen==="session" && <Session plans={plans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
+      {screen==="session" && <Session plans={plans} setPlans={setPlans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
@@ -5588,7 +5681,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.0</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.1</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
@@ -5653,7 +5746,7 @@ root.render(<App/>);
   background:rgba(255,255,255,.04); color:#666;
 }
 .dc-tab.active { background:rgba(227,27,35,.15); color:#e31b23; border:1px solid rgba(227,27,35,.2); }
-.dc-body { flex:1; overflow-y:auto; padding:.75rem; display:grid; gap:.75rem; }
+.dc-body { flex:1; overflow-y:auto; padding:.75rem; display:grid; gap:.75rem; min-height:0; }
 .dc-card {
   background:#0f0f12; border:1px solid #1a1a1e; border-radius:12px;
   padding:.85rem; display:grid; gap:.6rem;
@@ -5672,7 +5765,7 @@ root.render(<App/>);
 .dc-pill.active { background:rgba(227,27,35,.12); border-color:rgba(227,27,35,.3); color:#e31b23; }
 .dc-select { background:rgba(0,0,0,.4);border:1px solid #1e1e1e;border-radius:8px;
   padding:.4rem .65rem;font-size:.8rem;color:#ccc;width:100%; }
-.dc-canvas-wrap { position:relative; height:180px; }
+.dc-canvas-wrap { position:relative; height:180px; min-height:180px; overflow:hidden; }
 .dc-empty { text-align:center;padding:2rem;color:#333;font-size:.82rem; }
 .dc-formula { font-size:.65rem;color:#444;text-align:center;font-style:italic;margin-top:.25rem; }
 </style>
@@ -5744,6 +5837,9 @@ root.render(<App/>);
   function buildTreinoTab() {
     const hist = get(LS.history);
     const entries = Object.entries(hist).sort((a,b)=>a[0].localeCompare(b[0]));
+    if(!entries.length){
+      document.getElementById('dcBody').innerHTML='<div class="dc-empty">Nenhum treino registrado ainda.</div>';return;
+    }
 
     // Weekly volume
     const wkVol = {};
@@ -5753,36 +5849,48 @@ root.render(<App/>);
       const vol = (obj.entries||[]).reduce((a,en)=>(en.sets||[]).reduce((b,s)=>b+num(s.w)*num(s.r),a),0);
       wkVol[wk] = (wkVol[wk]||0)+vol;
     });
-    const wkKeys = Object.keys(wkVol).sort().slice(-12);
-    const wkVals = wkKeys.map(k=>Math.round(wkVol[k]));
 
-    // Exercise IIE for top exercise
+    // Exercise IIE - ALL exercises with data
     const exMap = {};
+    // Muscle IIE
+    const muscleMap = {};
+    // Plan IIE (weekly)
+    const planMap = {};
     entries.forEach(([iso,obj]) => {
+      const d = new Date(iso+'T00:00'); const start = new Date(d); start.setDate(d.getDate()-((d.getDay()+6)%7));
+      const wk = start.toISOString().slice(0,10);
+      const planName = obj.planName||'Treino Livre';
       (obj.entries||[]).forEach(en => {
+        // get muscle from EXS global
+        const meta = (window.EXS||[]).find(e=>e.name===en.name);
+        const muscle = meta?.primary||'Outros';
         (en.sets||[]).forEach(s => {
           const w=num(s.w),r=num(s.r); if(!r) return;
           const rw = {Falha:1,0:1,1:1,2:.92,3:.84,4:.75}[String(s.rir)]??0.9;
           const iie = (w>0?w*r:r)*rw/1000;
-          if(!exMap[en.name]) exMap[en.name]={total:0,count:0,dates:{}};
-          exMap[en.name].total+=iie; exMap[en.name].count++;
+          // exercise
+          if(!exMap[en.name]) exMap[en.name]={total:0,dates:{}};
+          exMap[en.name].total+=iie;
           exMap[en.name].dates[iso]=(exMap[en.name].dates[iso]||0)+iie;
+          // muscle
+          if(!muscleMap[muscle]) muscleMap[muscle]={};
+          muscleMap[muscle][wk]=(muscleMap[muscle][wk]||0)+iie;
+          // plan
+          if(!planMap[planName]) planMap[planName]={};
+          planMap[planName][wk]=(planMap[planName][wk]||0)+iie;
         });
       });
     });
-    const topExes = Object.entries(exMap).sort((a,b)=>b[1].total-a[1].total).slice(0,5).map(([n])=>n);
 
-    // Total stats
+    const allExes = Object.entries(exMap).sort((a,b)=>b[1].total-a[1].total).map(([n])=>n);
+    const allMuscles = Object.keys(muscleMap).sort();
+    const allPlans = Object.keys(planMap).sort();
+
     const totalVol = entries.reduce((a,[,o])=>a+(o.entries||[]).reduce((b,en)=>(en.sets||[]).reduce((c,s)=>c+num(s.w)*num(s.r),b),0),0);
     const totalSets = entries.reduce((a,[,o])=>a+(o.entries||[]).reduce((b,en)=>b+(en.sets||[]).length,0),0);
-    const topEx = topExes[0]||'–';
-
-    // Exercises select
-    const exSelect = `<select id="dcExSelect" class="dc-select">${topExes.map(e=>`<option>${e}</option>`).join('')}</select>`;
 
     document.getElementById('dcBody').innerHTML = `
       <div class="dc-card">
-        <div class="dc-card-title">Resumo geral</div>
         <div class="dc-stats">
           <div class="dc-stat-box"><div class="dc-stat-val">${entries.length}</div><div class="dc-stat-lbl">Treinos</div></div>
           <div class="dc-stat-box"><div class="dc-stat-val">${totalVol>=1000?(totalVol/1000).toFixed(1)+'t':Math.round(totalVol)+'kg'}</div><div class="dc-stat-lbl">Volume</div></div>
@@ -5799,44 +5907,65 @@ root.render(<App/>);
         <div class="dc-canvas-wrap"><canvas id="cVolSem"></canvas></div>
       </div>
       <div class="dc-card">
-        <div class="dc-card-title">Evolução por exercício (IIE)</div>
-        ${exSelect}
+        <div class="dc-card-title">IIE por exercício</div>
+        <select id="dcExSelect" class="dc-select">${allExes.map(e=>`<option>${e}</option>`).join('')}</select>
         <div class="dc-canvas-wrap"><canvas id="cExIIE"></canvas></div>
-        <div class="dc-formula">IIE = Volume × Fator RIR / 1000 · quanto maior, mais intenso</div>
+        <div class="dc-formula">IIE = Volume × Fator RIR / 1000</div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">IIE por músculo (semanal)</div>
+        <select id="dcMuscleSelect" class="dc-select">${allMuscles.map(m=>`<option>${m}</option>`).join('')}</select>
+        <div class="dc-canvas-wrap"><canvas id="cMuscleIIE"></canvas></div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">IIE por ficha (semanal)</div>
+        <select id="dcPlanSelect" class="dc-select">${allPlans.map(p=>`<option>${p}</option>`).join('')}</select>
+        <div class="dc-canvas-wrap"><canvas id="cPlanIIE"></canvas></div>
       </div>
     `;
 
-    // Volume semanal
     function plotVolSem(range) {
       const keys = Object.keys(wkVol).sort().slice(-range);
-      const vals = keys.map(k=>Math.round(wkVol[k]));
       mkChart('cVolSem','bar', keys.map(toBR), [{
-        label:'Volume (kg)', data:vals, backgroundColor:'rgba(227,27,35,.5)',
-        borderColor:'#e31b23', borderWidth:1, borderRadius:4
+        label:'Volume (kg)', data:keys.map(k=>Math.round(wkVol[k])),
+        backgroundColor:'rgba(227,27,35,.5)', borderColor:'#e31b23', borderWidth:1, borderRadius:4
       }]);
     }
     plotVolSem(12);
-
-    document.getElementById('dcTreinoPills')?.addEventListener('click', e => {
-      const btn = e.target.closest('.dc-pill'); if(!btn) return;
+    document.getElementById('dcTreinoPills')?.addEventListener('click', e=>{
+      const btn=e.target.closest('.dc-pill'); if(!btn) return;
       document.querySelectorAll('#dcTreinoPills .dc-pill').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      plotVolSem(Number(btn.dataset.range));
+      btn.classList.add('active'); plotVolSem(Number(btn.dataset.range));
     });
 
-    // IIE por exercício
-    function plotIIE(exName) {
-      const d = exMap[exName];
-      if(!d) return;
-      const dates = Object.keys(d.dates).sort().slice(-20);
-      const vals = dates.map(k=>+d.dates[k].toFixed(3));
-      mkChart('cExIIE','line', dates.map(toBR), [{
-        label:'IIE', data:vals, borderColor:'#e31b23', backgroundColor:'rgba(227,27,35,.1)',
-        fill:true, tension:.3, pointRadius:3
+    function plotExIIE(exName) {
+      const d=exMap[exName]; if(!d) return;
+      const dates=Object.keys(d.dates).sort().slice(-30);
+      mkChart('cExIIE','line',dates.map(toBR),[{
+        label:'IIE', data:dates.map(k=>+d.dates[k].toFixed(3)),
+        borderColor:'#e31b23', backgroundColor:'rgba(227,27,35,.1)', fill:true, tension:.3, pointRadius:3
       }]);
     }
-    if(topExes[0]) plotIIE(topExes[0]);
-    document.getElementById('dcExSelect')?.addEventListener('change', e => plotIIE(e.target.value));
+    function plotMuscleIIE(muscle) {
+      const d=muscleMap[muscle]||{}; const wks=Object.keys(d).sort().slice(-16);
+      mkChart('cMuscleIIE','bar',wks.map(toBR),[{
+        label:muscle, data:wks.map(k=>+d[k].toFixed(3)),
+        backgroundColor:'rgba(99,102,241,.55)', borderColor:'#6366f1', borderWidth:1, borderRadius:4
+      }]);
+    }
+    function plotPlanIIE(plan) {
+      const d=planMap[plan]||{}; const wks=Object.keys(d).sort().slice(-16);
+      mkChart('cPlanIIE','bar',wks.map(toBR),[{
+        label:plan, data:wks.map(k=>+d[k].toFixed(3)),
+        backgroundColor:'rgba(251,146,60,.55)', borderColor:'#fb923c', borderWidth:1, borderRadius:4
+      }]);
+    }
+    if(allExes[0]) plotExIIE(allExes[0]);
+    if(allMuscles[0]) plotMuscleIIE(allMuscles[0]);
+    if(allPlans[0]) plotPlanIIE(allPlans[0]);
+    document.getElementById('dcExSelect')?.addEventListener('change',e=>plotExIIE(e.target.value));
+    document.getElementById('dcMuscleSelect')?.addEventListener('change',e=>plotMuscleIIE(e.target.value));
+    document.getElementById('dcPlanSelect')?.addEventListener('change',e=>plotPlanIIE(e.target.value));
   }
 
   // ── PESO TAB ─────────────────────────────────────────────────────────────
@@ -6147,11 +6276,13 @@ root.render(<App/>);
     currentTab = tab || 'treino';
     document.querySelectorAll('.dc-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===currentTab));
     document.getElementById('dcBackdrop').style.display='flex';
+    document.body.style.overflow = 'hidden';
     destroyAll();
     TAB_BUILDERS[currentTab]?.();
   };
   window.closeDarkCharts = function() {
     document.getElementById('dcBackdrop').style.display='none';
+    document.body.style.overflow = '';
     destroyAll();
   };
 
