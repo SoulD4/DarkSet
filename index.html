@@ -1250,6 +1250,7 @@ const NAV_ITEMS = [
   {section: 'SOCIAL',   icon:'👥', label:'Squad',       screen:'community'},
   {section: null,       icon:'🏟️', label:'DarkGym',     screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
+  {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
 ];
 
 const Drawer = ({open, onClose, screen, goto, prefs}) => {
@@ -1283,7 +1284,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.6.3
+          DarkSet · V5.7.0
         </div>
       </div>
     </>
@@ -1678,6 +1679,7 @@ const Plans=({plans,setPlans,goto,setToast})=>{
                 </div>
                 <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
                   <button onClick={()=>goto('builder',pl.id)} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.4rem .85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>Editar</button>
+                  <button onClick={()=>setPreviewPlan(pl)} style={{background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#aaa',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>👁 Ver</button>
                   <button onClick={()=>setRenameId(renameId===pl.id?null:pl.id)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Renomear</button>
                   <button onClick={()=>duplicatePlan(pl.id)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Duplicar</button>
                   <button onClick={()=>setSharePlan(pl)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .75rem',color:'#777',fontSize:'.78rem',fontWeight:600,textTransform:'uppercase',cursor:'pointer'}}>Compartilhar</button>
@@ -1780,6 +1782,45 @@ const Plans=({plans,setPlans,goto,setToast})=>{
           </div>
           <div style={{fontSize:'.65rem',color:'#333',marginTop:'.5rem'}}>Apenas a estrutura da ficha. Sem dados pessoais.</div>
           <div style={{marginTop:'1rem',textAlign:'right'}}><button onClick={()=>setSharePlan(null)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.4rem .85rem',color:'#777',fontSize:'.78rem',cursor:'pointer'}}>Fechar</button></div>
+        </Modal>
+      )}
+
+      {/* Modal: Visualizar Minha Ficha */}
+      {previewPlan && (
+        <Modal onClose={()=>setPreviewPlan(null)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>{previewPlan.name}</span>
+            <button onClick={()=>{setPreviewPlan(null);goto('builder',previewPlan.id);}} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.3rem .75rem',color:'#fff',fontSize:'.72rem',fontWeight:800,cursor:'pointer',textTransform:'uppercase'}}>Editar</button>
+          </div>
+          <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
+            {DAYS.map(d=>{const n=previewPlan.byDay?.[d]?.length||0;return(
+              <span key={d} style={{padding:'.2rem .55rem',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,
+                background:n>0?'rgba(227,27,35,.1)':'rgba(0,0,0,.2)',
+                border:n>0?'1px solid rgba(227,27,35,.2)':'1px solid #1a1a1a',
+                color:n>0?'var(--color-accent)':'#333'}}>
+                {d.slice(0,3)}{n>0?' '+n:''}
+              </span>
+            );})}
+          </div>
+          <div style={{maxHeight:'60vh',overflowY:'auto',display:'grid',gap:'.75rem'}}>
+            {DAYS.filter(d=>(previewPlan.byDay?.[d]?.length||0)>0).map(d=>(
+              <div key={d}>
+                <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.4rem',borderBottom:'1px solid rgba(227,27,35,.15)',paddingBottom:'.3rem'}}>{d}</div>
+                {(previewPlan.byDay[d]||[]).map((ex,i)=>{
+                  const meta=EXS.find(e=>e.id===ex.exId||e.name===ex.name);
+                  return(
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'.55rem',padding:'.4rem 0',borderBottom:'1px solid rgba(255,255,255,.03)'}}>
+                      <ExGifThumb exName={ex.name} onClick={()=>{}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'.84rem',fontWeight:700}}>{ex.name}</div>
+                        <div style={{fontSize:'.63rem',color:'var(--color-text-sub)'}}>{ex.setsPlanned||3} séries · {meta?.primary||''}{meta?.equipment?' · '+meta.equipment:''}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </Modal>
       )}
     </div>
@@ -2619,11 +2660,307 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
 // COMUNIDADE — Firebase-backed social/ranking
 // ═══════════════════════════════════════════════════════════════════════════
 const Community = ({history, setToast, prefs}) => {
+  const uid = (() => { try { return JSON.parse(localStorage.getItem('darkset.user'))?.uid || null; } catch(_) { return null; } })();
+  const SQUAD_KEY = 'darkset.squad.v1';
+
+  const [tab, setTab]           = useState('feed');  // feed | ranking | chat | checkin
+  const [squad, setSquad]       = useState(() => { try { return JSON.parse(localStorage.getItem(SQUAD_KEY)) || null; } catch(_) { return null; } });
+  const [showCreate, setShowCreate] = useState(false);
+  const [showJoin, setShowJoin]     = useState(false);
+  const [squadName, setSquadName]   = useState('');
+  const [squadCode, setSquadCode]   = useState('');
+  const [squadPass, setSquadPass]   = useState('');
+  const [joinCode, setJoinCode]     = useState('');
+  const [joinPass, setJoinPass]     = useState('');
+  const [chatMsg, setChatMsg]       = useState('');
+  const [chatLog, setChatLog]       = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.chat')) || []; } catch(_) { return []; } });
+  const [checkins, setCheckins]     = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.checkins')) || {}; } catch(_) { return {}; } });
+  const [members, setMembers]       = useState(() => { try { return JSON.parse(localStorage.getItem('darkset.squad.members')) || []; } catch(_) { return []; } });
+
+  const saveAll = (sq, mb, ch, ci) => {
+    if(sq !== undefined) { setSquad(sq); try { localStorage.setItem(SQUAD_KEY, JSON.stringify(sq)); } catch(_) {} }
+    if(mb !== undefined) { setMembers(mb); try { localStorage.setItem('darkset.squad.members', JSON.stringify(mb)); } catch(_) {} }
+    if(ch !== undefined) { setChatLog(ch); try { localStorage.setItem('darkset.squad.chat', JSON.stringify(ch)); } catch(_) {} }
+    if(ci !== undefined) { setCheckins(ci); try { localStorage.setItem('darkset.squad.checkins', JSON.stringify(ci)); } catch(_) {} }
+  };
+
+  const myName = prefs.name || 'Você';
+  const myAvatar = prefs.avatarUrl || null;
+  const todayKey = new Date().toISOString().slice(0,10);
+
+  // Generate share code
+  const genCode = () => Math.random().toString(36).slice(2,8).toUpperCase();
+
+  const createSquad = () => {
+    if (!squadName.trim()) { setToast('Digite um nome'); return; }
+    const code = genCode();
+    const newSquad = { name: squadName.trim(), code, pass: squadPass.trim(), createdAt: Date.now() };
+    const newMember = { uid: uid||'local_'+Date.now(), name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'admin' };
+    saveAll(newSquad, [newMember], chatLog, checkins);
+    setShowCreate(false);
+    setToast('Squad criado! Código: ' + code);
+  };
+
+  const joinSquad = () => {
+    if (!joinCode.trim()) { setToast('Digite o código'); return; }
+    // Simulate joining (in production this would hit Firebase)
+    const found = { name: 'Squad ' + joinCode.toUpperCase(), code: joinCode.toUpperCase(), pass: joinPass, createdAt: Date.now() };
+    const newMember = { uid: uid||'local_'+Date.now(), name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'member' };
+    saveAll(found, [...members, newMember], chatLog, checkins);
+    setShowJoin(false);
+    setToast('Entrou no squad!');
+  };
+
+  const sendChat = () => {
+    if (!chatMsg.trim()) return;
+    const msg = { id: Date.now(), uid: uid||'local', name: myName, avatar: myAvatar, text: chatMsg.trim(), ts: Date.now() };
+    const newLog = [...chatLog, msg].slice(-100); // keep last 100
+    saveAll(undefined, undefined, newLog, undefined);
+    setChatMsg('');
+  };
+
+  const doCheckin = () => {
+    if (checkins[todayKey]?.some(c => c.uid === (uid||'local'))) { setToast('Já fez check-in hoje!'); return; }
+    const ci = { uid: uid||'local', name: myName, avatar: myAvatar, ts: Date.now(), hadWorkout: !!history[todayKey] };
+    const todayCis = [...(checkins[todayKey] || []), ci];
+    const newCheckins = { ...checkins, [todayKey]: todayCis };
+    saveAll(undefined, undefined, undefined, newCheckins);
+    setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!');
+  };
+
+  // Ranking: last 30 days
+  const ranking = useMemo(() => {
+    const since = new Date(); since.setDate(since.getDate()-30);
+    const sinceKey = since.toISOString().slice(0,10);
+    const scores = {};
+    Object.entries(checkins).forEach(([date, cis]) => {
+      if (date < sinceKey) return;
+      cis.forEach(ci => {
+        if (!scores[ci.uid]) scores[ci.uid] = { name: ci.name, avatar: ci.avatar, days: 0, workouts: 0 };
+        scores[ci.uid].days++;
+        if (ci.hadWorkout) scores[ci.uid].workouts++;
+      });
+    });
+    // Add self if has history
+    const myUid = uid||'local';
+    if (!scores[myUid]) scores[myUid] = { name: myName, avatar: myAvatar, days: 0, workouts: 0 };
+    Object.entries(history).forEach(([date]) => {
+      if (date >= sinceKey) scores[myUid].workouts = Math.max(scores[myUid].workouts, (scores[myUid].workouts||0));
+    });
+    return Object.entries(scores).sort((a,b) => b[1].workouts - a[1].workouts || b[1].days - a[1].days)
+      .map(([uid, data], i) => ({...data, uid, rank: i+1}));
+  }, [checkins, history]);
+
+  const todayCheckins = checkins[todayKey] || [];
+  const myCheckedToday = todayCheckins.some(c => c.uid === (uid||'local'));
+  const myWorkoutToday = !!history[todayKey];
+
+  const fmtTime = (ts) => { const d = new Date(ts); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); };
+  const fmtDate = (ts) => new Date(ts).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'});
+
+  // Feed: recent checkins across all days
+  const feedItems = useMemo(() => {
+    const items = [];
+    Object.entries(checkins).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,7).forEach(([date, cis]) => {
+      cis.forEach(ci => items.push({...ci, date}));
+    });
+    return items.sort((a,b) => b.ts - a.ts).slice(0, 30);
+  }, [checkins]);
+
+  if (!squad) {
+    return (
+      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Treine junto, evolua junto</div>
+        </div>
+        <div style={{display:'grid',gap:'1rem'}}>
+          <button onClick={()=>setShowCreate(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+            <div style={{position:'absolute',right:'-10px',top:'-10px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1}}>+</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#fff'}}>Criar Squad</div>
+            <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.65)',marginTop:'.25rem'}}>Crie um grupo e convide amigos com código</div>
+          </button>
+          <button onClick={()=>setShowJoin(true)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'var(--color-text)'}}>Entrar com Código</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'.25rem'}}>Digite o código do squad que um amigo criou</div>
+          </button>
+        </div>
+
+        {showCreate && (
+          <Modal onClose={()=>setShowCreate(false)}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Criar Squad</div>
+            <div style={{display:'grid',gap:'.6rem'}}>
+              <input value={squadName} onChange={e=>setSquadName(e.target.value)} placeholder="Nome do squad..." style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
+              <div>
+                <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'3px'}}>Senha (opcional)</div>
+                <input value={squadPass} onChange={e=>setSquadPass(e.target.value)} placeholder="Deixe vazio para squad aberto" type="password" style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
+              </div>
+              <button onClick={createSquad} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer'}}>Criar</button>
+            </div>
+          </Modal>
+        )}
+        {showJoin && (
+          <Modal onClose={()=>setShowJoin(false)}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Entrar no Squad</div>
+            <div style={{display:'grid',gap:'.6rem'}}>
+              <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} placeholder="Código do squad (ex: AB3X9K)" style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',letterSpacing:'.1em',fontWeight:700}}/>
+              <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha (se houver)" type="password" style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem'}}/>
+              <button onClick={joinSquad} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer'}}>Entrar</button>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div style={{marginTop:'1rem',padding:'2rem 1rem',textAlign:'center',color:'var(--color-text-sub)'}}>
-      <div style={{fontSize:'3rem',marginBottom:'1rem'}}>🚧</div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'var(--color-text)',marginBottom:'.5rem'}}>Em breve</div>
-      <div style={{fontSize:'.85rem'}}>O modo Squad está sendo atualizado. Em breve disponível!</div>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            {squad.name}
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
+            Código: <span style={{color:'var(--color-accent)',fontWeight:700,letterSpacing:'.08em'}}>{squad.code}</span>
+            {squad.pass && <span style={{marginLeft:'.5rem',color:'#4ade80',fontSize:'.6rem'}}>🔒 Privado</span>}
+          </div>
+        </div>
+        <button onClick={()=>{if(confirm('Sair do squad?')){saveAll(null,[],'',{});setToast('Saiu do squad');}}}
+          style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.35rem .7rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
+      </div>
+
+      {/* Check-in do dia */}
+      <button onClick={doCheckin} style={{
+        background: myCheckedToday ? 'rgba(74,222,128,.06)' : 'var(--color-accent)',
+        border: myCheckedToday ? '1px solid rgba(74,222,128,.3)' : 'none',
+        borderRadius:'12px', padding:'1rem', cursor:'pointer',
+        display:'flex', alignItems:'center', justifyContent:'space-between'
+      }}>
+        <div style={{textAlign:'left'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:myCheckedToday?'#4ade80':'#fff'}}>
+            {myCheckedToday ? '✓ Check-in feito!' : '📍 Fazer Check-in Hoje'}
+          </div>
+          <div style={{fontSize:'.72rem',color:myCheckedToday?'rgba(74,222,128,.7)':'rgba(255,255,255,.6)',marginTop:'2px'}}>
+            {myCheckedToday ? (myWorkoutToday?'Com treino registrado':'Sem treino') : 'Marque sua presença no squad'}
+          </div>
+        </div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:myCheckedToday?'#4ade80':'#fff'}}>
+          {todayCheckins.length}
+        </div>
+      </button>
+
+      {/* Tabs */}
+      <div style={{display:'flex',background:'rgba(255,255,255,.04)',borderRadius:'10px',padding:'3px',gap:'3px'}}>
+        {[['feed','📰 Feed'],['ranking','🏆 Ranking'],['chat','💬 Chat']].map(([t,label])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'.4rem',borderRadius:'8px',border:'none',
+            background:tab===t?'rgba(255,255,255,.1)':'transparent',
+            color:tab===t?'var(--color-text)':'var(--color-text-sub)',
+            fontWeight:700,fontSize:'.72rem',cursor:'pointer'}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* FEED */}
+      {tab==='feed' && (
+        <div style={{display:'grid',gap:'.5rem'}}>
+          {feedItems.length===0
+            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
+                Sem atividade ainda. Façam check-in!
+              </div>
+            : feedItems.map((item,i) => (
+              <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.75rem'}}>
+                {item.avatar
+                  ? <img src={item.avatar} style={{width:'36px',height:'36px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+                  : <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'var(--color-accent)',flexShrink:0}}>{item.name.slice(0,2).toUpperCase()}</div>
+                }
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:'.86rem',fontWeight:700}}>{item.name}</div>
+                  <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>
+                    {item.hadWorkout ? '💪 Treinou e fez check-in' : '✅ Fez check-in'} · {fmtDate(item.ts)}
+                  </div>
+                </div>
+                <div style={{fontSize:'.7rem',color:'#555',flexShrink:0}}>{fmtTime(item.ts)}</div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* RANKING */}
+      {tab==='ranking' && (
+        <div style={{display:'grid',gap:'.5rem'}}>
+          <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Últimos 30 dias</div>
+          {ranking.length===0
+            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
+                Façam check-in para aparecer no ranking!
+              </div>
+            : ranking.map((m,i) => {
+              const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+              const isMe = m.uid===(uid||'local');
+              return (
+                <div key={m.uid} style={{display:'flex',alignItems:'center',gap:'.75rem',
+                  background:isMe?'rgba(227,27,35,.06)':'var(--color-card)',
+                  border:isMe?'1px solid rgba(227,27,35,.2)':'1px solid var(--color-border)',
+                  borderRadius:'10px',padding:'.7rem .85rem'}}>
+                  <div style={{width:'28px',textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:i<3?'#facc15':'#555',flexShrink:0}}>
+                    {medal || (i+1)}
+                  </div>
+                  {m.avatar
+                    ? <img src={m.avatar} style={{width:'32px',height:'32px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+                    : <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'#555',flexShrink:0}}>{m.name.slice(0,2).toUpperCase()}</div>
+                  }
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:'.86rem',fontWeight:700,color:isMe?'var(--color-accent)':'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
+                    <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{m.workouts} treinos · {m.days} check-ins</div>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555'}}>{m.workouts}</div>
+                    <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase'}}>treinos</div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* CHAT */}
+      {tab==='chat' && (
+        <div style={{display:'grid',gap:'.5rem'}}>
+          <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.5rem',maxHeight:'50vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:'.4rem'}}>
+            {chatLog.length===0
+              ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.82rem'}}>Nenhuma mensagem ainda. Sejam o primeiro!</div>
+              : chatLog.map((msg,i) => {
+                const isMe = msg.uid===(uid||'local');
+                return (
+                  <div key={msg.id||i} style={{display:'flex',flexDirection:isMe?'row-reverse':'row',gap:'.4rem',alignItems:'flex-end'}}>
+                    {!isMe && (msg.avatar
+                      ? <img src={msg.avatar} style={{width:'24px',height:'24px',borderRadius:'50%',flexShrink:0}} alt=""/>
+                      : <div style={{width:'24px',height:'24px',borderRadius:'50%',background:'rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.65rem',fontWeight:700,flexShrink:0}}>{msg.name.slice(0,1)}</div>
+                    )}
+                    <div style={{maxWidth:'75%'}}>
+                      {!isMe && <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',marginBottom:'2px',paddingLeft:'4px'}}>{msg.name}</div>}
+                      <div style={{background:isMe?'var(--color-accent)':'rgba(255,255,255,.07)',borderRadius:isMe?'12px 12px 3px 12px':'12px 12px 12px 3px',padding:'.45rem .7rem'}}>
+                        <div style={{fontSize:'.84rem',color:isMe?'#fff':'var(--color-text)',lineHeight:1.4}}>{msg.text}</div>
+                      </div>
+                      <div style={{fontSize:'.58rem',color:'#555',marginTop:'2px',textAlign:isMe?'right':'left',paddingLeft:isMe?0:'4px'}}>{fmtTime(msg.ts)}</div>
+                    </div>
+                  </div>
+                );
+              })
+            }
+          </div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendChat()}
+              placeholder="Mensagem..." style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
+            <button onClick={sendChat} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>→</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -3352,6 +3689,8 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
   });
   const [freeSearch, setFreeSearch] = useState('');
   const [showFreeSearch, setShowFreeSearch] = useState(false);
+  const [showSwap, setShowSwap] = useState(false);  // trocar exercício
+  const [swapSearch, setSwapSearch] = useState('');
   const rirDefault = (typeof prefs.rirDefault === 'number') ? (prefs.rirDefault === 0 ? 'Falha' : String(prefs.rirDefault)) : '--';
 
   // Autosave free exercises
@@ -3618,6 +3957,9 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
                 </div>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.05em'}}>Ver</span>
               </button>
+              <button onClick={()=>{setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'8px',padding:'.28rem .55rem',cursor:'pointer',lineHeight:1}}>
+                <span style={{fontSize:'.65rem',fontWeight:800,color:'#aaa',textTransform:'uppercase',letterSpacing:'.05em'}}>↕ Trocar</span>
+              </button>
             </div>
           </div>
           <div style={{textAlign:'right'}}>
@@ -3634,6 +3976,54 @@ const Session = ({plans, history, setHistory, prefs, goto, setToast, onPR}) => {
       {prefs.showTimer && <DarkTimer prefs={prefs}/>}
       {sessionGif&&<ExGifModal exName={sessionGif} onClose={()=>setSessionGif(null)}/>}
       {sessionDetail&&<ExerciseDetail exName={sessionDetail} onClose={()=>setSessionDetail(null)} history={history}/>}
+
+      {/* Modal: Trocar exercício */}
+      {showSwap && (
+        <Modal onClose={()=>setShowSwap(false)}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>
+            ↕ Trocar <span style={{color:'var(--color-accent)'}}>{current?.name}</span>
+          </div>
+          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.6rem'}}>Equipamento ocupado? Escolha outro exercício para o mesmo músculo ou qualquer outro.</div>
+          <input
+            value={swapSearch} onChange={e=>setSwapSearch(e.target.value)}
+            placeholder="Buscar exercício..."
+            autoFocus
+            style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem',marginBottom:'.5rem'}}
+          />
+          <div style={{maxHeight:'55vh',overflowY:'auto',display:'grid',gap:'.3rem'}}>
+            {/* Same muscle first */}
+            {(() => {
+              const curMuscle = EXS.find(e=>e.name===current?.name)?.primary;
+              const sameMuscle = EXS.filter(e => e.primary===curMuscle && e.name!==current?.name &&
+                (!swapSearch || e.name.toLowerCase().includes(swapSearch.toLowerCase())));
+              const others = swapSearch ? EXS.filter(e => e.primary!==curMuscle && e.name!==current?.name &&
+                e.name.toLowerCase().includes(swapSearch.toLowerCase())) : [];
+              const all = swapSearch ? [...sameMuscle, ...others] : sameMuscle;
+              return all.slice(0,20).map((ex,i) => (
+                <button key={i} onClick={()=>{
+                  // Swap the current exercise in the plan
+                  setPlans(prev => {
+                    const copy = JSON.parse(JSON.stringify(prev));
+                    const dayArr = copy.list.find(p=>p.id===activePlanId)?.byDay?.[day];
+                    if(dayArr && dayArr[cursor]) {
+                      dayArr[cursor] = {...dayArr[cursor], name: ex.name, exId: ex.id};
+                    }
+                    return copy;
+                  });
+                  setShowSwap(false);
+                }} style={{display:'flex',alignItems:'center',gap:'.6rem',background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .75rem',cursor:'pointer',textAlign:'left'}}>
+                  <ExGifThumb exName={ex.name} onClick={()=>{}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:'.84rem',fontWeight:700,color:'var(--color-text)'}}>{ex.name}</div>
+                    <div style={{fontSize:'.63rem',color:'var(--color-text-sub)'}}>{ex.primary} · {ex.equipment}</div>
+                  </div>
+                  {ex.primary===curMuscle && <span style={{fontSize:'.6rem',color:'#4ade80',fontWeight:700,flexShrink:0}}>Mesmo músculo</span>}
+                </button>
+              ));
+            })()}
+          </div>
+        </Modal>
+      )}
 
       {/* Sets */}
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
@@ -3773,7 +4163,7 @@ const History=({history,setHistory,prefs})=>{
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Historico</div>
           <div style={{display:'flex',gap:'.4rem'}}>
             <button onClick={exportCSV} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.35rem .65rem',color:'#777',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>CSV</button>
-            <button disabled={!chartsEnabled} onClick={()=>window.openChartsModal&&window.openChartsModal()} style={{background:chartsEnabled?'rgba(227,27,35,.1)':'rgba(255,255,255,.02)',border:chartsEnabled?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .65rem',color:chartsEnabled?'#e31b23':'#333',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:chartsEnabled?'pointer':'default',display:'inline-flex',alignItems:'center',gap:'.3rem'}}>
+            <button disabled={!chartsEnabled} onClick={()=>window.openDarkCharts&&window.openDarkCharts('treino')} style={{background:chartsEnabled?'rgba(227,27,35,.1)':'rgba(255,255,255,.02)',border:chartsEnabled?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .65rem',color:chartsEnabled?'#e31b23':'#333',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:chartsEnabled?'pointer':'default',display:'inline-flex',alignItems:'center',gap:'.3rem'}}>
               {!chartsEnabled&&<LockIcon/>}Graficos
             </button>
           </div>
@@ -4144,155 +4534,348 @@ const Profile=({prefs,setPrefs,history})=>{
 // ═══════════════════════════════════════════════════════════════════════════
 // DIETA — Registro de refeições
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════
+// DARKSET SELOS — Sistema de conquistas com identidade própria
+// ══════════════════════════════════════════════════════════════════════════
+const SELOS = [
+  // Assiduidade
+  {id:'ferro_1',     cat:'assiduidade', title:'Primeiro Sangue',   icon:'🩸', desc:'Primeiro treino registrado',          check:(h,prefs)=>Object.keys(h).length>=1},
+  {id:'ferro_7',     cat:'assiduidade', title:'Uma Semana Sólida', icon:'⛓️', desc:'7 treinos no histórico',              check:(h)=>Object.keys(h).length>=7},
+  {id:'ferro_30',    cat:'assiduidade', title:'Mês de Ferro',      icon:'🔩', desc:'30 treinos no histórico',             check:(h)=>Object.keys(h).length>=30},
+  {id:'ferro_100',   cat:'assiduidade', title:'Centenário',        icon:'💯', desc:'100 treinos no histórico',            check:(h)=>Object.keys(h).length>=100},
+  {id:'streak_7',    cat:'assiduidade', title:'Sequência Viva',    icon:'🔥', desc:'7 dias de streak',                   check:(h,p)=>calcStreak(h,p)>=7},
+  {id:'streak_30',   cat:'assiduidade', title:'Chama Eterna',      icon:'🌋', desc:'30 dias de streak',                  check:(h,p)=>calcStreak(h,p)>=30},
+  // Volume
+  {id:'vol_1t',      cat:'volume',      title:'Uma Tonelada',      icon:'⚖️', desc:'1 tonelada de volume total',         check:(h)=>calcTotalVol(h)>=1000},
+  {id:'vol_10t',     cat:'volume',      title:'Carregador',        icon:'🏗️', desc:'10 toneladas de volume',             check:(h)=>calcTotalVol(h)>=10000},
+  {id:'vol_100t',    cat:'volume',      title:'Máquina de Guerra',  icon:'⚙️', desc:'100 toneladas de volume',            check:(h)=>calcTotalVol(h)>=100000},
+  // Força
+  {id:'pr_1',        cat:'forca',       title:'Personal Record',   icon:'📍', desc:'Primeiro PR batido',                 check:(h)=>calcPRCount(h)>=1},
+  {id:'pr_10',       cat:'forca',       title:'Quebrador',         icon:'💥', desc:'10 PRs batidos',                     check:(h)=>calcPRCount(h)>=10},
+  {id:'pr_50',       cat:'forca',       title:'Lenda do Ferro',    icon:'🏅', desc:'50 PRs batidos',                     check:(h)=>calcPRCount(h)>=50},
+  // Diversidade
+  {id:'ex_10',       cat:'diversidade', title:'Explorador',        icon:'🗺️', desc:'Treinou 10 exercícios diferentes',   check:(h)=>countUniqueEx(h)>=10},
+  {id:'ex_30',       cat:'diversidade', title:'Arsenal Completo',  icon:'🔱', desc:'Treinou 30 exercícios diferentes',   check:(h)=>countUniqueEx(h)>=30},
+  {id:'cardio_1',    cat:'diversidade', title:'Pulmão de Aço',     icon:'💨', desc:'Primeiro cardio registrado',         check:(h,p,c)=>(c||0)>=1},
+  // Dedicação
+  {id:'cedo_1',      cat:'dedicacao',   title:'Madrugador',        icon:'🌅', desc:'Registrou treino antes das 7h',      check:(h)=>hasEarlyWorkout(h)},
+  {id:'semana_full', cat:'dedicacao',   title:'Semana Perfeita',   icon:'📅', desc:'Treinou todos os dias de treino em uma semana', check:(h,p)=>hasPerfectWeek(h,p)},
+];
+
+function calcStreak(history, prefs) {
+  const today = new Date();
+  const trainDays = prefs?.trainDays || [1,2,3,4,5,6];
+  let s = 0;
+  const d = new Date(today);
+  const todayKey = today.toISOString().slice(0,10);
+  if (trainDays.includes(today.getDay()) && !history[todayKey]) d.setDate(d.getDate()-1);
+  for (let i=0; i<90; i++) {
+    const k = d.toISOString().slice(0,10);
+    const isTrain = trainDays.includes(d.getDay());
+    if (!isTrain) { d.setDate(d.getDate()-1); continue; }
+    if (history[k]) { s++; d.setDate(d.getDate()-1); } else break;
+  }
+  return s;
+}
+function calcTotalVol(history) {
+  const n = v => { const x=parseFloat(String(v).replace(',','.')); return isFinite(x)?x:0; };
+  return Object.values(history).reduce((a,obj)=>
+    a+(obj.entries||[]).reduce((b,en)=>b+(en.sets||[]).reduce((c,s)=>c+n(s.w)*n(s.r),0),0),0);
+}
+function calcPRCount(history) {
+  const best = {};
+  const n = v => { const x=parseFloat(String(v).replace(',','.')); return isFinite(x)?x:0; };
+  let prs = 0;
+  Object.entries(history).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([,obj])=>{
+    (obj.entries||[]).forEach(en=>{
+      (en.sets||[]).forEach(s=>{
+        const w=n(s.w),r=n(s.r); if(!w||!r) return;
+        const est=w*(1+r/30);
+        if(!best[en.name]||est>best[en.name]+0.01){best[en.name]=est;prs++;}
+      });
+    });
+  });
+  return prs;
+}
+function countUniqueEx(history) {
+  const ex = new Set();
+  Object.values(history).forEach(obj=>(obj.entries||[]).forEach(en=>ex.add(en.name)));
+  return ex.size;
+}
+function hasEarlyWorkout(history) {
+  return Object.entries(history).some(([,obj])=>{
+    const d = new Date(obj.startTime||Object.values(history)[0]?.startTime||'');
+    return !isNaN(d) && d.getHours() < 7;
+  });
+}
+function hasPerfectWeek(history, prefs) {
+  const trainDays = prefs?.trainDays || [1,2,3,4,5,6];
+  for (let w=0; w<12; w++) {
+    const d = new Date(); d.setDate(d.getDate() - d.getDay() - w*7 + 1);
+    let perfect = true;
+    for (let i=0; i<7; i++) {
+      const dd = new Date(d); dd.setDate(d.getDate()+i);
+      if (!trainDays.includes(dd.getDay())) continue;
+      if (!history[dd.toISOString().slice(0,10)]) { perfect=false; break; }
+    }
+    if (perfect && trainDays.some(td=>{
+      const dd=new Date(d); dd.setDate(d.getDate()+td); return history[dd.toISOString().slice(0,10)];
+    })) return true;
+  }
+  return false;
+}
+
+const catLabel = {assiduidade:'⛓️ Assiduidade', volume:'⚖️ Volume', forca:'💥 Força', diversidade:'🗺️ Diversidade', dedicacao:'📅 Dedicação'};
+
+const DarkSelos = ({history, prefs, cardioCount}) => {
+  const unlocked = useMemo(() => {
+    const set = new Set();
+    SELOS.forEach(s => { if(s.check(history, prefs, cardioCount)) set.add(s.id); });
+    return set;
+  }, [history, prefs, cardioCount]);
+
+  const pct = Math.round(unlocked.size / SELOS.length * 100);
+
+  const cats = [...new Set(SELOS.map(s=>s.cat))];
+
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+          DARK<span style={{color:'var(--color-accent)'}}>SELOS</span>
+        </div>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Conquistas do ferro</div>
+      </div>
+
+      {/* Progress */}
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem'}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.5rem'}}>
+          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>Progresso total</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'var(--color-accent)'}}>{unlocked.size}/{SELOS.length}</div>
+        </div>
+        <div style={{height:'6px',background:'rgba(255,255,255,.07)',borderRadius:'6px',overflow:'hidden'}}>
+          <div style={{height:'100%',width:pct+'%',background:'var(--color-accent)',borderRadius:'6px',transition:'width .5s'}}/>
+        </div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem',marginTop:'.75rem'}}>
+          {SELOS.filter(s=>unlocked.has(s.id)).map(s=>(
+            <span key={s.id} style={{fontSize:'1.3rem'}} title={s.title}>{s.icon}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Categories */}
+      {cats.map(cat=>{
+        const catSelos = SELOS.filter(s=>s.cat===cat);
+        return (
+          <div key={cat}>
+            <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>{catLabel[cat]}</div>
+            <div style={{display:'grid',gap:'.4rem'}}>
+              {catSelos.map(s=>{
+                const done = unlocked.has(s.id);
+                return (
+                  <div key={s.id} style={{display:'flex',alignItems:'center',gap:'.75rem',background:done?'rgba(227,27,35,.05)':'var(--color-card)',border:done?'1px solid rgba(227,27,35,.15)':'1px solid var(--color-border)',borderRadius:'10px',padding:'.7rem .85rem',opacity:done?1:0.45,transition:'all .3s'}}>
+                    <div style={{fontSize:'1.6rem',flexShrink:0,filter:done?'none':'grayscale(100%)'}}>{s.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:done?'var(--color-text)':'#555'}}>{s.title}</div>
+                      <div style={{fontSize:'.68rem',color:done?'var(--color-text-sub)':'#333'}}>{s.desc}</div>
+                    </div>
+                    {done && <div style={{fontSize:'1rem',flexShrink:0}}>✓</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+
 const DIET_LS = 'darkset.v1.diet';
 const MEAL_ICONS = ['🍳','🥗','🍱','🍎','🥛','🍕','🥩','🥦','🧃','🫙','🍌','🥤','🍚','🥚','🫐'];
 
-// ── BarcodeScanner: câmera + Open Food Facts ──────────────────────────────
+// ── BarcodeScanner: câmera nativa + Open Food Facts ──────────────────────────
 const BarcodeScanner = ({onResult, onClose}) => {
-  const videoRef = React.useRef(null);
-  const [status, setStatus] = React.useState('starting'); // starting | scanning | loading | error
-  const [errMsg, setErrMsg] = React.useState('');
+  const videoRef        = React.useRef(null);
+  const canvasRef       = React.useRef(null);
+  const streamRef       = React.useRef(null);
+  const rafRef          = React.useRef(null);
+  const [status, setStatus]   = React.useState('requesting'); // requesting|scanning|searching|notfound|done
   const [manualCode, setManualCode] = React.useState('');
-  const streamRef = React.useRef(null);
-  const codeReaderRef = React.useRef(null);
+  const [camErr, setCamErr]   = React.useState(false);
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    if (codeReaderRef.current) {
-      try { codeReaderRef.current.reset(); } catch(e) {}
-    }
-  };
-
-  const fetchProduct = async (barcode) => {
-    setStatus('loading');
+  // ── Busca Open Food Facts ──────────────────────────────────────────────────
+  const fetchProduct = React.useCallback(async (barcode) => {
+    setStatus('searching');
     try {
-      const r = await fetch('https://world.openfoodfacts.org/api/v0/product/'+barcode+'.json');
+      const r    = await fetch('https://world.openfoodfacts.org/api/v2/product/'+barcode+'?fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity');
       const data = await r.json();
       if (data.status !== 1 || !data.product) {
-        setErrMsg('Produto não encontrado. Tente outro código ou preencha manualmente.');
-        setStatus('error'); return;
+        setStatus('notfound'); return;
       }
       const p = data.product;
       const n = p.nutriments || {};
-      const per = n['energy-kcal_serving'] ? 'serving' : '100g';
-      const suffix = per === 'serving' ? '_serving' : '_100g';
+      // Prefer per-100g values (most reliable)
+      const cal  = Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || (n['energy_100g']||0)/4.184 || 0);
+      const prot = Math.round(n['proteins_100g']        || n.proteins        || 0);
+      const carb = Math.round(n['carbohydrates_100g']   || n.carbohydrates   || 0);
+      const fat  = Math.round(n['fat_100g']             || n.fat             || 0);
+      const name = p.product_name_pt || p.product_name || 'Produto escaneado';
       onResult({
-        name: p.product_name || p.product_name_pt || 'Produto escaneado',
-        calories: String(Math.round(n['energy-kcal'+suffix] || n['energy-kcal'] || 0)),
-        protein:  String(Math.round(n['proteins'+suffix] || n.proteins || 0)),
-        carbs:    String(Math.round(n['carbohydrates'+suffix] || n.carbohydrates || 0)),
-        fat:      String(Math.round(n['fat'+suffix] || n.fat || 0)),
-        note: p.brands ? p.brands.split(',')[0].trim() : '',
-        icon: '🛒',
+        name,
+        calories: String(cal),
+        protein:  String(prot),
+        carbs:    String(carb),
+        fat:      String(fat),
+        note:     (p.brands||'').split(',')[0].trim() + (p.serving_size ? ' · porção: '+p.serving_size : ''),
+        icon:     '🛒',
       });
     } catch(e) {
-      setErrMsg('Erro ao buscar produto. Verifique sua conexão.');
-      setStatus('error');
+      setStatus('notfound');
     }
-  };
+  }, [onResult]);
 
+  // ── Câmera via BarcodeDetector API nativa ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    const start = async () => {
-      // Try to use ZXing if available, fallback to manual
-      if (typeof ZXing === 'undefined') {
-        setStatus('manual'); return;
-      }
+    const startCamera = async () => {
       try {
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        codeReaderRef.current = codeReader;
-        const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
-        const deviceId = devices.length > 1 ? devices[devices.length-1].deviceId : (devices[0]?.deviceId);
-        if (!deviceId) { setStatus('manual'); return; }
-
-        const stream = await navigator.mediaDevices.getUserMedia({video:{deviceId,facingMode:'environment'}});
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-
-        setStatus('scanning');
-        codeReader.decodeFromVideoDevice(deviceId, videoRef.current, (result, err) => {
-          if (cancelled) return;
-          if (result) {
-            stopCamera();
-            fetchProduct(result.getText());
-          }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
         });
+        if (cancelled) { stream.getTracks().forEach(t=>t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setStatus('scanning');
+
+        // Use BarcodeDetector if available (Chrome/Android)
+        if ('BarcodeDetector' in window) {
+          const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] });
+          const detect = async () => {
+            if (cancelled || !videoRef.current) return;
+            try {
+              const codes = await detector.detect(videoRef.current);
+              if (codes.length > 0) {
+                stopCamera();
+                fetchProduct(codes[0].rawValue);
+                return;
+              }
+            } catch(e) {}
+            rafRef.current = requestAnimationFrame(detect);
+          };
+          rafRef.current = requestAnimationFrame(detect);
+        }
+        // fallback: ZXing if loaded
+        else if (typeof ZXing !== 'undefined') {
+          const reader = new ZXing.BrowserMultiFormatReader();
+          reader.decodeFromVideoElement(videoRef.current).then(result => {
+            if (!cancelled) { stopCamera(); fetchProduct(result.getText()); }
+          }).catch(()=>{});
+        }
+        // else: user types manually (camera still shows for visual feedback)
+
       } catch(e) {
-        if (!cancelled) setStatus('manual');
+        if (!cancelled) setCamErr(true);
       }
     };
-    start();
-    return () => { cancelled = true; stopCamera(); };
-  }, []);
+    startCamera();
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
+  }, [fetchProduct]);
 
-  const handleManual = () => {
-    if (!manualCode.trim()) return;
-    fetchProduct(manualCode.trim());
+  const stopCamera = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current = null; }
   };
 
+  // ── Render — fullscreen sem Modal extra ───────────────────────────────────
   return (
-    <Modal onClose={()=>{stopCamera();onClose();}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>
-        📷 Scanner de Alimentos
+    <div style={{position:'fixed',inset:0,zIndex:10001,background:'#000',display:'flex',flexDirection:'column'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.85rem 1rem',background:'rgba(0,0,0,.8)',borderBottom:'1px solid #1a1a1a',flexShrink:0}}>
+        <button onClick={()=>{stopCamera();onClose();}} style={{background:'rgba(255,255,255,.08)',border:'1px solid #333',borderRadius:'8px',padding:'.4rem .75rem',color:'#aaa',fontSize:'.85rem',cursor:'pointer',fontWeight:700}}>← Voltar</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff'}}>
+          📷 Scanner de <span style={{color:'var(--color-accent)'}}>Alimentos</span>
+        </div>
       </div>
 
-      {status==='starting' && (
-        <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
-          <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
-          <div style={{fontSize:'.82rem'}}>Iniciando câmera...</div>
-        </div>
-      )}
+      {/* Camera view */}
+      <div style={{flex:1,position:'relative',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',background:'#000'}}>
+        <video ref={videoRef} autoPlay playsInline muted
+          style={{width:'100%',height:'100%',objectFit:'cover',display:camErr?'none':'block'}}/>
 
-      {status==='scanning' && (
-        <div style={{borderRadius:'10px',overflow:'hidden',background:'#000',marginBottom:'.75rem',position:'relative'}}>
-          <video ref={videoRef} autoPlay playsInline muted style={{width:'100%',maxHeight:'240px',objectFit:'cover',display:'block'}}/>
-          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
-            <div style={{width:'200px',height:'80px',border:'2px solid var(--color-accent)',borderRadius:'8px',boxShadow:'0 0 0 1000px rgba(0,0,0,.4)'}}/>
+        {/* Scan overlay */}
+        {status==='scanning' && !camErr && (
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
+            <div style={{width:'72%',maxWidth:'300px',height:'120px',border:'2px solid var(--color-accent)',borderRadius:'12px',boxShadow:'0 0 0 2000px rgba(0,0,0,.5)',position:'relative'}}>
+              {/* Corner accents */}
+              {[['0','0'],['0','auto'],['auto','0'],['auto','auto']].map(([t,b],i)=>(
+                <div key={i} style={{position:'absolute',top:t==='0'?-2:'auto',bottom:b==='auto'?-2:'auto',left:i<2?-2:'auto',right:i>=2?-2:'auto',width:'20px',height:'20px',border:'3px solid var(--color-accent)',borderRadius:'3px',
+                  borderRight:i%2===0?'none':'3px solid var(--color-accent)',
+                  borderBottom:i<2?'none':'3px solid var(--color-accent)',
+                  borderLeft:i%2===0?'3px solid var(--color-accent)':'none',
+                  borderTop:i<2?'3px solid var(--color-accent)':'none'
+                }}/>
+              ))}
+            </div>
+            <div style={{marginTop:'1rem',color:'rgba(255,255,255,.7)',fontSize:'.78rem',textAlign:'center'}}>Aponte para o código de barras</div>
           </div>
-        </div>
-      )}
+        )}
 
-      {status==='loading' && (
-        <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)'}}>
-          <div style={{fontSize:'1.5rem',marginBottom:'.5rem',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
-          <div style={{fontSize:'.82rem'}}>Buscando produto...</div>
-        </div>
-      )}
-
-      {status==='error' && (
-        <div style={{textAlign:'center',padding:'1.5rem',color:'#f87171',fontSize:'.82rem',marginBottom:'.5rem'}}>
-          ⚠️ {errMsg}
-        </div>
-      )}
-
-      {/* Manual barcode input - always visible */}
-      {(status==='manual' || status==='scanning' || status==='error') && (
-        <div style={{marginTop:status==='scanning'?0:'.5rem'}}>
-          <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'4px'}}>
-            {status==='scanning' ? 'Ou digite o código manualmente:' : 'Código de barras:'}
+        {/* States overlay */}
+        {status==='searching' && (
+          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1rem'}}>
+            <div style={{fontSize:'2rem',animation:'spin 1s linear infinite'}}>⟳</div>
+            <div style={{color:'#fff',fontSize:'.9rem'}}>Buscando produto...</div>
           </div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <input
-              value={manualCode}
-              onChange={e=>setManualCode(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&handleManual()}
-              placeholder="Ex: 7891000100103"
-              type="number"
-              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.88rem'}}
-            />
-            <button onClick={handleManual} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.82rem',cursor:'pointer'}}>
-              Buscar
-            </button>
+        )}
+
+        {camErr && (
+          <div style={{textAlign:'center',padding:'2rem',color:'#aaa'}}>
+            <div style={{fontSize:'2rem',marginBottom:'.75rem'}}>📵</div>
+            <div style={{fontSize:'.85rem',marginBottom:'.5rem'}}>Câmera não disponível</div>
+            <div style={{fontSize:'.75rem',color:'#555'}}>Use o campo abaixo para digitar o código</div>
           </div>
-          <div style={{fontSize:'.62rem',color:'#555',marginTop:'.3rem'}}>Dados via Open Food Facts</div>
+        )}
+      </div>
+
+      {/* Bottom panel */}
+      <div style={{background:'rgba(10,10,10,.97)',borderTop:'1px solid #1a1a1a',padding:'1rem',flexShrink:0}}>
+        {status==='notfound' && (
+          <div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.25)',borderRadius:'8px',padding:'.6rem .75rem',marginBottom:'.75rem',color:'#f87171',fontSize:'.78rem',textAlign:'center'}}>
+            ⚠️ Produto não encontrado no Open Food Facts. Tente digitar o código ou preencha manualmente.
+          </div>
+        )}
+
+        <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.4rem'}}>Ou digitar código de barras</div>
+        <div style={{display:'flex',gap:'.5rem'}}>
+          <input
+            value={manualCode}
+            onChange={e=>setManualCode(e.target.value.replace(/\D/g,''))}
+            onKeyDown={e=>e.key==='Enter'&&manualCode.length>5&&fetchProduct(manualCode)}
+            placeholder="Ex: 7891000100103"
+            inputMode="numeric"
+            style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'8px',padding:'.55rem .75rem',color:'#fff',fontSize:'.9rem'}}
+          />
+          <button
+            onClick={()=>manualCode.length>5&&fetchProduct(manualCode)}
+            style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1rem',color:'#fff',fontWeight:800,fontSize:'.85rem',cursor:'pointer',opacity:manualCode.length>5?1:0.4}}>
+            Buscar
+          </button>
         </div>
-      )}
-    </Modal>
+        <div style={{fontSize:'.6rem',color:'#333',marginTop:'.4rem',textAlign:'center'}}>Dados via Open Food Facts · por 100g</div>
+      </div>
+    </div>
   );
 };
+
 
 // ── PresetChecker: componente separado para checar refeições do preset ──────
 const PresetChecker = ({plan, viewDate, setDiet, todayStr}) => {
@@ -4493,6 +5076,17 @@ const Diet = ({setToast}) => {
   );
 
   return (
+    <>
+    {showScanner && (
+      <BarcodeScanner
+        onClose={()=>setShowScanner(false)}
+        onResult={(product)=>{
+          setForm(f=>({...f,...product}));
+          setShowScanner(false);
+          setShowAdd(true);
+        }}
+      />
+    )}
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -4785,17 +5379,6 @@ const Diet = ({setToast}) => {
         </Modal>
       )}
 
-      {/* Scanner modal */}
-      {showScanner && (
-        <BarcodeScanner
-          onClose={()=>setShowScanner(false)}
-          onResult={(product)=>{
-            setForm(f=>({...f,...product}));
-            setShowScanner(false);
-          }}
-        />
-      )}
-
       {/* Modal: Adicionar/editar refeição */}
       {showAdd && (
         <Modal onClose={()=>setShowAdd(false)}>
@@ -4844,6 +5427,7 @@ const Diet = ({setToast}) => {
         </Modal>
       )}
     </div>
+    </>
   );
 };
 
@@ -4998,12 +5582,13 @@ function App(){
       {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
+      {screen==="selos"     && <DarkSelos history={history} prefs={prefs}/>}
       {screen==="diet"   && <Diet setToast={setToast}/>}
       {screen==="measures" && <Measures setToast={setToast}/>}
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.6.3</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.0</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
@@ -5031,315 +5616,552 @@ root.render(<App/>);
   }
 </script>
 
-<!-- ===== Modal de Gráficos (IIE) ===== -->
+<!-- ===== DarkCharts v2 ===== -->
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<div id="chartsModalBackdrop" class="charts-modal-backdrop" aria-hidden="true">
-  <div class="charts-modal" role="dialog" aria-modal="true" aria-label="Gráficos de treino">
-    <div class="charts-hd">
-      <h3>Gráficos de Evolução (IIE)</h3>
-      <div class="charts-help" id="chartsHelpBtn">?</div>
-      <div class="charts-actions"><button class="charts-btn" id="chartsCloseBtn">Fechar</button></div>
+
+<style>
+.dc-backdrop {
+  display:none; position:fixed; inset:0; z-index:9000;
+  background:rgba(0,0,0,.85); backdrop-filter:blur(6px);
+  align-items:flex-end; justify-content:center;
+}
+.dc-sheet {
+  width:100%; max-width:540px; max-height:92vh;
+  background:#0c0c0e; border-radius:20px 20px 0 0;
+  border-top:1px solid #1e1e22;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.dc-handle { width:36px;height:4px;border-radius:2px;background:#2a2a2a;margin:12px auto 0; flex-shrink:0; }
+.dc-head {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.85rem 1rem .6rem; border-bottom:1px solid #131316;
+  flex-shrink:0;
+}
+.dc-head h3 { font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;
+  text-transform:uppercase;letter-spacing:.04em;color:#eee;flex:1;margin:0; }
+.dc-close { background:rgba(255,255,255,.06);border:1px solid #222;border-radius:8px;
+  padding:.3rem .7rem;color:#777;font-size:.78rem;font-weight:700;cursor:pointer; }
+.dc-tabs {
+  display:flex; gap:3px; padding:.5rem .75rem; background:#0c0c0e; flex-shrink:0;
+  overflow-x:auto; scrollbar-width:none;
+}
+.dc-tabs::-webkit-scrollbar { display:none; }
+.dc-tab {
+  flex-shrink:0; padding:.35rem .75rem; border-radius:8px; border:none;
+  font-size:.72rem; font-weight:700; cursor:pointer; transition:all .15s;
+  background:rgba(255,255,255,.04); color:#666;
+}
+.dc-tab.active { background:rgba(227,27,35,.15); color:#e31b23; border:1px solid rgba(227,27,35,.2); }
+.dc-body { flex:1; overflow-y:auto; padding:.75rem; display:grid; gap:.75rem; }
+.dc-card {
+  background:#0f0f12; border:1px solid #1a1a1e; border-radius:12px;
+  padding:.85rem; display:grid; gap:.6rem;
+}
+.dc-card-title {
+  font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:.8rem;
+  text-transform:uppercase; letter-spacing:.06em; color:#888;
+}
+.dc-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:.4rem; }
+.dc-stat-box { background:rgba(255,255,255,.03); border-radius:8px; padding:.5rem .6rem; text-align:center; }
+.dc-stat-val { font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:#eee; }
+.dc-stat-lbl { font-size:.55rem;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-top:1px; }
+.dc-pills { display:flex; gap:.3rem; flex-wrap:wrap; }
+.dc-pill { padding:.25rem .65rem; border-radius:20px; font-size:.7rem; font-weight:700;
+  cursor:pointer; border:1px solid #222; background:transparent; color:#555; transition:all .15s; }
+.dc-pill.active { background:rgba(227,27,35,.12); border-color:rgba(227,27,35,.3); color:#e31b23; }
+.dc-select { background:rgba(0,0,0,.4);border:1px solid #1e1e1e;border-radius:8px;
+  padding:.4rem .65rem;font-size:.8rem;color:#ccc;width:100%; }
+.dc-canvas-wrap { position:relative; height:180px; }
+.dc-empty { text-align:center;padding:2rem;color:#333;font-size:.82rem; }
+.dc-formula { font-size:.65rem;color:#444;text-align:center;font-style:italic;margin-top:.25rem; }
+</style>
+
+<div id="dcBackdrop" class="dc-backdrop">
+  <div class="dc-sheet">
+    <div class="dc-handle"></div>
+    <div class="dc-head">
+      <h3>Dark<span style="color:#e31b23">Charts</span></h3>
+      <button class="dc-close" id="dcClose">Fechar</button>
     </div>
-    <div class="charts-body">
-      <div class="charts-row">
-        <div class="charts-field">
-          <label for="chartsType">Tipo</label>
-          <select id="chartsType" class="charts-select">
-            <option value="exercise">Exercício</option>
-            <option value="muscle">Músculo</option>
-            <option value="plan">Ficha</option>
-          </select>
-        </div>
-        <div class="charts-field">
-          <label for="chartsSubject">Assunto</label>
-          <select id="chartsSubject" class="charts-select"></select>
-        </div>
-      </div>
-      <div class="charts-pills">
-        <button class="charts-pill" data-range="7">7d</button>
-        <button class="charts-pill" data-range="30">30d</button>
-        <button class="charts-pill" data-range="90">90d</button>
-        <button class="charts-pill active" data-range="all">Tudo</button>
-      </div>
-      <div class="charts-canvas-wrap"><canvas id="chartsCanvas" height="260"></canvas></div>
-      <div id="chartsEmpty" class="charts-empty">Sem dados para o filtro selecionado.</div>
-      <div id="chartsSummary" style="display:none;margin-top:12px;display:none">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
-          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Variação</div>
-            <div id="sumDelta" style="font-size:18px;font-weight:700">—</div>
-          </div>
-          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Volume total</div>
-            <div id="sumVol" style="font-size:18px;font-weight:700">—</div>
-          </div>
-          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Séries</div>
-            <div id="sumSets" style="font-size:18px;font-weight:700">—</div>
-          </div>
-          <div style="background:#0e0e12;border:1px solid #1f2024;border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;opacity:.7;margin-bottom:2px">Repetições</div>
-            <div id="sumReps" style="font-size:18px;font-weight:700">—</div>
-          </div>
-        </div>
-      </div>
+    <div class="dc-tabs" id="dcTabs">
+      <button class="dc-tab active" data-tab="treino">💪 Treino</button>
+      <button class="dc-tab" data-tab="peso">⚖️ Peso</button>
+      <button class="dc-tab" data-tab="cardio">🏃 Cardio</button>
+      <button class="dc-tab" data-tab="dieta">🥗 Dieta</button>
+      <button class="dc-tab" data-tab="composicao">🔬 Composição</button>
+    </div>
+    <div class="dc-body" id="dcBody">
+      <div class="dc-empty">Carregando...</div>
     </div>
   </div>
 </div>
+
 <script>
 (function(){
-  const LS_HISTORY_KEY = "darkset.v3.history";
-  function getHistory(){ try{ return JSON.parse(localStorage.getItem(LS_HISTORY_KEY)) || {}; }catch(e){ return {}; } }
-  const toBR = (iso) => { const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; };
-  const dayMs = 86400000;
-
-  const RIR_W = { "Falha":1.00, 0:1.00, 1:1.00, 2:0.92, 3:0.84, 4:0.75 };
-  const num = (v)=>{ const n=parseFloat(String(v).replace(',', '.')); return isFinite(n)?n:0; };
-  const tOf = (iso)=> +new Date(iso+"T00:00:00");
-
-  function metaOf(name){
-    return (window.EXS||[]).find(e=> e && e.name && e.name.toLowerCase()===String(name).toLowerCase()) || null;
-  }
-  function primaryOf(name){ const m=metaOf(name); return m? m.primary : null; }
-  function isUnilateral(name){ const m=metaOf(name); return m? !!m.unilateral : false; }
-
-  function listSubjects(hist, type){
-    const set = new Set();
-    for(const [date, obj] of Object.entries(hist)){
-      if(!obj || !Array.isArray(obj.entries)) continue;
-      if(type==='plan'){ if(obj.planName) set.add(obj.planName); continue; }
-      for(const en of obj.entries){
-        if(!en || !en.name || !Array.isArray(en.sets)) continue;
-        const has = en.sets.some(s=> num(s.r)>0);
-        if(!has) continue;
-        if(type==='exercise') set.add(en.name);
-        if(type==='muscle'){ const p=primaryOf(en.name); if(p) set.add(p); }
-      }
-    }
-    return Array.from(set).sort((a,b)=> a.localeCompare(b));
-  }
-
-  function weekStart(d){
-    const dt = new Date(d);
-    const day = (dt.getDay()+6)%7;
-    dt.setDate(dt.getDate()-day);
-    dt.setHours(0,0,0,0);
-    return dt;
-  }
-  function weekEndFromStart(ws){
-    const dt = new Date(+ws + 6*dayMs);
-    dt.setHours(0,0,0,0);
-    return dt;
-  }
-  function fmtISO(d){ return d.toISOString().slice(0,10); }
-
-  // Calcula moving average (janela de 3 pontos)
-  function movingAvg(data, window=3){
-    return data.map((_, i)=>{
-      const start = Math.max(0, i - Math.floor(window/2));
-      const end   = Math.min(data.length, start + window);
-      const slice = data.slice(start, end);
-      return slice.reduce((a,b)=>a+b,0) / slice.length;
-    });
-  }
-
-  function buildAgg(hist, type, subject, rangeDays){
-    const since = (rangeDays && rangeDays!=='all') ? (Date.now() - Number(rangeDays)*dayMs) : 0;
-    const dayMap = new Map();
-
-    for(const [iso, obj] of Object.entries(hist)){
-      const t = tOf(iso); if(since && t < since) continue;
-      if(!obj || !Array.isArray(obj.entries)) continue;
-      if(type==='plan' && obj.planName !== subject) continue;
-
-      for(const en of obj.entries){
-        if(!en || !en.name || !Array.isArray(en.sets)) continue;
-        if(type==='exercise' && en.name !== subject) continue;
-        if(type==='muscle'){ const p=primaryOf(en.name); if(p!==subject) continue; }
-
-        // Fator unilateral: exercícios de 1 lado × 2 para equivaler ao bilateral
-        const uFactor = isUnilateral(en.name) ? 2 : 1;
-
-        for(const s of en.sets){
-          const r=num(s.r), w=num(s.w);
-          if(r<=0) continue;
-          const rw = (s.rir in RIR_W) ? RIR_W[s.rir] : (RIR_W[String(s.rir)] ?? 0.90);
-          const vol = (w>0 ? w*r : r) * uFactor;
-          const iie = vol * rw / 1000.0;
-
-          let acc = dayMap.get(iso);
-          if(!acc){ acc={iie:0,volume:0,sets:0,reps:0}; dayMap.set(iso,acc); }
-          acc.iie += iie; acc.volume += vol; acc.sets += 1; acc.reps += r;
-        }
-      }
-    }
-
-    // Exercício: diário
-    if(type==='exercise'){
-      const labels = Array.from(dayMap.keys()).sort((a,b)=> a.localeCompare(b));
-      const series = labels.map(d=> dayMap.get(d));
-      const tot = series.reduce((o,s)=>({iie:o.iie+s.iie, vol:o.vol+s.volume, sets:o.sets+s.sets, reps:o.reps+s.reps}), {iie:0,vol:0,sets:0,reps:0});
-      const delta = (series.length>1)? Math.round(((series.at(-1).iie - series[0].iie)/Math.max(1e-6, series[0].iie))*100) : 0;
-      window.__chartsWeekTitles = null;
-      return { labels: labels.map(toBR), series, tot, delta };
-    }
-
-    // Agrupamento semanal com SOMA (não média) para músculo/ficha
-    const wkMap = new Map();
-    for(const [iso, vals] of Array.from(dayMap.entries())){
-      const ws = weekStart(new Date(iso+"T00:00:00"));
-      const we = weekEndFromStart(ws);
-      const key = fmtISO(ws);
-      let acc = wkMap.get(key);
-      if(!acc){ acc={sumIie:0, days:0, volume:0, sets:0, reps:0, ws, we}; wkMap.set(key, acc); }
-      acc.sumIie += vals.iie; acc.days += 1;
-      acc.volume += vals.volume; acc.sets += vals.sets; acc.reps += vals.reps;
-    }
-    const weeks = Array.from(wkMap.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
-    const labels = [], series = [], titles = [];
-    let idx = 1;
-    for(const [, v] of weeks){
-      labels.push("Sem " + (idx++));
-      // Soma semanal (não mais média)
-      series.push({ iie: v.sumIie, volume: v.volume, sets: v.sets, reps: v.reps });
-      titles.push(`${toBR(fmtISO(v.ws))} — ${toBR(fmtISO(v.we))}`);
-    }
-    const tot = series.reduce((o,s)=>({iie:o.iie+s.iie, vol:o.vol+s.volume, sets:o.sets+s.sets, reps:o.reps+s.reps}), {iie:0,vol:0,sets:0,reps:0});
-    const delta = (series.length>1)? Math.round(((series.at(-1).iie - series[0].iie)/Math.max(1e-6, series[0].iie))*100) : 0;
-    window.__chartsWeekTitles = titles;
-    return { labels, series, tot, delta };
-  }
-
-  let chart;
-  function renderChart(labels, series, tot, delta){
-    const elEmpty  = document.getElementById('chartsEmpty');
-    const elSummary= document.getElementById('chartsSummary');
-    const ctx = document.getElementById('chartsCanvas');
-    if(chart){ chart.destroy(); chart=null; }
-
-    if(!labels.length){
-      elEmpty.style.display=''; elSummary.style.display='none'; return;
-    }
-    elEmpty.style.display='none';
-
-    // Atualiza estatísticas resumidas
-    if(elSummary){
-      elSummary.style.display='block';
-      const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
-      const color = delta > 0 ? '#4ade80' : delta < 0 ? '#f87171' : '#a3a3a3';
-      document.getElementById('sumDelta').innerHTML = `<span style="color:${color}">${arrow} ${Math.abs(delta)}%</span>`;
-      const vol = tot.vol >= 1000 ? `${(tot.vol/1000).toFixed(1)}t` : `${Math.round(tot.vol)}kg`;
-      document.getElementById('sumVol').textContent = vol;
-      document.getElementById('sumSets').textContent = tot.sets;
-      document.getElementById('sumReps').textContent = tot.reps;
-    }
-
-    const iieData  = series.map(s=> +s.iie.toFixed(4));
-    const trendData = movingAvg(iieData);
-    const titles   = window.__chartsWeekTitles;
-
-    chart = new Chart(ctx, {
-      type:'line',
-      data:{
-        labels,
-        datasets:[
-          {
-            label:'IIE',
-            data: iieData,
-            borderWidth:2, tension:.25, pointRadius:4, pointHoverRadius:6,
-            borderColor:'#ff3b30', backgroundColor:'rgba(255,59,48,.15)',
-            fill: true, order: 2
-          },
-          {
-            label:'Tendência',
-            data: trendData,
-            borderWidth:2, tension:.4, pointRadius:0, pointHoverRadius:0,
-            borderColor:'rgba(255,200,0,.6)', backgroundColor:'transparent',
-            borderDash:[5,4], fill: false, order: 1
-          }
-        ]
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        interaction:{mode:'index', intersect:false},
-        plugins:{
-          legend:{ display: true, labels:{ color:'#eaeaea', boxWidth:12, font:{size:11} } },
-          tooltip:{
-            enabled:true,
-            callbacks:{
-              title:(items)=>{
-                const i = items && items.length? items[0].dataIndex : 0;
-                return titles && titles[i] ? titles[i] : items[0].label;
-              },
-              label:(item)=>{
-                if(item.datasetIndex === 1) return `Tendência: ${Number(item.raw).toFixed(3)}`;
-                const s = series[item.dataIndex];
-                const lines = [`IIE: ${Number(item.raw).toFixed(3)}`];
-                if(s.volume > 0) lines.push(`Volume: ${Math.round(s.volume)}kg`);
-                lines.push(`Séries: ${s.sets}  ·  Reps: ${s.reps}`);
-                return lines;
-              }
-            }
-          }
-        },
-        scales:{
-          x:{ ticks:{ color:'#a3a3a3', maxRotation:0, autoSkip:true }, grid:{ color:'rgba(255,255,255,.05)' } },
-          y:{ beginAtZero:true, ticks:{ color:'#a3a3a3' }, grid:{ color:'rgba(255,255,255,.05)' } }
-        }
-      }
-    });
-  }
-
-  function refillAndPlot(defaults){
-    const hist = getHistory();
-    const typeSel = document.getElementById('chartsType');
-    const subjSel = document.getElementById('chartsSubject');
-    const pills = Array.from(document.querySelectorAll('.charts-pill'));
-    if(defaults && defaults.type) typeSel.value = defaults.type;
-
-    function fillSubj(){
-      const list = listSubjects(hist, typeSel.value);
-      subjSel.innerHTML = '';
-      if(!list.length){ subjSel.innerHTML = '<option>Sem dados</option>'; renderChart([],[],{},{delta:0}); return; }
-      for(const name of list){ const o=document.createElement('option'); o.value=name; o.textContent=name; subjSel.appendChild(o); }
-      if(defaults && defaults.subject && list.includes(defaults.subject)) subjSel.value = defaults.subject;
-    }
-    fillSubj();
-
-    let range = 'all';
-    function plot(){
-      const {labels, series, tot, delta} = buildAgg(hist, typeSel.value, subjSel.value, range);
-      renderChart(labels, series, tot, delta);
-    }
-    plot();
-
-    typeSel.onchange = ()=>{ fillSubj(); plot(); };
-    subjSel.onchange = ()=> plot();
-    pills.forEach(p=> p.onclick = ()=>{ pills.forEach(x=>x.classList.remove('active')); p.classList.add('active'); range=p.dataset.range; plot(); });
-  }
-
-  window.openChartsModal = function(defaultExerciseName){
-    const el = document.getElementById('chartsModalBackdrop'); if(!el) return;
-    el.style.display='flex';
-    const defaults = defaultExerciseName? {type:'exercise', subject: defaultExerciseName} : null;
-    setTimeout(()=> refillAndPlot(defaults), 0);
+  const LS = {
+    history: 'darkset.v3.history',
+    measures: 'darkset.measures',
+    cardio:   'darkset.cardio.history',
+    diet:     'darkset.v1.diet',
   };
-  window.closeChartsModal = function(){ const el = document.getElementById('chartsModalBackdrop'); if(el) el.style.display='none'; };
+  const get = k => { try { return JSON.parse(localStorage.getItem(k)) || (k===LS.history?{}:(k===LS.measures?[]:(k===LS.diet?{}:[]))) } catch(_) { return k===LS.history||k===LS.diet?{}:[]; } };
+  const num = v => { const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:0; };
+  const toBR = iso => { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${d}/${m}`; };
+  const dayMs = 86400000;
+  let charts = {};
 
-  document.getElementById('chartsCloseBtn')?.addEventListener('click', ()=> window.closeChartsModal());
-  document.getElementById('chartsHelpBtn')?.addEventListener('click', ()=>{
-    alert('IIE (Índice de Intensidade Efetiva) = Volume × Fator RIR / 1000\n\nExercícios unilaterais têm fator ×2 (equivalência bilateral).\n\nA linha amarela tracejada é a tendência (média móvel de 3 pontos).\n\nMúsculo/Ficha: IIE somado por semana. Exercício: IIE diário.');
+  function destroyAll() {
+    Object.values(charts).forEach(c => { try{c.destroy();}catch(_){} });
+    charts = {};
+  }
+
+  function mkChart(id, type, labels, datasets, opts={}) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(charts[id]) { try{charts[id].destroy();}catch(_){} }
+    charts[id] = new Chart(el, {
+      type,
+      data: { labels, datasets },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{ display: datasets.length>1, labels:{color:'#888',boxWidth:10,font:{size:10}} },
+          tooltip:{ callbacks:{ ...(opts.tooltipLabel?{label:opts.tooltipLabel}:{}) } }
+        },
+        scales: {
+          x:{ ticks:{color:'#555',maxRotation:0,autoSkip:true,maxTicksLimit:8}, grid:{color:'rgba(255,255,255,.04)'} },
+          y:{ beginAtZero: opts.noZero?false:true, ticks:{color:'#555'}, grid:{color:'rgba(255,255,255,.04)'} },
+          ...(opts.y2 ? {y2:{type:'linear',position:'right',ticks:{color:'#888'},grid:{drawOnChartArea:false}}} : {})
+        },
+        ...opts.extra
+      }
+    });
+  }
+
+  // ── TREINO TAB ──────────────────────────────────────────────────────────
+  function buildTreinoTab() {
+    const hist = get(LS.history);
+    const entries = Object.entries(hist).sort((a,b)=>a[0].localeCompare(b[0]));
+
+    // Weekly volume
+    const wkVol = {};
+    entries.forEach(([iso, obj]) => {
+      const d = new Date(iso+'T00:00'); const start = new Date(d); start.setDate(d.getDate()-((d.getDay()+6)%7));
+      const wk = start.toISOString().slice(0,10);
+      const vol = (obj.entries||[]).reduce((a,en)=>(en.sets||[]).reduce((b,s)=>b+num(s.w)*num(s.r),a),0);
+      wkVol[wk] = (wkVol[wk]||0)+vol;
+    });
+    const wkKeys = Object.keys(wkVol).sort().slice(-12);
+    const wkVals = wkKeys.map(k=>Math.round(wkVol[k]));
+
+    // Exercise IIE for top exercise
+    const exMap = {};
+    entries.forEach(([iso,obj]) => {
+      (obj.entries||[]).forEach(en => {
+        (en.sets||[]).forEach(s => {
+          const w=num(s.w),r=num(s.r); if(!r) return;
+          const rw = {Falha:1,0:1,1:1,2:.92,3:.84,4:.75}[String(s.rir)]??0.9;
+          const iie = (w>0?w*r:r)*rw/1000;
+          if(!exMap[en.name]) exMap[en.name]={total:0,count:0,dates:{}};
+          exMap[en.name].total+=iie; exMap[en.name].count++;
+          exMap[en.name].dates[iso]=(exMap[en.name].dates[iso]||0)+iie;
+        });
+      });
+    });
+    const topExes = Object.entries(exMap).sort((a,b)=>b[1].total-a[1].total).slice(0,5).map(([n])=>n);
+
+    // Total stats
+    const totalVol = entries.reduce((a,[,o])=>a+(o.entries||[]).reduce((b,en)=>(en.sets||[]).reduce((c,s)=>c+num(s.w)*num(s.r),b),0),0);
+    const totalSets = entries.reduce((a,[,o])=>a+(o.entries||[]).reduce((b,en)=>b+(en.sets||[]).length,0),0);
+    const topEx = topExes[0]||'–';
+
+    // Exercises select
+    const exSelect = `<select id="dcExSelect" class="dc-select">${topExes.map(e=>`<option>${e}</option>`).join('')}</select>`;
+
+    document.getElementById('dcBody').innerHTML = `
+      <div class="dc-card">
+        <div class="dc-card-title">Resumo geral</div>
+        <div class="dc-stats">
+          <div class="dc-stat-box"><div class="dc-stat-val">${entries.length}</div><div class="dc-stat-lbl">Treinos</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val">${totalVol>=1000?(totalVol/1000).toFixed(1)+'t':Math.round(totalVol)+'kg'}</div><div class="dc-stat-lbl">Volume</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val">${totalSets}</div><div class="dc-stat-lbl">Séries</div></div>
+        </div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">Volume semanal (kg)</div>
+        <div class="dc-pills" id="dcTreinoPills">
+          <button class="dc-pill active" data-range="12">12 sem</button>
+          <button class="dc-pill" data-range="26">6 meses</button>
+          <button class="dc-pill" data-range="52">1 ano</button>
+        </div>
+        <div class="dc-canvas-wrap"><canvas id="cVolSem"></canvas></div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">Evolução por exercício (IIE)</div>
+        ${exSelect}
+        <div class="dc-canvas-wrap"><canvas id="cExIIE"></canvas></div>
+        <div class="dc-formula">IIE = Volume × Fator RIR / 1000 · quanto maior, mais intenso</div>
+      </div>
+    `;
+
+    // Volume semanal
+    function plotVolSem(range) {
+      const keys = Object.keys(wkVol).sort().slice(-range);
+      const vals = keys.map(k=>Math.round(wkVol[k]));
+      mkChart('cVolSem','bar', keys.map(toBR), [{
+        label:'Volume (kg)', data:vals, backgroundColor:'rgba(227,27,35,.5)',
+        borderColor:'#e31b23', borderWidth:1, borderRadius:4
+      }]);
+    }
+    plotVolSem(12);
+
+    document.getElementById('dcTreinoPills')?.addEventListener('click', e => {
+      const btn = e.target.closest('.dc-pill'); if(!btn) return;
+      document.querySelectorAll('#dcTreinoPills .dc-pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      plotVolSem(Number(btn.dataset.range));
+    });
+
+    // IIE por exercício
+    function plotIIE(exName) {
+      const d = exMap[exName];
+      if(!d) return;
+      const dates = Object.keys(d.dates).sort().slice(-20);
+      const vals = dates.map(k=>+d.dates[k].toFixed(3));
+      mkChart('cExIIE','line', dates.map(toBR), [{
+        label:'IIE', data:vals, borderColor:'#e31b23', backgroundColor:'rgba(227,27,35,.1)',
+        fill:true, tension:.3, pointRadius:3
+      }]);
+    }
+    if(topExes[0]) plotIIE(topExes[0]);
+    document.getElementById('dcExSelect')?.addEventListener('change', e => plotIIE(e.target.value));
+  }
+
+  // ── PESO TAB ─────────────────────────────────────────────────────────────
+  function buildPesoTab() {
+    const measures = get(LS.measures);
+    const sorted = [...measures].sort((a,b)=>a.date?.localeCompare(b.date));
+    const hasPeso = sorted.some(m=>m.peso);
+    const hasGord = sorted.some(m=>m.gordura);
+
+    document.getElementById('dcBody').innerHTML = `
+      <div class="dc-card">
+        <div class="dc-card-title">Peso corporal (kg)</div>
+        ${hasPeso ? `<div class="dc-canvas-wrap"><canvas id="cPeso"></canvas></div>` : '<div class="dc-empty">Sem dados de peso. Registre em DarkBody.</div>'}
+      </div>
+      ${hasGord ? `
+      <div class="dc-card">
+        <div class="dc-card-title">% Gordura</div>
+        <div class="dc-canvas-wrap"><canvas id="cGord"></canvas></div>
+      </div>` : ''}
+      ${hasPeso ? `
+      <div class="dc-card">
+        <div class="dc-card-title">Massa magra estimada (kg)</div>
+        <div class="dc-canvas-wrap"><canvas id="cMassa"></canvas></div>
+        <div class="dc-formula">Massa magra = Peso × (1 − %Gordura/100)</div>
+      </div>` : ''}
+    `;
+
+    if(!hasPeso) return;
+    const labels = sorted.filter(m=>m.peso).map(m=>toBR(m.date));
+    const pesos = sorted.filter(m=>m.peso).map(m=>num(m.peso));
+    mkChart('cPeso','line', labels, [{
+      label:'Peso', data:pesos, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.1)',
+      fill:true, tension:.3, pointRadius:4
+    }], {noZero:true});
+
+    if(hasGord) {
+      const gl = sorted.filter(m=>m.gordura).map(m=>toBR(m.date));
+      const gv = sorted.filter(m=>m.gordura).map(m=>num(m.gordura));
+      mkChart('cGord','line', gl, [{
+        label:'% Gordura', data:gv, borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.1)',
+        fill:true, tension:.3, pointRadius:4
+      }], {noZero:true});
+    }
+
+    // Massa magra
+    const massaData = sorted.filter(m=>m.peso && m.gordura).map(m=>({
+      date:m.date, val: +(num(m.peso)*(1-num(m.gordura)/100)).toFixed(1)
+    }));
+    if(massaData.length > 0) {
+      mkChart('cMassa','line', massaData.map(m=>toBR(m.date)), [{
+        label:'Massa Magra (kg)', data:massaData.map(m=>m.val),
+        borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)',
+        fill:true, tension:.3, pointRadius:4
+      }], {noZero:true});
+    }
+  }
+
+  // ── CARDIO TAB ────────────────────────────────────────────────────────────
+  function buildCardioTab() {
+    const cardio = get(LS.cardio);
+    if(!cardio.length) {
+      document.getElementById('dcBody').innerHTML = '<div class="dc-empty">Sem sessões de cardio registradas.</div>';
+      return;
+    }
+    const sorted = [...cardio].sort((a,b)=>a.date?.localeCompare(b.date));
+    const labels = sorted.map(s=>toBR(s.date?.slice(0,10)));
+    const tempos = sorted.map(s=>Math.round((s.tempo||0)/60));
+    const cals   = sorted.map(s=>num(s.metrics?.calorias));
+    const dists  = sorted.map(s=>num(s.metrics?.distancia));
+
+    // By type
+    const byType = {};
+    cardio.forEach(s => {
+      byType[s.typeName||s.type] = (byType[s.typeName||s.type]||0)+1;
+    });
+
+    document.getElementById('dcBody').innerHTML = `
+      <div class="dc-card">
+        <div class="dc-card-title">Tempo por sessão (min)</div>
+        <div class="dc-canvas-wrap"><canvas id="cCardioTempo"></canvas></div>
+      </div>
+      ${cals.some(v=>v>0) ? `
+      <div class="dc-card">
+        <div class="dc-card-title">Calorias queimadas</div>
+        <div class="dc-canvas-wrap"><canvas id="cCardioCal"></canvas></div>
+      </div>` : ''}
+      ${dists.some(v=>v>0) ? `
+      <div class="dc-card">
+        <div class="dc-card-title">Distância (km)</div>
+        <div class="dc-canvas-wrap"><canvas id="cCardioDist"></canvas></div>
+      </div>` : ''}
+      <div class="dc-card">
+        <div class="dc-card-title">Modalidades</div>
+        <div class="dc-canvas-wrap" style="height:140px"><canvas id="cCardioType"></canvas></div>
+      </div>
+    `;
+
+    mkChart('cCardioTempo','bar', labels, [{
+      data:tempos, backgroundColor:'rgba(99,102,241,.5)', borderColor:'#6366f1',
+      borderWidth:1, borderRadius:4, label:'Minutos'
+    }]);
+    if(cals.some(v=>v>0)) mkChart('cCardioCal','line', labels, [{
+      data:cals, borderColor:'#fb923c', backgroundColor:'rgba(251,146,60,.1)',
+      fill:true, tension:.3, label:'kcal'
+    }]);
+    if(dists.some(v=>v>0)) mkChart('cCardioDist','line', labels, [{
+      data:dists, borderColor:'#34d399', backgroundColor:'rgba(52,211,153,.1)',
+      fill:true, tension:.3, label:'km'
+    }], {noZero:true});
+
+    const typeNames = Object.keys(byType);
+    const typeVals  = typeNames.map(k=>byType[k]);
+    mkChart('cCardioType','doughnut', typeNames, [{
+      data:typeVals,
+      backgroundColor:['#e31b23','#6366f1','#34d399','#fb923c','#60a5fa','#f472b6'].slice(0,typeNames.length),
+      borderWidth:0
+    }], {extra:{plugins:{legend:{display:true,position:'right',labels:{color:'#888',font:{size:11}}}}}});
+  }
+
+  // ── DIETA TAB ─────────────────────────────────────────────────────────────
+  function buildDietaTab() {
+    const diet = get(LS.diet);
+    const days = Object.entries(diet).sort((a,b)=>a[0].localeCompare(b[0])).slice(-30);
+    if(!days.length) {
+      document.getElementById('dcBody').innerHTML = '<div class="dc-empty">Sem dados de dieta. Registre em DarkDiet.</div>';
+      return;
+    }
+
+    const labels = days.map(([d])=>toBR(d));
+    const cals = days.map(([,meals])=>(meals||[]).reduce((a,m)=>a+num(m.calories),0));
+    const prots = days.map(([,meals])=>(meals||[]).reduce((a,m)=>a+num(m.protein),0));
+    const carbs = days.map(([,meals])=>(meals||[]).reduce((a,m)=>a+num(m.carbs),0));
+    const fats  = days.map(([,meals])=>(meals||[]).reduce((a,m)=>a+num(m.fat),0));
+
+    const goals = (() => { try{return JSON.parse(localStorage.getItem('ds_diet_goals'))||{calories:2000,protein:150};}catch(_){return{calories:2000,protein:150};} })();
+    const avgCal = Math.round(cals.reduce((a,b)=>a+b,0)/cals.length);
+
+    document.getElementById('dcBody').innerHTML = `
+      <div class="dc-card">
+        <div class="dc-stats">
+          <div class="dc-stat-box"><div class="dc-stat-val">${avgCal}</div><div class="dc-stat-lbl">Média kcal</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val">${goals.calories}</div><div class="dc-stat-lbl">Meta kcal</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val" style="color:${avgCal>=goals.calories*0.9&&avgCal<=goals.calories*1.1?'#4ade80':'#f87171'}">${avgCal>=goals.calories*0.9&&avgCal<=goals.calories*1.1?'Na meta':'Fora'}</div><div class="dc-stat-lbl">Status</div></div>
+        </div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">Calorias diárias (últimos 30 dias)</div>
+        <div class="dc-canvas-wrap"><canvas id="cDietaCal"></canvas></div>
+      </div>
+      <div class="dc-card">
+        <div class="dc-card-title">Macros acumulados (g)</div>
+        <div class="dc-canvas-wrap"><canvas id="cDietaMacros"></canvas></div>
+      </div>
+    `;
+
+    mkChart('cDietaCal','bar', labels, [
+      { label:'Calorias', data:cals, backgroundColor:'rgba(251,146,60,.5)', borderColor:'#fb923c', borderWidth:1, borderRadius:3 },
+      { label:'Meta', data:labels.map(()=>goals.calories), type:'line', borderColor:'rgba(255,255,255,.3)', borderDash:[4,3], borderWidth:1.5, pointRadius:0, fill:false }
+    ]);
+
+    mkChart('cDietaMacros','bar', labels, [
+      { label:'Proteína', data:prots, backgroundColor:'rgba(74,222,128,.6)', stack:'a' },
+      { label:'Carbs',    data:carbs, backgroundColor:'rgba(250,204,21,.6)', stack:'a' },
+      { label:'Gordura',  data:fats,  backgroundColor:'rgba(248,113,113,.6)', stack:'a' },
+    ], {extra:{scales:{x:{stacked:true},y:{stacked:true,ticks:{color:'#555'},grid:{color:'rgba(255,255,255,.04)'}}}}});
+  }
+
+  // ── COMPOSIÇÃO TAB ────────────────────────────────────────────────────────
+  function buildComposicaoTab() {
+    const measures = get(LS.measures);
+    const cardio   = get(LS.cardio);
+    const diet     = get(LS.diet);
+    const sorted   = [...measures].sort((a,b)=>a.date?.localeCompare(b.date));
+
+    if(sorted.length < 2) {
+      document.getElementById('dcBody').innerHTML = `
+        <div class="dc-empty">Precisa de ao menos 2 medições em DarkBody para ver análise de composição.</div>`;
+      return;
+    }
+
+    // Weekly cardio minutes
+    const wkCardio = {};
+    cardio.forEach(s => {
+      const d = new Date((s.date||'').slice(0,10)+'T00:00');
+      const start = new Date(d); start.setDate(d.getDate()-((d.getDay()+6)%7));
+      const wk = start.toISOString().slice(0,10);
+      wkCardio[wk] = (wkCardio[wk]||0)+Math.round((s.tempo||0)/60);
+    });
+
+    // Weekly calories
+    const wkDiet = {};
+    Object.entries(diet).forEach(([iso,meals]) => {
+      const d = new Date(iso+'T00:00');
+      const start = new Date(d); start.setDate(d.getDate()-((d.getDay()+6)%7));
+      const wk = start.toISOString().slice(0,10);
+      const cal = (meals||[]).reduce((a,m)=>a+num(m.calories),0);
+      wkDiet[wk] = (wkDiet[wk]||0)+cal;
+    });
+
+    // Peso vs Cardio (se ambos existirem)
+    const pesoComCardio = sorted.filter(m=>m.peso).map(m=>{
+      const d = new Date(m.date+'T00:00');
+      const start = new Date(d); start.setDate(d.getDate()-((d.getDay()+6)%7));
+      const wk = start.toISOString().slice(0,10);
+      return { date:m.date, peso:num(m.peso), cardioMin:wkCardio[wk]||0, dietaCal:wkDiet[wk]||0 };
+    });
+
+    const last = sorted[sorted.length-1];
+    const first = sorted[0];
+    const pesoChange = last.peso && first.peso ? (num(last.peso)-num(first.peso)).toFixed(1) : null;
+    const gordChange = last.gordura && first.gordura ? (num(last.gordura)-num(first.gordura)).toFixed(1) : null;
+    const massaChange = (last.peso && last.gordura && first.peso && first.gordura)
+      ? ((num(last.peso)*(1-num(last.gordura)/100)) - (num(first.peso)*(1-num(first.gordura)/100))).toFixed(1) : null;
+
+    const arw = v => v===null?'–':(Number(v)>0?`<span style="color:#f87171">+${v}</span>`:`<span style="color:#4ade80">${v}</span>`);
+
+    document.getElementById('dcBody').innerHTML = `
+      <div class="dc-card">
+        <div class="dc-card-title">Variação total</div>
+        <div class="dc-stats">
+          <div class="dc-stat-box"><div class="dc-stat-val">${pesoChange!==null?arw(pesoChange)+'kg':'–'}</div><div class="dc-stat-lbl">Peso</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val">${gordChange!==null?arw(gordChange)+'%':'–'}</div><div class="dc-stat-lbl">Gordura</div></div>
+          <div class="dc-stat-box"><div class="dc-stat-val">${massaChange!==null?arw(massaChange)+'kg':'–'}</div><div class="dc-stat-lbl">Massa magra</div></div>
+        </div>
+      </div>
+      ${pesoComCardio.some(p=>p.cardioMin>0) ? `
+      <div class="dc-card">
+        <div class="dc-card-title">Peso × Cardio semanal</div>
+        <div class="dc-canvas-wrap"><canvas id="cPesoCardio"></canvas></div>
+        <div class="dc-formula">Correlação entre minutos de cardio e variação de peso</div>
+      </div>` : ''}
+      ${pesoComCardio.some(p=>p.dietaCal>0) ? `
+      <div class="dc-card">
+        <div class="dc-card-title">Peso × Ingestão calórica semanal</div>
+        <div class="dc-canvas-wrap"><canvas id="cPesoDieta"></canvas></div>
+        <div class="dc-formula">Peso medido vs calorias ingeridas na semana anterior</div>
+      </div>` : ''}
+      <div class="dc-card">
+        <div class="dc-card-title">Índice de Recomposição Corporal</div>
+        <div class="dc-canvas-wrap"><canvas id="cRecomp"></canvas></div>
+        <div class="dc-formula">IRC = (Δ Massa Magra − Δ Gordura absoluta) / Nº semanas · positivo = recomposição</div>
+      </div>
+    `;
+
+    // Peso × Cardio
+    if(pesoComCardio.some(p=>p.cardioMin>0)) {
+      mkChart('cPesoCardio','line',
+        pesoComCardio.map(p=>toBR(p.date)),
+        [
+          { label:'Peso (kg)', data:pesoComCardio.map(p=>p.peso), borderColor:'#60a5fa', yAxisID:'y', tension:.3, pointRadius:3 },
+          { label:'Cardio (min/sem)', data:pesoComCardio.map(p=>p.cardioMin), borderColor:'#34d399', yAxisID:'y2', tension:.3, borderDash:[3,2], pointRadius:3 },
+        ], {noZero:true, y2:true}
+      );
+    }
+
+    // Peso × Dieta
+    if(pesoComCardio.some(p=>p.dietaCal>0)) {
+      mkChart('cPesoDieta','line',
+        pesoComCardio.map(p=>toBR(p.date)),
+        [
+          { label:'Peso (kg)', data:pesoComCardio.map(p=>p.peso), borderColor:'#60a5fa', yAxisID:'y', tension:.3, pointRadius:3 },
+          { label:'kcal/sem', data:pesoComCardio.map(p=>Math.round(p.dietaCal/7)), borderColor:'#fb923c', yAxisID:'y2', tension:.3, borderDash:[3,2], pointRadius:3 },
+        ], {noZero:true, y2:true}
+      );
+    }
+
+    // IRC chart
+    const ircData = sorted.filter(m=>m.peso&&m.gordura).map(m=>{
+      const p=num(m.peso), g=num(m.gordura)/100;
+      return { date:m.date, mm:+(p*(1-g)).toFixed(2), gabs:+(p*g).toFixed(2) };
+    });
+    if(ircData.length>=2) {
+      const irc = ircData.slice(1).map((d,i)=>{
+        const prev=ircData[i];
+        const dMM=d.mm-prev.mm, dGabs=d.gabs-prev.gabs;
+        return +(dMM-dGabs).toFixed(2);
+      });
+      mkChart('cRecomp','bar',
+        ircData.slice(1).map(d=>toBR(d.date)),
+        [{ label:'IRC', data:irc,
+          backgroundColor: irc.map(v=>v>=0?'rgba(74,222,128,.5)':'rgba(248,113,113,.4)'),
+          borderColor: irc.map(v=>v>=0?'#4ade80':'#f87171'),
+          borderWidth:1, borderRadius:4
+        }]
+      );
+    }
+  }
+
+  // ── INIT ──────────────────────────────────────────────────────────────────
+  const TAB_BUILDERS = { treino:buildTreinoTab, peso:buildPesoTab, cardio:buildCardioTab, dieta:buildDietaTab, composicao:buildComposicaoTab };
+  let currentTab = 'treino';
+
+  document.getElementById('dcTabs')?.addEventListener('click', e=>{
+    const btn = e.target.closest('.dc-tab'); if(!btn) return;
+    document.querySelectorAll('.dc-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    destroyAll();
+    TAB_BUILDERS[currentTab]?.();
   });
 
-  document.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('button, a'); if(!btn) return;
-    const t = (btn.innerText || btn.textContent || '').toLowerCase();
-    if(t.includes('gráfico')){ ev.preventDefault(); window.openChartsModal(); }
+  document.getElementById('dcClose')?.addEventListener('click', ()=>window.closeDarkCharts());
+  document.getElementById('dcBackdrop')?.addEventListener('click', e=>{
+    if(e.target===document.getElementById('dcBackdrop')) window.closeDarkCharts();
   });
+
+  window.openDarkCharts = function(tab) {
+    currentTab = tab || 'treino';
+    document.querySelectorAll('.dc-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===currentTab));
+    document.getElementById('dcBackdrop').style.display='flex';
+    destroyAll();
+    TAB_BUILDERS[currentTab]?.();
+  };
+  window.closeDarkCharts = function() {
+    document.getElementById('dcBackdrop').style.display='none';
+    destroyAll();
+  };
+
+  // Keep old openChartsModal working
+  window.openChartsModal = () => window.openDarkCharts('treino');
+  window.closeChartsModal = window.closeDarkCharts;
 })();
 </script>
-<!-- ===== /Modal de Gráficos ===== -->
+<!-- ===== /DarkCharts v2 ===== -->
+
 
 
 <!-- Firebase compat SDKs -->
