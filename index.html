@@ -656,6 +656,23 @@ const EX_NO_IMG = new Set([
   "Abdução em pé polia","Glúteo 4 apoios cabo",
 ]);
 
+
+// ── WGER FALLBACK: imagem estática quando yuhonas não cobre ──────────────────
+const WGER_BASE = 'https://wger.de/media/exercise-images/';
+const WGER_ID = {
+  "Supino reto máquina":339,"Supino inclinado máquina":374,
+  "Supino inclinado Articulado":374,"Desenvolvimento máquina":78,
+  "Extensão lombar máquina":91,"Agachamento sumô barra":207,
+  "Agachamento sumô halteres":355,"Abdução em pé polia":311,
+  "Glúteo 4 apoios cabo":305,"Hip thrust máquina":256,
+  "Cadeira abdutora":359,"Cadeira adutora":360,
+  "Face Pull (corda)":330,"Arnold press halteres":74,
+  "Flexora unilateral em pé":116,"Leg press 180° unilateral":127,
+};
+function exImgSrcs(exName) {
+  const slug=EX_IMG_MAP[exName]||null, wid=WGER_ID[exName]||null;
+  return { yuSrc:slug?YUHONAS_BASE+'/'+slug+'/':null, wgerSrc:wid?WGER_BASE+wid+'/main.png':null };
+}
 function getImgSlug(exName) {
   return EX_IMG_MAP[exName] || null;
 }
@@ -733,6 +750,7 @@ const GifAnimBlock = ({slug, exName, height='280px'}) => {
   const [hasFrame1, setHasFrame1] = useState(true);
   const [img0Err, setImg0Err] = useState(false);
   const [img1Err, setImg1Err] = useState(false);
+  const [wgerErr, setWgerErr] = useState(false);
 
   useEffect(() => {
     setFrame(0); setImg0Err(false); setImg1Err(false); setHasFrame1(true);
@@ -753,11 +771,25 @@ const GifAnimBlock = ({slug, exName, height='280px'}) => {
   const GRP_COLOR = {"Peito":"#e74c3c","Ombro":"#e67e22","Costas":"#27ae60","Bíceps":"#2980b9","Tríceps":"#8e44ad","Quadríceps":"#16a085","Posterior de Coxa":"#d35400","Glúteo":"#c0392b","Trapézio":"#7f8c8d","Panturrilha":"#1abc9c","Abdômen":"#f39c12"};
   const grpColor = GRP_COLOR[ex?.primary] || '#e31b23';
 
+  if ((!slug||img0Err) && !wgerErr) {
+    const srcs=exImgSrcs(exName);
+    if (srcs.wgerSrc) return (
+      <div style={{borderRadius:'14px',overflow:'hidden',border:`1px solid ${grpColor}33`,background:'#000',height,position:'relative'}}>
+        <img src={srcs.wgerSrc} alt={exName} onError={()=>setWgerErr(true)}
+          style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+        <div style={{position:'absolute',bottom:0,left:0,right:0,height:'60px',background:'linear-gradient(transparent,rgba(0,0,0,.65))',pointerEvents:'none'}}/>
+        <div style={{position:'absolute',bottom:'10px',right:'10px',background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',borderRadius:'6px',padding:'3px 9px',display:'flex',alignItems:'center',gap:'5px'}}>
+          <div style={{width:'6px',height:'6px',borderRadius:'50%',background:grpColor}}/><span style={{fontSize:'.6rem',fontWeight:700,color:'#fff',letterSpacing:'.06em'}}>WGER</span>
+        </div>
+        <div style={{position:'absolute',top:'10px',left:'10px',padding:'3px 8px',background:`${grpColor}cc`,borderRadius:'5px',fontSize:'.58rem',fontWeight:800,color:'#fff',textTransform:'uppercase'}}>{ex?.primary}</div>
+      </div>
+    );
+  }
   if (!slug || img0Err) return (
     <div style={{borderRadius:'14px',border:'1px solid #1e1e1e',background:'#080808',
       height,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
       <div style={{fontSize:'2.5rem',opacity:.3}}>🏋️</div>
-      <div style={{fontSize:'.8rem',color:'#444',fontWeight:600}}>Sem animação</div>
+      <div style={{fontSize:'.8rem',color:'#444',fontWeight:600}}>Sem imagem</div>
     </div>
   );
 
@@ -940,8 +972,8 @@ const ExGifModal = ({exName, onClose}) => {
   );
 };
 const ExGifThumb = ({exName, onClick}) => {
-  const slug = EX_IMG_MAP[exName] || null;
-  const previewUrl = slug ? YUHONAS_BASE + '/' + slug + '/0.jpg' : null;
+  const srcs2 = exImgSrcs(exName);
+  const previewUrl = srcs2.yuSrc ? srcs2.yuSrc+'0.jpg' : srcs2.wgerSrc;
   const [imgErr, setImgErr] = useState(false);
   return (
     <button onClick={onClick} title={"Ver execução: "+exName}
@@ -1898,6 +1930,15 @@ const Builder=({planId,plans,setPlans,setToast})=>{
     return copy;
   });
 
+  const toggleSuperset=(i)=>setPlans(p=>{
+    const copy=JSON.parse(JSON.stringify(p));
+    const arr=copy.list.find(x=>x.id===plan.id).byDay[day];
+    if(i<0||i>=arr.length-1) return p;
+    const gA=arr[i].supersetGroup, gB=arr[i+1].supersetGroup;
+    if(gA&&gA===gB){arr[i].supersetGroup=null;arr[i+1].supersetGroup=null;}
+    else{const id='ss_'+Date.now().toString(36);arr[i].supersetGroup=id;arr[i+1].supersetGroup=id;}
+    return copy;
+  });
   const SUBS_BY=MUSCLES.reduce((acc,mu)=>{acc[mu]=[...new Set(EXS.filter(e=>e.primary===mu&&e.subgroup).map(e=>e.subgroup))];return acc;},{});
 
   const totalSets=dayItems.reduce((a,it)=>a+(it.setsPlanned||3),0);
@@ -1965,35 +2006,47 @@ const Builder=({planId,plans,setPlans,setToast})=>{
               </button>
             </div>
           ) : (
-            <div style={{display:'grid',gap:'.5rem'}}>
-              {dayItems.map((it,i)=>(
-                <div key={i} style={{display:'grid',gridTemplateColumns:'2rem 1fr 3.5rem 2.5rem 2.5rem',alignItems:'center',gap:'.5rem',background:'rgba(0,0,0,.3)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.6rem .75rem'}}>
-                  {/* Número */}
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:900,color:'#222',lineHeight:1}}>{i+1}</div>
-                  {/* Nome */}
+            <div style={{display:'grid',gap:'.3rem'}}>
+              {dayItems.map((it,i)=>{
+                const ssN=it.supersetGroup&&dayItems[i+1]?.supersetGroup===it.supersetGroup;
+                const ssP=it.supersetGroup&&dayItems[i-1]?.supersetGroup===it.supersetGroup;
+                const ssC='#8b5cf6';
+                return (<React.Fragment key={i}>
+                <div style={{display:'grid',gridTemplateColumns:'2rem 1fr 3.5rem 2.5rem 2.5rem',alignItems:'center',gap:'.5rem',
+                  background:it.supersetGroup?'rgba(139,92,246,.07)':'rgba(0,0,0,.3)',
+                  border:it.supersetGroup?'1px solid rgba(139,92,246,.4)':'1px solid #1a1a1a',
+                  borderRadius:ssN?'10px 10px 0 0':ssP?'0 0 10px 10px':'10px',
+                  borderBottom:ssN?'none':undefined,padding:'.6rem .75rem'}}>
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'1px'}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:900,color:'#222',lineHeight:1}}>{i+1}</div>
+                    {it.supersetGroup&&<span style={{fontSize:'.42rem',fontWeight:900,color:ssC,textTransform:'uppercase'}}>{ssP?'B':'A'}</span>}
+                  </div>
                   <div style={{minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:'.82rem',lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{it.name}</div>
-                    <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px'}}>
-                      {EXS.find(e=>e.id===it.exId)?.primary||''} · {EXS.find(e=>e.id===it.exId)?.equipment||''}
-                    </div>
+                    <div style={{fontSize:'.65rem',color:'#444',marginTop:'2px'}}>{EXS.find(e=>e.id===it.exId)?.primary||''} · {EXS.find(e=>e.id===it.exId)?.equipment||''}</div>
                   </div>
-                  {/* Séries input */}
                   <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
                     <input type="number" min="1" max="10" value={it.setsPlanned||3}
                       onChange={e=>updateSets(i,e.target.value)}
-                      style={{width:'2.5rem',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.85rem',color:'#fff'}}
-                    />
+                      style={{width:'2.5rem',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.85rem',color:'#fff'}}/>
                     <div style={{fontSize:'.52rem',color:'#333',textTransform:'uppercase',letterSpacing:'.04em'}}>séries</div>
                   </div>
-                  {/* Move */}
                   <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
                     <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===0?'#222':'#888',padding:'3px 7px',cursor:i===0?'default':'pointer',fontSize:'.8rem',lineHeight:1}}>↑</button>
                     <button onClick={()=>move(i,1)} disabled={i===dayItems.length-1} style={{background:'none',border:'1px solid #1a1a1a',borderRadius:'4px',color:i===dayItems.length-1?'#222':'#888',padding:'3px 7px',cursor:i===dayItems.length-1?'default':'pointer',fontSize:'.8rem',lineHeight:1}}>↓</button>
                   </div>
-                  {/* Remove */}
                   <button onClick={()=>removeItem(i)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',padding:'.4rem .4rem',cursor:'pointer',fontSize:'.8rem',fontWeight:700,lineHeight:1,alignSelf:'center'}}>✕</button>
                 </div>
-              ))}
+                {i<dayItems.length-1&&<button onClick={()=>toggleSuperset(i)} style={{
+                  display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',width:'100%',
+                  background:ssN?'rgba(139,92,246,.12)':'transparent',
+                  border:ssN?'1px solid rgba(139,92,246,.3)':'1px dashed #1e1e1e',
+                  borderRadius:'6px',padding:'.22rem',cursor:'pointer',
+                  fontSize:'.6rem',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',
+                  color:ssN?ssC:'#2a2a2a',transition:'all .15s',
+                }}>⛓ {ssN?'BISET ATIVO — toque para desfazer':'criar biset/superset com próximo'}</button>}
+                </React.Fragment>);
+              })}
             </div>
           )}
         </div>
@@ -2593,6 +2646,17 @@ const QRScanner = ({onResult, onClose}) => {
   );
 };
 
+// ── Detecta horário habitual de treino ──────────────────────────────────────
+function detectTrainHour(history) {
+  if (!history||typeof history!=='object') return null;
+  const hours=[];
+  Object.values(history).slice(-20).forEach(sess=>{
+    if(sess.startedAt){const h=new Date(sess.startedAt).getHours();if(h>=4&&h<=23)hours.push(h);}
+  });
+  if(hours.length<3) return null;
+  return Math.round(hours.reduce((a,b)=>a+b,0)/hours.length);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICAÇÕES DE TREINO
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2640,7 +2704,9 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>Lembrete diário</div>
-          <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>Te avisa na hora certa de treinar</div>
+          <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
+            {(()=>{const dh=detectTrainHour(window._DS_HIST||{});return dh!==null?`Horário detectado nos seus treinos: ${String(dh).padStart(2,'0')}:00`:'Te avisa na hora certa de treinar';})()}
+          </div>
         </div>
         <Switch checked={enabled} onChange={v=>v?requestAndSave():disable()}/>
       </div>
@@ -3782,6 +3848,46 @@ function detectPR(exName, newSets, history) {
 }
 
 
+
+// ── DELOAD INTELIGENTE ────────────────────────────────────────────────────────
+function calcDeloadInfo(history) {
+  if (!history||typeof history!=='object') return null;
+  const dates=Object.keys(history).sort();
+  if (dates.length<8) return null;
+  const byWeek={};
+  dates.forEach(d=>{const dt=new Date(d),wk=`${dt.getFullYear()}-${Math.floor((dt-new Date(dt.getFullYear(),0,1))/604800000)}`;byWeek[wk]=(byWeek[wk]||0)+1;});
+  const activeWeeks=Object.values(byWeek).filter(c=>c>=2).length;
+  if (activeWeeks<4) return null;
+  const last30=dates.filter(d=>d>=new Date(Date.now()-30*864e5).toISOString().slice(0,10));
+  for(let i=1;i<last30.length;i++){if((new Date(last30[i])-new Date(last30[i-1]))/864e5>8)return null;}
+  return {weeks:activeWeeks};
+}
+const DeloadBanner=({history,plans,setPlans,setToast})=>{
+  const info=useMemo(()=>calcDeloadInfo(history),[Object.keys(history||{}).length]);
+  const [done,setDone]=useState(()=>{try{return localStorage.getItem('ds.deload.done')===new Date().toISOString().slice(0,7);}catch(_){return false;}});
+  const [applied,setApplied]=useState(false);
+  if(!info||done||applied) return null;
+  const apply=()=>{
+    setPlans(prev=>{const copy=JSON.parse(JSON.stringify(prev));copy.list.forEach(p=>Object.values(p.byDay||{}).forEach(arr=>arr.forEach(ex=>{ex.setsPlanned=Math.max(1,Math.round((ex.setsPlanned||3)*.6));})));return copy;});
+    setApplied(true);setToast('Deload aplicado — semana leve 💤');
+  };
+  const dismiss=()=>{setDone(true);try{localStorage.setItem('ds.deload.done',new Date().toISOString().slice(0,7));}catch(_){}};
+  return(
+    <div style={{background:'linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.05))',border:'1px solid rgba(245,158,11,.35)',borderRadius:'12px',padding:'1rem 1.1rem',marginBottom:'.5rem'}}>
+      <div style={{display:'flex',gap:'.75rem',alignItems:'flex-start'}}>
+        <div style={{fontSize:'1.8rem',flexShrink:0}}>🔋</div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.06em',color:'#f59e0b',marginBottom:'.2rem'}}>Deload Recomendado</div>
+          <div style={{fontSize:'.75rem',color:'#888',lineHeight:1.5,marginBottom:'.7rem'}}>{info.weeks}+ semanas contínuas sem pausa. Uma semana de deload (−40% volume) acelera recuperação e previne plateau.</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <button onClick={apply} style={{background:'rgba(245,158,11,.18)',border:'1px solid rgba(245,158,11,.45)',borderRadius:'8px',padding:'.42rem .9rem',color:'#f59e0b',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>✓ Aplicar deload</button>
+            <button onClick={dismiss} style={{background:'none',border:'1px solid #222',borderRadius:'8px',padding:'.42rem .75rem',color:'#444',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>Ignorar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, onPR}) => {
   const activePlanId = plans.activeId || (plans.list[0]?.id ?? null);
   const activePlan = plans.list.find(p => p.id === activePlanId) || null;
@@ -3808,6 +3914,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
 
   const [sessionGif,setSessionGif]=useState(null);
   const [sessionDetail,setSessionDetail]=useState(null);
+  const [showSharePopup,setShowSharePopup]=useState(false);
   // ── FREE MODE STATE ──
   const [freeExercises, setFreeExercises] = useState(() => {
     try { const d = JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d) && d.length ? d : []; } catch(_) { return []; }
@@ -3886,6 +3993,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     clearDraftSession(activePlanId, day);
     back();
     setToast(saved > 0 ? `${saved} exercício(s) salvos! 💪` : 'Nenhum dado para salvar');
+    if (saved > 0) setShowSharePopup(true);
   };
 
   // Marca visualmente exercícios com dados (pelo menos 1 rep)
@@ -3940,6 +4048,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   // ── PRE-START SCREEN ──
   const preStartScreen = (
     <div className="grid gap-3 mt-3">
+      <DeloadBanner history={history} plans={plans} setPlans={setPlans} setToast={setToast}/>
       {/* Mode toggle */}
       <div className="mode-toggle">
         <button className={'mode-toggle-btn' + (mode === 'plan' ? ' active' : '')} onClick={() => setMode('plan')}>Com Ficha</button>
@@ -4051,7 +4160,47 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     </div>
   );
 
-  if (!started || mode === 'free') return preStartScreen;
+
+  // ── Popup de compartilhar treino (aparece após salvar, na tela de pré-início) ──
+  const sharePopupJSX = showSharePopup ? (() => {
+    const today = new Date().toISOString().slice(0,10);
+    const sess  = history[today];
+    return (
+      <div style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 env(safe-area-inset-bottom,1.5rem)'}}>
+        <div style={{width:'min(480px,96vw)',background:'#111418',border:'1px solid #1e2830',borderRadius:'20px 20px 16px 16px',padding:'1.5rem 1.3rem 1.3rem',boxShadow:'0 -12px 48px rgba(0,0,0,.7)'}}>
+          <div style={{width:'36px',height:'4px',background:'#333',borderRadius:'2px',margin:'0 auto .9rem'}}/>
+          <div style={{textAlign:'center',marginBottom:'1rem'}}>
+            <div style={{fontSize:'2.4rem',marginBottom:'.3rem'}}>📸</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.35rem',textTransform:'uppercase',letterSpacing:'.05em',color:'#fff'}}>Compartilhar Treino</div>
+            <div style={{fontSize:'.76rem',color:'#555',marginTop:'.2rem'}}>Gera uma imagem 9:16 pra você postar nos stories</div>
+          </div>
+          {sess?.entries?.length > 0 && (
+            <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.65rem .85rem',marginBottom:'1rem',display:'flex',gap:'0',justifyContent:'space-around'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.length}</div>
+                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>exercícios</div>
+              </div>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.reduce((a,en)=>a+(en.sets||[]).filter(s=>s.r).length,0)}</div>
+                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>séries</div>
+              </div>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{(()=>{const v=sess.entries.reduce((a,en)=>a+(en.sets||[]).reduce((b,s)=>b+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0),0);return v>0?Math.round(v)+'kg':'—';})()}</div>
+                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>volume</div>
+              </div>
+            </div>
+          )}
+          <div style={{display:'flex',gap:'.6rem'}}>
+            <button onClick={()=>setShowSharePopup(false)} style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #252525',borderRadius:'10px',padding:'.72rem',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer'}}>
+              Agora não
+            </button>
+            <ShareWorkoutBtn history={history} prefs={prefs} setToast={setToast} onDone={()=>setShowSharePopup(false)} fullBtn={true}/>
+          </div>
+        </div>
+      </div>
+    );
+  })() : null;
+  if (!started || mode === 'free') return <React.Fragment>{preStartScreen}{sharePopupJSX}</React.Fragment>;
   if (planItems.length === 0) return (
     <div className="ds-card grid gap-3 mt-3" style={{padding:'1rem 1.1rem'}}>
       <div className="mode-toggle">
@@ -4072,24 +4221,30 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
       {/* Header com progresso */}
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
         <div className="flex items-center justify-between" style={{marginBottom:'.6rem'}}>
-          <div>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>{activePlan.name} · {day}</div>
-            <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginTop:'.15rem'}}>
-              <button onClick={()=>setSessionDetail(current.name)} style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.03em',lineHeight:1.1,color:'var(--color-text)',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'left'}}>{current.name}</button>
-              <button onClick={()=>setSessionGif(current.name)} style={{flexShrink:0,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'8px',padding:'.28rem .6rem',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',lineHeight:1}}>
-                <div style={{width:'14px',height:'14px',borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.5rem'}}>
+              <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePlan.name} · {day}</div>
+              <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'.85rem',color:'#333'}}>/{planItems.length}</span></div>
+                <Button variant="ghost" onClick={back} style={{fontSize:'.62rem',padding:'.22rem .5rem',flexShrink:0}}>Sair</Button>
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'.35rem',marginTop:'.1rem',flexWrap:'wrap'}}>
+              {current.supersetGroup&&planItems[cursor-1]?.supersetGroup===current.supersetGroup&&<span style={{flexShrink:0,fontSize:'.55rem',fontWeight:900,color:'#8b5cf6',background:'rgba(139,92,246,.15)',border:'1px solid rgba(139,92,246,.35)',borderRadius:'4px',padding:'1px 6px',textTransform:'uppercase'}}>B</span>}
+              {current.supersetGroup&&planItems[cursor+1]?.supersetGroup===current.supersetGroup&&<span style={{flexShrink:0,fontSize:'.55rem',fontWeight:900,color:'#8b5cf6',background:'rgba(139,92,246,.15)',border:'1px solid rgba(139,92,246,.35)',borderRadius:'4px',padding:'1px 6px',textTransform:'uppercase'}}>A</span>}
+              <button onClick={()=>setSessionDetail(current.name)} style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.02em',lineHeight:1.1,color:'var(--color-text)',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'left',flex:1,minWidth:0}}>{current.name}</button>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'.4rem',marginTop:'.45rem'}}>
+              <button onClick={()=>setSessionGif(current.name)} style={{flexShrink:0,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'7px',padding:'.28rem .65rem',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',lineHeight:1}}>
+                <div style={{width:'13px',height:'13px',borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                   <div style={{width:0,height:0,borderTop:'3px solid transparent',borderBottom:'3px solid transparent',borderLeft:'5px solid #fff',marginLeft:'1px'}}/>
                 </div>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.05em'}}>Ver</span>
               </button>
-              <button onClick={()=>{setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'8px',padding:'.28rem .55rem',cursor:'pointer',lineHeight:1}}>
+              <button onClick={()=>{setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'7px',padding:'.28rem .6rem',cursor:'pointer',lineHeight:1}}>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#aaa',textTransform:'uppercase',letterSpacing:'.05em'}}>↕ Trocar</span>
               </button>
             </div>
-          </div>
-          <div style={{textAlign:'right'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.6rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'1rem',color:'#333'}}>/{planItems.length}</span></div>
-            <Button variant="ghost" onClick={back} style={{fontSize:'.65rem',padding:'.25rem .5rem'}}>Sair</Button>
           </div>
         </div>
         <div className="ds-progress-track">
@@ -4219,6 +4374,102 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
 
 
 // History (cards compact + modal details)
+
+// ── COMPARTILHAR TREINO COMO IMAGEM (stories 9:16) ───────────────────────────
+async function buildWorkoutImage(session, prefs) {
+  const W=1080,H=1920;
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const ctx=c.getContext('2d');
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#090a0c');bg.addColorStop(1,'#0d0f14');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const rl=ctx.createLinearGradient(0,0,W,0);
+  rl.addColorStop(0,'transparent');rl.addColorStop(.3,'#7a2a08');rl.addColorStop(.5,'#c4521e');rl.addColorStop(.7,'#7a2a08');rl.addColorStop(1,'transparent');
+  ctx.fillStyle=rl;ctx.fillRect(0,0,W,5);
+  ctx.textAlign='center';
+  ctx.font='900 108px Barlow Condensed, Arial Black, sans-serif';
+  ctx.fillStyle='#c0d4de';ctx.fillText('DARK',W/2-90,155);
+  ctx.fillStyle='#c4521e';ctx.fillText('SET',W/2+96,155);
+  ctx.fillStyle='rgba(255,255,255,.22)';ctx.font='30px monospace';
+  ctx.fillText('SEU TREINO · SUA EVOLUÇÃO',W/2,202);
+  const hoje=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+  ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='34px Arial';
+  ctx.fillText(hoje.toUpperCase(),W/2,270);
+  ctx.fillStyle='#fff';ctx.font='900 72px Barlow Condensed, Arial Black, sans-serif';
+  const pn=(session.planName||'TREINO LIVRE').toUpperCase();
+  ctx.fillText(pn.length>22?pn.slice(0,22)+'…':pn,W/2,360);
+  const sep=ctx.createLinearGradient(80,0,W-80,0);
+  sep.addColorStop(0,'transparent');sep.addColorStop(.5,'rgba(196,82,30,.5)');sep.addColorStop(1,'transparent');
+  ctx.strokeStyle=sep;ctx.lineWidth=1;ctx.setLineDash([6,5]);
+  ctx.beginPath();ctx.moveTo(80,395);ctx.lineTo(W-80,395);ctx.stroke();ctx.setLineDash([]);
+  const entries=session.entries||[];
+  const startY=430,lineH=Math.min(108,(H-startY-270)/Math.max(entries.length,1));
+  entries.forEach((en,i)=>{
+    const y=startY+i*lineH;
+    const valid=(en.sets||[]).filter(s=>s.r);
+    const bestW=Math.max(0,...valid.map(s=>parseFloat(s.w)||0));
+    const vol=valid.reduce((a,s)=>a+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0);
+    ctx.fillStyle=i%2===0?'rgba(255,255,255,.06)':'rgba(255,255,255,.03)';
+    ctx.beginPath();if(ctx.roundRect)ctx.roundRect(60,y,W-120,lineH-6,8);else ctx.rect(60,y,W-120,lineH-6);ctx.fill();
+    ctx.fillStyle='#dce8f0';ctx.font='700 40px Barlow Condensed, Arial Narrow, sans-serif';ctx.textAlign='left';
+    let nm=en.name||'';while(ctx.measureText(nm).width>W-340&&nm.length>4)nm=nm.slice(0,-1);if(nm!==en.name)nm+='…';
+    ctx.fillText(nm,90,y+lineH*.52);
+    ctx.fillStyle='rgba(196,82,30,.9)';ctx.font='700 30px Arial';ctx.textAlign='right';
+    ctx.fillText(bestW>0?`${bestW}kg · ${valid.length}s · ${Math.round(vol)}vol`:`${valid.length}s`,W-90,y+lineH*.52);
+  });
+  const totalSets=entries.reduce((a,en)=>a+(en.sets||[]).filter(s=>s.r).length,0);
+  const totalVol=entries.reduce((a,en)=>a+(en.sets||[]).reduce((b,s)=>b+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0),0);
+  const bY=H-240;
+  ctx.strokeStyle='rgba(196,82,30,.25)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(80,bY-16);ctx.lineTo(W-80,bY-16);ctx.stroke();ctx.setLineDash([]);
+  [{l:'EXERCÍCIOS',v:String(entries.length)},{l:'SÉRIES',v:String(totalSets)},{l:'VOLUME',v:totalVol>0?Math.round(totalVol)+'kg':'—'}].forEach((st,i)=>{
+    const x=W/6+i*(W/3);ctx.textAlign='center';
+    ctx.fillStyle='#c4521e';ctx.font='900 68px Barlow Condensed, Arial Black, sans-serif';ctx.fillText(st.v,x,bY+55);
+    ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='26px monospace';ctx.fillText(st.l,x,bY+88);
+  });
+  ctx.fillStyle='rgba(255,255,255,.15)';ctx.font='24px monospace';ctx.textAlign='center';
+  ctx.fillText('#DarkSet · darkset.app',W/2,H-55);
+  return new Promise(res=>c.toBlob(res,'image/png',.92));
+}
+
+const ShareWorkoutBtn=({history,prefs,setToast,onDone,fullBtn=false})=>{
+  const [busy,setBusy]=useState(false);
+  const share=async()=>{
+    setBusy(true);
+    try{
+      const today=new Date().toISOString().slice(0,10);
+      const sess=history[today];
+      if(!sess?.entries?.length){setToast('Nenhum treino registrado hoje');setBusy(false);return;}
+      const blob=await buildWorkoutImage(sess,prefs);
+      const file=new File([blob],'darkset-treino.png',{type:'image/png'});
+      if(navigator.share&&navigator.canShare?.({files:[file]})){
+        await navigator.share({title:'Meu treino — DarkSet',text:`${sess.entries.length} exercícios 💪 #DarkSet`,files:[file]});
+        setToast('Compartilhado! 🚀'); if(onDone) onDone();
+      } else {
+        const url=URL.createObjectURL(blob);const a=document.createElement('a');
+        a.href=url;a.download='darkset-treino.png';a.click();
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        setToast('Imagem salva! 📸'); if(onDone) onDone();
+      }
+    }catch(e){if(e.name!=='AbortError')setToast('Erro ao gerar imagem');}
+    setBusy(false);
+  };
+  if (fullBtn) return (
+    <button onClick={share} disabled={busy}
+      style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',background:busy?'rgba(196,82,30,.3)':'linear-gradient(135deg,#c4521e,#8a3010)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:busy?'wait':'pointer'}}>
+      <span>{busy?'⏳':'📸'}</span>{busy?' Gerando…':' Compartilhar'}
+    </button>
+  );
+  return(
+    <button onClick={share} disabled={busy} title="Compartilhar treino de hoje"
+      style={{display:'flex',alignItems:'center',gap:'.4rem',background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'8px',padding:'.38rem .75rem',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',textTransform:'uppercase',letterSpacing:'.05em',color:'#aaa',flexShrink:0}}>
+      {busy?'⏳':'📸'}{busy?' Gerando…':' Story'}
+    </button>
+  );
+};
 const History=({history,setHistory,prefs})=>{
   const [dateSearch,setDateSearch]=useState("");
   const [weekday,setWeekday]=useState("");
@@ -5934,6 +6185,7 @@ function App(){
   };
   const [plans,setPlans]=usePlans();
   const [history,setHistory]=useHistory();
+  useEffect(()=>{window._DS_HIST=history;},[history]);
   const [prefs,setPrefs]=usePrefs();
   const [toast,setToast]=useState(null);
   const [builderPlanId,setBuilderPlanId]=useState(null);
