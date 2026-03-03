@@ -1,8 +1,8 @@
-// DarkSet Service Worker V5.1.0
-const CACHE = 'darkset-v5-5-1';
+// DarkSet Service Worker V5.7.6
+const CACHE = 'darkset-v5-7-6';
 const ASSETS = ['/', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
-// ── Install: cache assets ──────────────────────────────────────────────────
+// ── Install ────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
@@ -31,14 +31,6 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ── Messages from app ──────────────────────────────────────────────────────
-self.addEventListener('message', e => {
-  if (e.data?.type === 'scheduleNotif') {
-    const { hour, min } = e.data;
-    scheduleDaily(hour, min);
-  }
-});
-
 // ── Notification schedule ──────────────────────────────────────────────────
 let notifTimer = null;
 
@@ -47,7 +39,7 @@ function scheduleDaily(hour, min) {
   const now = new Date();
   const next = new Date();
   next.setHours(hour, min, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1); // next day if already passed
+  if (next <= now) next.setDate(next.getDate() + 1);
   const delay = next - now;
   notifTimer = setTimeout(() => {
     self.registration.showNotification('DarkSet 💪', {
@@ -58,23 +50,16 @@ function scheduleDaily(hour, min) {
       renotify: true,
       data: { url: './' }
     });
-    scheduleDaily(hour, min); // reschedule for next day
+    scheduleDaily(hour, min);
   }, delay);
 }
 
-// ── Notification click: open app ───────────────────────────────────────────
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      if (list.length > 0) return list[0].focus();
-      return clients.openWindow('./');
-    })
-  );
-});
-
-// ── Rest timer notification ────────────────────────────────────────────────
+// ── Messages — ÚNICO listener (era duplicado antes, causava bug) ───────────
 self.addEventListener('message', e => {
+  if (e.data?.type === 'scheduleNotif') {
+    const { hour, min } = e.data;
+    scheduleDaily(hour, min);
+  }
   if (e.data?.type === 'restTimer') {
     const { dur, exName } = e.data;
     setTimeout(() => {
@@ -86,4 +71,15 @@ self.addEventListener('message', e => {
       });
     }, dur * 1000);
   }
+});
+
+// ── Notification click ─────────────────────────────────────────────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      if (list.length > 0) return list[0].focus();
+      return clients.openWindow('./');
+    })
+  );
 });

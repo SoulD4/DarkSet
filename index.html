@@ -2884,8 +2884,15 @@ const Community = ({history, setToast, prefs}) => {
   // ── Leave squad ────────────────────────────────────────────────────────
   const leaveSquad = async () => {
     if (!confirm('Sair do squad?')) return;
-    if (uid && db()) {
-      try { await membRef(squad.code, uid).delete(); } catch(_) {}
+    // Remover do Firestore primeiro (com waitForDb para garantir conexão)
+    if (uid && squad?.code) {
+      try {
+        const fdb = await waitForDb();
+        await fdb.collection('squads').doc(squad.code.toUpperCase())
+                 .collection('members').doc(uid).delete();
+      } catch(e) {
+        console.warn('leaveSquad Firestore error:', e);
+      }
     }
     stopListeners();
     localStorage.removeItem('ds.squad');
@@ -7061,7 +7068,11 @@ root.render(<App/>);
         },
         signUpEmail: function(email, pass, name){
           return auth.createUserWithEmailAndPassword(email, pass).then(function(cred){
-            if(name) return cred.user.updateProfile({ displayName: name });
+            var user = cred.user;
+            var chain = Promise.resolve();
+            if(name) chain = chain.then(function(){ return user.updateProfile({ displayName: name }); });
+            chain = chain.then(function(){ return user.sendEmailVerification(); });
+            return chain;
           });
         },
         signInEmail: function(email, pass){
@@ -7241,9 +7252,16 @@ root.render(<App/>);
     if(!window.DSAuth){ showError('Firebase não carregou. Tente recarregar.'); return; }
     primaryBtn.disabled = true; primaryBtn.textContent = 'Aguarde…';
     try{
-      if(mode==='signUp') await DSAuth.signUpEmail(email, pass, name);
-      else                await DSAuth.signInEmail(email, pass);
-      closeAuthModal();
+      if(mode==='signUp'){
+        await DSAuth.signUpEmail(email, pass, name);
+        closeAuthModal();
+        setTimeout(function(){
+          alert('✅ Conta criada! Verifique seu e-mail (' + email + ') e clique no link de confirmação antes de fazer login.');
+        }, 300);
+      } else {
+        await DSAuth.signInEmail(email, pass);
+        closeAuthModal();
+      }
     }catch(e){
       var msg = e && e.message ? e.message : 'Erro desconhecido.';
       if(e.code==='auth/user-not-found'||e.code==='auth/wrong-password') msg='Email ou senha incorretos.';
