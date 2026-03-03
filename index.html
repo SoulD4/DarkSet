@@ -429,7 +429,6 @@ const EXS=[
   E("Remada alta barra","Trapézio","Superior","Barra"),
   // ── COSTAS ────────────────────────────────────────────────────────────────
   E("Barra fixa","Costas","Dorsal (Lats)","Peso corporal","avançado"),
-  E("Hiperextensão lombar","Costas","Lombar","Peso corporal","iniciante"),
   E("Pulldown","Costas","Dorsal (Lats)","Cabo/Crossover","iniciante"),
   E("Puxada alta aberta","Costas","Dorsal (Lats)","Cabo/Crossover"),
   E("Puxada alta unilateral","Costas","Dorsal (Lats)","Cabo/Crossover"),
@@ -532,23 +531,23 @@ const EX_IMG_MAP = {
   // ── PEITO ─────────────────────────────────────────────────────────────
   "Crossover polia alta":"Cable_Crossover",
   "Crucifixo inclinado halteres":"Incline_Dumbbell_Flyes",
-  "Crucifixo Máquina":"Chest_Fly_Machine",
+  "Crucifixo Máquina":"Butterfly",
   "Crucifixo reto halteres":"Dumbbell_Flyes",
   "Flexão de braço":"Pushups",
-  "Pullover halteres":"Dumbbell_Pullover",
+  "Pullover halteres":"Bent-Arm_Dumbbell_Pullover",
   "Supino declinado barra":"Decline_Barbell_Bench_Press",
   "Supino declinado halteres":"Decline_Dumbbell_Bench_Press",
-  "Supino inclinado Articulado":"Dumbbell_Incline_Bench_Press",
+  "Supino inclinado Articulado":"Dumbbell_Incline_Shoulder_Raise",
   "Supino inclinado barra":"Barbell_Incline_Bench_Press_-_Medium_Grip",
-  "Supino inclinado halteres":"Dumbbell_Incline_Bench_Press",
-  "Supino inclinado máquina":"Lever_Incline_Chest_Press",
-  "Supino reto barra":"Barbell_Bench_Press",
+  "Supino inclinado halteres":"Dumbbell_Incline_Shoulder_Raise",
+  "Supino inclinado máquina":"Smith_Incline_Shoulder_Raise",
+  "Supino reto barra":"Barbell_Bench_Press_-_Medium_Grip",
   "Supino reto halteres":"Dumbbell_Bench_Press",
-  "Supino reto máquina":"Lever_Chest_Press",
+  "Supino reto máquina":"Smith_Incline_Shoulder_Raise",
   // ── COSTAS ────────────────────────────────────────────────────────────
   "Barra fixa":"Pullups",
   "Hiperextensão lombar":"Hyperextensions__Back_Extensions_",
-  "Extensão lombar máquina":"Hyperextensions__Back_Extensions_",
+  "Extensão lombar máquina":"Hyperextensions_Back_Extensions",
   "Pulldown":"Wide-Grip_Lat_Pulldown",
   "Puxada alta aberta":"Wide-Grip_Lat_Pulldown",
   "Puxada alta aberta polia":"Wide-Grip_Lat_Pulldown",
@@ -559,24 +558,24 @@ const EX_IMG_MAP = {
   "Remada baixa aberta polia":"Seated_Cable_Rows",
   "Remada baixa polia":"Seated_Cable_Rows",
   "Remada baixa unilateral":"Seated_Cable_Rows",
-  "Remada cavalinho":"Barbell_Bent_Over_Row",
-  "Remada curvada barra":"Barbell_Bent_Over_Row",
-  "Remada serrote halteres":"Dumbbell_One-Arm_Row",
-  "Remada unilateral halteres":"Dumbbell_One-Arm_Row",
+  "Remada cavalinho":"Barbell_Rear_Delt_Row",
+  "Remada curvada barra":"Barbell_Rear_Delt_Row",
+  "Remada serrote halteres":"One-Arm_Dumbbell_Row",
+  "Remada unilateral halteres":"One-Arm_Dumbbell_Row",
   "Remada máquina":"Seated_Cable_Rows",
   // ── OMBRO ─────────────────────────────────────────────────────────────
   "Desenvolvimento barra":"Barbell_Shoulder_Press",
   "Desenvolvimento halteres":"Dumbbell_Shoulder_Press",
-  "Desenvolvimento máquina":"Lever_Seated_Military_Press",
+  "Desenvolvimento máquina":"Leverage_Shoulder_Press",
   "Elevação frontal barra":"Front_Plate_Raise",
-  "Elevação frontal halteres":"Dumbbell_Front_Raise",
-  "Elevação frontal polia":"Cable_Front_Raise",
-  "Elevação lateral halteres":"Dumbbell_Lateral_Raise",
-  "Elevação lateral máquina":"Lever_Lateral_Raise",
-  "Elevação lateral polia":"Cable_Lateral_Raise",
-  "Elevação lateral unilateral polia":"Cable_Lateral_Raise",
-  "Crucifixo inverso máquina":"Reverse_Fly",
-  "Crucifixo inverso polia":"Reverse_Fly",
+  "Elevação frontal halteres":"Front_Dumbbell_Raise",
+  "Elevação frontal polia":"Front_Cable_Raise",
+  "Elevação lateral halteres":"Side_Lateral_Raise",
+  "Elevação lateral máquina":"Bent_Over_Low-Pulley_Side_Lateral",
+  "Elevação lateral polia":"Side_Lateral_Raise",
+  "Elevação lateral unilateral polia":"Side_Lateral_Raise",
+  "Crucifixo inverso máquina":"Reverse_Machine_Flyes",
+  "Crucifixo inverso polia":"Cable_Rear_Delt_Fly",
   "Encolhimento barra":"Barbell_Shrug",
   "Encolhimento halteres":"Dumbbell_Shrug",
   // ── BÍCEPS ────────────────────────────────────────────────────────────
@@ -590,27 +589,27 @@ const EX_IMG_MAP = {
   "Rosca martelo corda":"Hammer_Curls",
   "Rosca martelo halteres":"Hammer_Curls",
   "Rosca polia baixa":"Cable_Hammer_Curls_-_Rope_Attachment",
-  "Rosca scott barra W":"EZ-Bar_Preacher_Curl",
-  "Rosca scott halteres":"Seated_Zottman_Curl",
+  "Rosca scott barra W":"Preacher_Curl",
+  "Rosca scott halteres":"Preacher_Curl",
   // ── TRÍCEPS ───────────────────────────────────────────────────────────
-  "Tríceps coice halteres":"Dumbbell_Kickback",
-  "Tríceps francês barra":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
+  "Tríceps coice halteres":"Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension",
+  "Tríceps francês barra":"Standing_Overhead_Barbell_Triceps_Extension",
   "Tríceps francês halteres":"Lying_Triceps_Press",
   "Tríceps mergulho":"Dips_-_Triceps_Version",
   "Tríceps pulley barra reta":"Triceps_Pushdown",
   "Tríceps pulley barra W":"Triceps_Pushdown_-_V-Bar_Attachment",
   "Tríceps pulley corda":"Triceps_Pushdown",
   "Tríceps pulley polia":"Triceps_Pushdown",
-  "Tríceps testa barra W":"Barbell_Lying_Triceps_Extension_Skull_Crusher",
+  "Tríceps testa barra W":"Lying_Close-Grip_Barbell_Triceps_Press_To_Chin",
   "Tríceps testa halteres":"Lying_Triceps_Press",
   "Tríceps unilateral polia":"Triceps_Pushdown",
   // ── PERNAS ────────────────────────────────────────────────────────────
-  "Afundo com halteres":"Dumbbell_Lunge",
+  "Afundo com halteres":"Dumbbell_Lunges",
   "Afundo máquina":"Smith_Machine_Squat",
   "Agachamento barra":"Barbell_Squat",
   "Agachamento hack máquina":"Hack_Squat",
   "Agachamento livre":"Bodyweight_Squat",
-  "Agachamento sumô":"Sumo_Squat",
+  "Agachamento sumô":"Barbell_Side_Split_Squat",
   "Cadeira extensora":"Leg_Extensions",
   "Cadeira extensora unilateral":"Leg_Extensions",
   "Cadeira flexora":"Lying_Leg_Curls",
@@ -619,27 +618,27 @@ const EX_IMG_MAP = {
   "Leg press 180°":"Leg_Press",
   "Leg press 180° unilateral":"Leg_Press",
   "Mesa flexora":"Lying_Leg_Curls",
-  "Passada avançada halteres":"Dumbbell_Lunge",
+  "Passada avançada halteres":"Dumbbell_Lunges",
   "Stiff barra":"Romanian_Deadlift",
-  "Stiff com halteres":"Dumbbell_Romanian_Deadlift",
-  "Stiff unilateral halteres":"Dumbbell_Romanian_Deadlift",
+  "Stiff com halteres":"Stiff-Legged_Dumbbell_Deadlift",
+  "Stiff unilateral halteres":"Stiff-Legged_Dumbbell_Deadlift",
   // ── GLÚTEO ────────────────────────────────────────────────────────────
-  "Abdução em pé polia":"Hip_Abduction_Machine",
-  "Cadeira abdutora":"Hip_Abduction_Machine",
+  "Abdução em pé polia":"Thigh_Abductor",
+  "Cadeira abdutora":"Thigh_Abductor",
   "Elevação pélvica com barra":"Barbell_Hip_Thrust",
   "Hip thrust barra":"Barbell_Hip_Thrust",
   "Glúteo coice polia":"Donkey_Calf_Raises",
-  "Glúteo na máquina":"Hip_Abduction_Machine",
+  "Glúteo na máquina":"Thigh_Abductor",
   // ── PANTURRILHA ───────────────────────────────────────────────────────
   "Panturrilha em pé máquina":"Standing_Calf_Raises",
   "Panturrilha sentado máquina":"Seated_Calf_Raise",
   "Panturrilha step":"Standing_Calf_Raises",
   // ── CORE ──────────────────────────────────────────────────────────────
   "Abdominal crunch":"Crunches",
-  "Abdominal infra":"Leg_Raises",
+  "Abdominal infra":"Hanging_Leg_Raise",
   "Abdominal máquina":"Crunches",
   "Prancha abdominal":"Plank",
-  "Abdominal oblíquo":"Side_Crunch",
+  "Abdominal oblíquo":"Oblique_Crunches_-_On_The_Floor",
   "Dead bug":"Crunches",
   // ── COMPOSTOS ─────────────────────────────────────────────────────────
   "Levantamento terra":"Barbell_Deadlift",
@@ -1354,7 +1353,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Footer */}
         <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111',fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>
-          DarkSet · V5.7.5
+          DarkSet · V5.7.6
         </div>
       </div>
     </>
@@ -6316,7 +6315,7 @@ function App(){
       {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.5</footer>
+      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
