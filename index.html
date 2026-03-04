@@ -1616,6 +1616,7 @@ const Plans=({plans,setPlans,goto,setToast})=>{
     const id=Date.now();
     const byDay={};
     for(const d of DAYS){ byDay[d]=preset.byDay[d]||[]; }
+    const _p2=getDSPlan(); if(plans.list.length>=(_p2.perms.maxFichas||1)){ window._showPaywall&&window._showPaywall('Criar mais fichas'); return; }
     setPlans(p=>({...p,list:[...p.list,{id,name:preset.name,byDay}],activeId:p.activeId||id}));
     setToast("Ficha importada! 💪");
     setTab('minhas');
@@ -1630,10 +1631,11 @@ const Plans=({plans,setPlans,goto,setToast})=>{
   const levelColor={'iniciante':'#4ade80','intermediário':'#facc15','avançado':'#e31b23'};
 
   const createPlan=()=>{
-    if(!newName.trim()) return;
+    const nm = newName.trim() || ('Minha Ficha ' + (plans.list.length+1));
+    const _p=getDSPlan(); if(plans.list.length>=(_p.perms.maxFichas||1)){ window._showPaywall&&window._showPaywall('Criar mais fichas'); return; }
     const id=Date.now(); const byDay={};
     for(const d of DAYS){byDay[d]=[]}
-    setPlans(p=>({...p,list:[...p.list,{id,name:newName.trim(),byDay}],activeId:p.activeId||id}));
+    setPlans(p=>({...p,list:[...p.list,{id,name:nm,byDay}],activeId:p.activeId||id}));
     setNewName(""); setToast("Ficha criada");
   };
   const duplicatePlan=(id)=>setPlans(p=>{
@@ -2914,7 +2916,7 @@ const Community = ({history, setToast, prefs}) => {
     if (!squad || !uid || !db()) return;
     const alreadyDone = checkins.some(ci => ci.uid === uid && ci.date === todayKey);
     if (alreadyDone) { setToast('Já fez check-in hoje!'); return; }
-    const ci = { uid, name: myName, avatar: myAvatar, ts: Date.now(), date: todayKey, hadWorkout: !!history[todayKey] };
+    const ci = { uid, name: myName, avatar: myAvatar, ts: Date.now(), date: todayKey, hadWorkout: !!history[todayKey], weeklyGoal: prefs&&prefs.weeklyGoal||3 };
     try {
       await cinRef(squad.code).doc(todayKey + '_' + uid).set(ci);
       setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!');
@@ -2925,11 +2927,14 @@ const Community = ({history, setToast, prefs}) => {
   const ranking = useMemo(() => {
     const scores = {};
     checkins.forEach(ci => {
-      if (!scores[ci.uid]) scores[ci.uid] = { uid: ci.uid, name: ci.name, avatar: ci.avatar, days: 0, workouts: 0 };
+      if (!scores[ci.uid]) scores[ci.uid] = { uid:ci.uid, name:ci.name, avatar:ci.avatar, days:0, workouts:0, goal:ci.weeklyGoal||3 };
       scores[ci.uid].days++;
       if (ci.hadWorkout) scores[ci.uid].workouts++;
+      if (ci.weeklyGoal) scores[ci.uid].goal = ci.weeklyGoal;
     });
-    return Object.values(scores).sort((a,b) => b.workouts - a.workouts || b.days - a.days);
+    return Object.values(scores)
+      .map(function(m){ return Object.assign({},m,{pct:Math.min(100,Math.round((m.workouts/(m.goal||3))*100))}); })
+      .sort(function(a,b){ return b.pct-a.pct||b.workouts-a.workouts; });
   }, [checkins]);
 
   const todayCi = checkins.filter(ci => ci.date === todayKey);
@@ -3108,9 +3113,9 @@ const Community = ({history, setToast, prefs}) => {
                     : <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',fontWeight:700,color:'#555',flexShrink:0}}>{(m.name||'?').slice(0,2).toUpperCase()}</div>}
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:'.84rem',fontWeight:700,color:isMe?'var(--color-accent)':'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
-                    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.workouts} treino{m.workouts!==1?'s':''} · {m.days} check-in{m.days!==1?'s':''}</div>
+                    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.workouts}/{m.goal} treinos · {m.pct}% consistência</div>
                   </div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555',flexShrink:0}}>{m.workouts}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555',flexShrink:0}}>{m.pct}%</div>
                 </div>
               );
             })
@@ -4260,7 +4265,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
                 </div>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.05em'}}>Ver</span>
               </button>
-              <button onClick={()=>{setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'7px',padding:'.28rem .6rem',cursor:'pointer',lineHeight:1}}>
+              <button onClick={function(){ var _p=getDSPlan(); if(!_p.perms.swap){ window._showPaywall&&window._showPaywall('Trocar exercício durante o treino'); return; } setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'7px',padding:'.28rem .6rem',cursor:'pointer',lineHeight:1}}>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#aaa',textTransform:'uppercase',letterSpacing:'.05em'}}>↕ Trocar</span>
               </button>
             </div>
@@ -4501,7 +4506,8 @@ const History=({history,setHistory,prefs})=>{
   const volSession=(obj)=>(obj.entries||[]).reduce((acc,en)=>acc+volSets(en.sets||[]),0);
   const toBR=(iso)=>{const [y,m,d]=iso.split("-");return `${d}/${m}/${y}`;};
 
-  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1);
+  var _hdays=getDSPlan().perms.historyDays||30; var _hcut=new Date(); _hcut.setDate(_hcut.getDate()-_hdays);
+  const entries=Object.entries(history).sort((a,b)=>a[0]>b[0]?-1:1).filter(function(x){return new Date(x[0])>=_hcut;});
 
   const prMap=useMemo(()=>{
     const map={};
@@ -4525,7 +4531,7 @@ const History=({history,setHistory,prefs})=>{
   };
   const filtered=entries.filter(([date,o])=>(!weekday||o.day===weekday)&&(!planFilter||o.planName===planFilter)&&matchDate(date));
   const planOptions=[...new Set(entries.map(([,o])=>o.planName).filter(Boolean))];
-  const chartsEnabled=!!prefs.chartsPremium;
+  const chartsEnabled=!!getDSPlan().perms.charts;
   const totalVol=Math.round(entries.reduce((_a,[,o])=>_a+volSession(o),0));
 
   const exportCSV=()=>{
@@ -4558,7 +4564,7 @@ const History=({history,setHistory,prefs})=>{
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Historico</div>
           <div style={{display:'flex',gap:'.4rem'}}>
             <button onClick={exportCSV} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'7px',padding:'.35rem .65rem',color:'#777',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>CSV</button>
-            <button disabled={!chartsEnabled} onClick={()=>window.openDarkCharts&&window.openDarkCharts('treino')} style={{background:chartsEnabled?'rgba(227,27,35,.1)':'rgba(255,255,255,.02)',border:chartsEnabled?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .65rem',color:chartsEnabled?'#e31b23':'#333',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:chartsEnabled?'pointer':'default',display:'inline-flex',alignItems:'center',gap:'.3rem'}}>
+            <button disabled={false} onClick={function(){ if(!getDSPlan().perms.charts){ window._showPaywall&&window._showPaywall('Gráficos de evolução'); return; } window.openDarkCharts&&window.openDarkCharts('treino');}} style={{background:chartsEnabled?'rgba(227,27,35,.1)':'rgba(255,255,255,.02)',border:chartsEnabled?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'7px',padding:'.35rem .65rem',color:chartsEnabled?'#e31b23':'#333',fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',cursor:chartsEnabled?'pointer':'default',display:'inline-flex',alignItems:'center',gap:'.3rem'}}>
               {!chartsEnabled&&<LockIcon/>}Graficos
             </button>
           </div>
@@ -4773,6 +4779,14 @@ const Profile=({prefs,setPrefs,history})=>{
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,color:'var(--color-text)'}}>{name||'Sem nome'}</div>
             <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>Meta: {goal} treinos/semana</div>
+            {(function(){ var _ps=getDSPlan(); return (
+              <div style={{marginTop:'5px',display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                {_ps.tier==='elite' ? <span style={{background:'linear-gradient(90deg,#e31b23,#b31217)',color:'#fff',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>⚡ ELITE</span> : null}
+                {_ps.tier==='darkgod' ? <span style={{background:'#0d0d0f',border:'1px solid #e31b23',color:'#e31b23',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>👑 DARKGOD</span> : null}
+                {(!_ps.tier||_ps.tier==='free')&&!_ps.isTrialActive ? <span style={{background:'rgba(255,255,255,.05)',color:'#555',fontSize:'.62rem',fontWeight:600,padding:'.15rem .5rem',borderRadius:'20px',cursor:'pointer'}} onClick={function(){window._showPaywall&&window._showPaywall('Recursos avançados');}}>Gratuito — Ver Elite ›</span> : null}
+                {_ps.isTrialActive ? <span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',color:'#e31b23',fontSize:'.62rem',fontWeight:700,padding:'.15rem .5rem',borderRadius:'20px'}}>✨ Trial Elite — {_ps.trialDaysLeft}d</span> : null}
+              </div>
+            ); })()}
           </div>
         </div>
         {uploading&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
@@ -4885,7 +4899,13 @@ const Profile=({prefs,setPrefs,history})=>{
           <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'var(--color-text)'}}>Fotos de Progresso</div>
-              <button onClick={()=>photoRef.current&&photoRef.current.click()} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
+              <button onClick={function(){
+                  var _p=getDSPlan(); var max=_p.perms.maxPhotosPerDay||0;
+                  if(max===0){ window._showPaywall&&window._showPaywall('Fotos de progresso'); return; }
+                  var todayPics=progressPhotos.filter(function(x){return x.date===photoDate;});
+                  if(todayPics.length>=max){ window._showPaywall&&window._showPaywall('Mais fotos hoje'); return; }
+                  photoRef.current&&photoRef.current.click();
+                }} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.35rem .9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer'}}>+ Foto</button>
               <input ref={photoRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handleProgressPhoto}/>
             </div>
 
@@ -5007,6 +5027,10 @@ const SELOS = [
   {id:'madrugador',   cat:'dedicacao',   title:'Enquanto o Mundo Dorme',  icon:'🌅', desc:'5 treinos antes das 7h da manhã',                     check:(h)=>countEarlyWorkouts(h)>=5},
   {id:'mes_perfeito', cat:'dedicacao',   title:'Mês Inquebrável',         icon:'🔐', desc:'30 dias consecutivos sem falhar um dia de treino',     check:(h,p)=>calcStreak(h,p)>=30},
   {id:'2anos',        cat:'dedicacao',   title:'O Ferro É Meu Lar',       icon:'🏠', desc:'730 treinos ao longo da vida — isso é estilo de vida', check:(h)=>Object.keys(h).length>=730},
+  // Planos — selos exclusivos
+  {id:'elite_badge',   cat:'especial', title:'DarkSet Elite',     icon:'⚡', desc:'Assinante Elite ativo',       check:(h,p)=>{ try{var pd=JSON.parse(localStorage.getItem('ds.planData')||'null'); return pd&&(pd.tier==='elite'||pd.tier==='darkgod');}catch(_){return false;} }},
+  {id:'darkgod_badge', cat:'especial', title:'DarkGod Founder',   icon:'👑', desc:'Fundador do DarkSet — edição limitada', check:(h,p)=>{ try{var pd=JSON.parse(localStorage.getItem('ds.planData')||'null'); return pd&&pd.tier==='darkgod';}catch(_){return false;} }},
+
 ];
 
 function calcStreak(history, prefs) {
@@ -5188,11 +5212,11 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
               {catSelos.map(s=>{
                 const done = unlocked.has(s.id);
                 return (
-                  <div key={s.id} style={{display:'flex',alignItems:'center',gap:'.75rem',background:done?'rgba(227,27,35,.05)':'var(--color-card)',border:done?'1px solid rgba(227,27,35,.15)':'1px solid var(--color-border)',borderRadius:'10px',padding:'.7rem .85rem',opacity:done?1:0.45,transition:'all .3s'}}>
+                  <div key={s.id} style={{display:'flex',alignItems:'center',gap:'.75rem',background:done?'rgba(227,27,35,.05)':'var(--color-card)',border:done?'1px solid rgba(227,27,35,.15)':'1px solid var(--color-border)',borderRadius:'10px',padding:'.7rem .85rem',opacity:done?1:0.7,transition:'all .3s'}}>
                     <div style={{fontSize:'1.6rem',flexShrink:0,filter:done?'none':'grayscale(100%)'}}>{s.icon}</div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:done?'var(--color-text)':'#555'}}>{s.title}</div>
-                      <div style={{fontSize:'.68rem',color:done?'var(--color-text-sub)':'#333'}}>{s.desc}</div>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:done?'var(--color-text)':'#888'}}>{s.title}</div>
+                      <div style={{fontSize:'.68rem',color:done?'var(--color-text-sub)':'#666'}}>{s.desc}</div>
                     </div>
                     {done && <div style={{fontSize:'1rem',flexShrink:0}}>✓</div>}
                   </div>
@@ -5985,6 +6009,7 @@ const Diet = ({setToast}) => {
                 {label:'Refeição 3',    time:'21:30', items:[], checked:false},
               ]
             });
+            var _p3=getDSPlan(); if(plans.length>=(_p3.perms.maxDietPlans||1)){ window._showPaywall&&window._showPaywall('Criar mais planos de dieta'); return; }
             setShowPlanForm(true);
           }} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.4rem .85rem',color:'#fff',fontWeight:800,fontSize:'.78rem',cursor:'pointer'}}>+ Novo Plano</button>
         </div>
@@ -6178,6 +6203,117 @@ const Diet = ({setToast}) => {
 };
 
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// DARKSET PLAN SYSTEM — Global via window._DS_PLAN
+// ══════════════════════════════════════════════════════════════════════════
+const DS_PLANS = {
+  free:    { maxFichas:1,   maxDietPlans:1,   maxPhotosPerDay:0,   historyDays:30,   charts:false, swap:false },
+  elite:   { maxFichas:10,  maxDietPlans:10,  maxPhotosPerDay:3,   historyDays:9999, charts:true,  swap:true  },
+  darkgod: { maxFichas:999, maxDietPlans:999, maxPhotosPerDay:999, historyDays:9999, charts:true,  swap:true  },
+};
+
+function getDSPlan() {
+  try {
+    if(!getUID()) return { tier:'free', perms:DS_PLANS.free, isTrialActive:false, trialDaysLeft:0, trialUsed:false };
+    const pd = JSON.parse(localStorage.getItem('ds.planData') || 'null');
+    if (!pd) return { tier:'free', perms:DS_PLANS.free, isTrialActive:false, trialDaysLeft:0, trialUsed:false };
+    const now = Date.now();
+    const isTrialActive = !!(pd.trialEnd && now < pd.trialEnd);
+    const tier = isTrialActive ? (pd.trialTier||'elite') : (pd.tier||'free');
+    const trialDaysLeft = pd.trialEnd ? Math.max(0, Math.ceil((pd.trialEnd - now)/86400000)) : 0;
+    return { tier, perms: DS_PLANS[tier]||DS_PLANS.free, isTrialActive, trialDaysLeft, trialUsed:!!(pd.trialEnd) };
+  } catch(_) {
+    return { tier:'free', perms:DS_PLANS.free, isTrialActive:false, trialDaysLeft:0, trialUsed:false };
+  }
+}
+
+function startDSTrial() {
+  if(!getUID()){ window.openAuthModal&&window.openAuthModal('signIn'); return false; }
+  localStorage.setItem('ds.planData', JSON.stringify({ tier:'free', trialTier:'elite', trialEnd: Date.now()+7*86400000 }));
+  return true;
+}
+
+function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
+  const items = [
+    ['📋','Até 10 fichas de treino','vs 1 no gratuito'],
+    ['📈','Todos os gráficos','15+ análises detalhadas'],
+    ['↕️','Trocar exercício no treino','sem perder o ritmo'],
+    ['📸','Fotos de progresso','até 3 por dia'],
+    ['🥗','10 planos de dieta','vs 1 no gratuito'],
+    ['🏅','Selo exclusivo Elite','badge permanente'],
+  ];
+  return (
+    <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+      <div style={{background:'#0d0d0f',border:'1px solid #1e1e22',borderRadius:'20px',width:'min(400px,94vw)',overflow:'hidden',boxShadow:'0 0 60px rgba(227,27,35,.15)',maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{background:'linear-gradient(160deg,#130608,#0d0d0f)',padding:'1.2rem 1.4rem 1rem',borderBottom:'1px solid #1a1a1e',position:'relative'}}>
+          <div style={{fontWeight:900,fontSize:'1.4rem',letterSpacing:'.06em',color:'#fff'}}>DARK<span style={{color:'#e31b23'}}>SET</span> <span style={{color:'#e31b23',fontSize:'1rem'}}>ELITE</span></div>
+          <div style={{fontSize:'.75rem',color:'#555',marginTop:'.1rem'}}>Desbloqueie todo o potencial</div>
+          <button onClick={onClose} style={{position:'absolute',top:'12px',right:'12px',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',color:'#888',cursor:'pointer',width:'28px',height:'28px',borderRadius:'50%',fontSize:'13px'}}>✕</button>
+        </div>
+        <div style={{padding:'1rem 1.4rem',borderBottom:'1px solid #111'}}>
+          <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.7rem 1rem',fontSize:'.82rem',color:'#f87171'}}>
+            🔒 {feature} é exclusivo do plano Elite
+          </div>
+        </div>
+        <div style={{padding:'1rem 1.4rem',borderBottom:'1px solid #111'}}>
+          {items.map(function(item) {
+            return (
+              <div key={item[1]} style={{display:'flex',gap:'.65rem',alignItems:'center',marginBottom:'.5rem'}}>
+                <span style={{fontSize:'.85rem',width:'20px',flexShrink:0}}>{item[0]}</span>
+                <div>
+                  <div style={{fontSize:'.82rem',color:'#ccc',fontWeight:600}}>{item[1]}</div>
+                  <div style={{fontSize:'.7rem',color:'#444'}}>{item[2]}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{padding:'1rem 1.4rem'}}>
+          <div style={{display:'flex',gap:'.65rem',marginBottom:'.75rem'}}>
+            <div style={{flex:1,background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center'}}>
+              <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Mensal</div>
+              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.7rem',color:'#555'}}>/1°mês</span></div>
+              <div style={{fontSize:'.68rem',color:'#555',marginTop:'.15rem'}}>após R$15,99/mês</div>
+            </div>
+            <div style={{flex:1,background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'12px',padding:'.75rem',textAlign:'center',position:'relative'}}>
+              <div style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',background:'#e31b23',color:'#fff',fontSize:'.6rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px',whiteSpace:'nowrap'}}>2 MESES GRÁTIS</div>
+              <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Anual</div>
+              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$159,99</div>
+              <div style={{fontSize:'.68rem',color:'#555',marginTop:'.15rem'}}>R$13,33/mês</div>
+            </div>
+          </div>
+          {!trialUsed ? (
+            <button onClick={onTrial} style={{width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.7rem',color:'#aaa',fontSize:'.8rem',fontWeight:700,cursor:'pointer',marginBottom:'.65rem'}}>
+              ✨ Experimentar Elite grátis por 7 dias — sem cartão
+            </button>
+          ) : null}
+          <button style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontSize:'1rem',fontWeight:900,cursor:'pointer',marginBottom:'.5rem'}}>
+            Assinar Elite — Em breve
+          </button>
+          <div style={{height:'1px',background:'#1e1e22',margin:'.75rem 0'}}/>
+          <div style={{background:'linear-gradient(135deg,#0d0d0f,#1a0a0a)',border:'1px solid #e31b23',borderRadius:'12px',padding:'1rem',marginBottom:'.5rem'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.4rem'}}>
+              <span style={{fontSize:'1.1rem'}}>👑</span>
+              <div style={{fontWeight:900,fontSize:'.95rem',color:'#e31b23'}}>DarkGod Founder Pack</div>
+              <div style={{background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.1rem .4rem',borderRadius:'10px',marginLeft:'auto',whiteSpace:'nowrap'}}>LIMITADO</div>
+            </div>
+            <div style={{fontSize:'.72rem',color:'#666',lineHeight:1.5,marginBottom:'.6rem'}}>Acesso vitalício + fichas ilimitadas + selo exclusivo de fundador — disponível apenas no 1° mês do app.</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+              <div style={{fontWeight:900,fontSize:'1.4rem',color:'#fff'}}>R$249,99 <span style={{fontSize:'.7rem',color:'#555',fontWeight:400}}>único</span></div>
+            </div>
+            <button style={{width:'100%',background:'transparent',border:'1px solid #e31b23',borderRadius:'10px',padding:'.6rem',color:'#e31b23',fontSize:'.88rem',fontWeight:900,cursor:'pointer'}}>
+              DarkGod Pack — Em breve
+            </button>
+          </div>
+          <div style={{textAlign:'center',fontSize:'.68rem',color:'#333',marginTop:'.3rem'}}>Pagamento em breve via Google Play</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App(){
   const [screen,setScreen]=useState("home");
   // Apply saved theme immediately on load
@@ -6206,6 +6342,11 @@ function App(){
   const [history,setHistory]=useHistory();
   useEffect(()=>{window._DS_HIST=history;},[history]);
   const [prefs,setPrefs]=usePrefs();
+  const [planState, setPlanState] = useState(getDSPlan);
+  const [paywallFeature, setPaywallFeature] = useState(null);
+  const showPaywall = function(feat){ setPaywallFeature(feat); };
+  window._showPaywall = showPaywall;
+  const { tier, perms, isTrialActive, trialDaysLeft, trialUsed } = planState;
   const [toast,setToast]=useState(null);
   const [builderPlanId,setBuilderPlanId]=useState(null);
   const [viewerPlanId,setViewerPlanId]=useState(null);
@@ -6259,6 +6400,8 @@ function App(){
   },[]);
 
   const syncStatus = useSyncStatus();
+  const [authed, setAuthed] = useState(()=>!!getUID());
+  window._DS_SETTERS.authed = setAuthed;
   const syncLabel = {saving:'Salvando…',saved:'Salvo ✓',syncing:'Sincronizando…',error:'Erro sync',idle:''}[syncStatus]||'';
   const syncColor = {saving:'#888',saved:'#4ade80',syncing:'#facc15',error:'#e31b23',idle:'transparent'}[syncStatus]||'transparent';
 
@@ -6314,31 +6457,50 @@ function App(){
           </button>
           <LogoRow/>
         </div>
-        {syncLabel&&(
-          <div style={{fontSize:'.62rem',color:syncColor,fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',whiteSpace:'nowrap',flexShrink:0,display:'flex',alignItems:'center',gap:'.3rem'}}>
-            {syncStatus==='saving'||syncStatus==='syncing'?<span style={{display:'inline-block',width:'6px',height:'6px',borderRadius:'50%',background:syncColor,animation:'pulse 1s infinite'}}></span>:null}
-            {syncLabel}
-          </div>
-        )}
+        <div style={{display:'flex',alignItems:'center',gap:'.5rem',flexShrink:0}}>
+          {(function(){ var _ps=getDSPlan();
+            if(_ps.tier==='darkgod') return <div style={{background:'linear-gradient(90deg,#1a0a0a,#0d0d0f)',border:'1px solid #e31b23',borderRadius:'20px',padding:'.18rem .6rem',fontSize:'.6rem',fontWeight:900,color:'#e31b23',letterSpacing:'.08em',cursor:'pointer'}} onClick={function(){window._showPaywall&&window._showPaywall('DarkGod Pack');}}>👑 DARKGOD</div>;
+            if(_ps.tier==='elite') return <div style={{background:'linear-gradient(90deg,#e31b23,#b31217)',borderRadius:'20px',padding:'.18rem .6rem',fontSize:'.6rem',fontWeight:900,color:'#fff',letterSpacing:'.08em'}}>⚡ ELITE</div>;
+            if(_ps.isTrialActive) return <div style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'20px',padding:'.18rem .6rem',fontSize:'.6rem',fontWeight:700,color:'#e31b23',cursor:'pointer'}} onClick={function(){window._showPaywall&&window._showPaywall('Trial Elite');}}>✨ TRIAL {_ps.trialDaysLeft}d</div>;
+            return <div style={{background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'20px',padding:'.18rem .6rem',fontSize:'.6rem',fontWeight:700,color:'#555',cursor:'pointer',letterSpacing:'.06em'}} onClick={function(){window._showPaywall&&window._showPaywall('Plano Elite');}}>FREE → ELITE</div>;
+          })()}
+          {syncLabel&&(
+            <div style={{fontSize:'.62rem',color:syncColor,fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:'.3rem'}}>
+              {syncStatus==='saving'||syncStatus==='syncing'?<span style={{display:'inline-block',width:'6px',height:'6px',borderRadius:'50%',background:syncColor,animation:'pulse 1s infinite'}}></span>:null}
+              {syncLabel}
+            </div>
+          )}
+        </div>
       </header>
 
-      {screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs} setDrawerOpen={setDrawerOpen}/>}
-      {screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
-      {screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
-      {screen==="session" && <Session plans={plans} setPlans={setPlans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
-      {screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
-      {screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
-      {screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
-      {screen==="selos"     && <DarkSelos history={history} prefs={prefs}/>}
-      {screen==="diet"   && <Diet setToast={setToast}/>}
-      {screen==="measures" && <Measures setToast={setToast}/>}
-      {screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
-      {screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
+      {!authed ? (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',padding:'2rem',textAlign:'center',gap:'1.2rem'}}>
+          <div style={{fontSize:'3rem'}}>🔒</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:'#fff',letterSpacing:'.06em'}}>DARK<span style={{color:'#e31b23'}}>SET</span></div>
+          <div style={{fontSize:'.88rem',color:'#555',maxWidth:'260px',lineHeight:1.6}}>Faça login ou crie sua conta para começar a treinar.</div>
+          <button onClick={function(){window.openAuthModal&&window.openAuthModal('signIn');}} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem 2rem',color:'#fff',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:'.04em',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>Entrar / Criar conta</button>
+          <button onClick={function(){window.openAuthModal&&window.openAuthModal('signUp');}} style={{background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'12px',padding:'.65rem 1.5rem',color:'#888',fontWeight:700,fontSize:'.88rem',cursor:'pointer',fontFamily:'inherit'}}>Criar conta grátis</button>
+        </div>
+      ) : null}
+      {authed && screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs} setDrawerOpen={setDrawerOpen}/>}
+      {authed && screen==="plans" && <Plans plans={plans} setPlans={setPlans} goto={(s,id)=>goto(s,id)} setToast={setToast}/>}
+      {authed && screen==="builder" && <Builder planId={builderPlanId||(plans.activeId||plans.list[0]?.id)} plans={plans} setPlans={setPlans} setToast={setToast}/>}
+      {authed && screen==="session" && <Session plans={plans} setPlans={setPlans} setHistory={setHistory} history={history} prefs={prefs} goto={goto} setToast={setToast} onPR={setPrCelebration}/>}
+      {authed && screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
+      {authed && screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
+      {authed && screen==="community" && <Community history={history} setToast={setToast} prefs={prefs}/>}
+      {authed && screen==="selos"     && <DarkSelos history={history} prefs={prefs}/>}
+      {authed && screen==="diet"   && <Diet setToast={setToast}/>}
+      {authed && screen==="measures" && <Measures setToast={setToast}/>}
+      {authed && screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
+      {authed && screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
 
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
+      {paywallFeature ? <PaywallModal feature={paywallFeature} onClose={function(){ setPaywallFeature(null); }} onTrial={function(){ startDSTrial(); setPlanState(getDSPlan()); setPaywallFeature(null); setToast('✨ Trial Elite ativo por 7 dias!'); }} trialUsed={trialUsed}/> : null}
+
       {toast && <Toast text={toast}/>}
     </div>
   );
@@ -7108,8 +7270,10 @@ root.render(<App/>);
               setTimeout(tryPull,200);
             }
             if(window.closeAuthModal) closeAuthModal();
+            if(window._DS_SETTERS && window._DS_SETTERS.authed) window._DS_SETTERS.authed(true);
           } else {
             localStorage.removeItem('darkset.user');
+            if(window._DS_SETTERS && window._DS_SETTERS.authed) window._DS_SETTERS.authed(false);
           }
         }catch(_){}
       });
