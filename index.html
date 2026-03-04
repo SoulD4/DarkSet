@@ -7626,18 +7626,19 @@ root.render(<App/>);
               var clearKeys = [
                 'darkset.v3.plans','darkset.v3.history','darkset.v3.prefs',
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
-                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData'
+                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
               ];
               clearKeys.forEach(function(k){ localStorage.removeItem(k); });
               if(window._DS_SETTERS){
                 if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
                 if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
+                if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
               }
               // Retry até os setters do React estarem registrados (max 3s)
               var attempts=0;
               var tryPull=function(){
                 attempts++;
-                if(window._DS_SETTERS && window._DS_SETTERS.plans){
+                if(window._DS_SETTERS && window._DS_SETTERS.plans && window._DS_SETTERS.isPersonal){
                   window.DSSync.pull(user.uid);
                 } else if(attempts<30){
                   setTimeout(tryPull,100);
@@ -7656,7 +7657,7 @@ root.render(<App/>);
               'darkset.v3.plans', 'darkset.v3.history', 'darkset.v3.prefs',
               'darkset.v1.diet', 'darkset.measures', 'darkset.cardio.history',
               'ds.squad', 'darkset.squad.v1', 'darkset.squad.checkins', 'darkset.squad.chat',
-              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData'
+              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData', 'ds.isPersonal'
             ];
             keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
             // Reset React state to empty
@@ -7665,6 +7666,7 @@ root.render(<App/>);
               if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
               if(window._DS_SETTERS.prefs)   window._DS_SETTERS.prefs({name:'',avatar:'💀',unit:'kg',vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false});
               if(window._DS_SETTERS.authed)  window._DS_SETTERS.authed(false);
+              if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
             }
           }
         }catch(_){}
