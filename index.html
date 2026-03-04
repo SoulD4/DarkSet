@@ -1230,20 +1230,24 @@ window.DSSync = {
         localStorage.setItem(LS.prefs, JSON.stringify(merged));
       }
 
-      // Pull planData from user document (admin-controlled, not in subcollection)
+      // Pull planData + role from user document (admin-controlled)
       try{
         if(window._db){
           const userDoc = await window._db.collection('users').doc(uid).get();
           if(userDoc.exists){
             const userData = userDoc.data();
+            // planData
             if(userData && userData.planData){
               const pd = userData.planData;
-              // Merge with local: cloud tier overrides if set by admin
               const localPd = JSON.parse(localStorage.getItem('ds.planData')||'null') || {};
               const merged = { ...localPd, ...pd };
               localStorage.setItem('ds.planData', JSON.stringify(merged));
               if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData(merged);
             }
+            // role: personal
+            const isP = userData && (userData.role === 'personal');
+            localStorage.setItem('ds.isPersonal', JSON.stringify(isP));
+            if(window._DS_SETTERS && window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(isP);
           }
         }
       }catch(_){}
@@ -1353,7 +1357,7 @@ const NAV_ITEMS = [
   {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
 ];
 
-const Drawer = ({open, onClose, screen, goto, prefs}) => {
+const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
   const nav = (s) => { goto(s); onClose(); };
   return (
     <>
@@ -1368,7 +1372,7 @@ const Drawer = ({open, onClose, screen, goto, prefs}) => {
         </div>
         {/* Items */}
         <div style={{flex:1,paddingBottom:'1rem'}}>
-          {NAV_ITEMS.map((item,i) => (
+          {NAV_ITEMS.filter(item => !item.personalOnly || isPersonal).map((item,i) => (
             <div key={i}>
               {item.section && <div className="ds-drawer-section">{item.section}</div>}
               <button
@@ -4696,7 +4700,7 @@ const History=({history,setHistory,prefs})=>{
 
 // Profile
 
-const Profile=({prefs,setPrefs,history})=>{
+const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const [tab,setTab]=useState('config');
   const [name,setName]=useState(prefs.name||'');
   const [avatarUrl,setAvatarUrl]=useState(prefs.avatarUrl||null);
@@ -4999,6 +5003,7 @@ const Profile=({prefs,setPrefs,history})=>{
       </div>
 
       {/* Suporte */}
+      <MeuPersonalSection setToast={setToast}/>
       <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.6rem'}}>
         <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Suporte</div>
         <div style={{fontSize:'.82rem',color:'var(--color-text-sub)',lineHeight:1.4}}>Encontrou um bug ou tem uma sugestão? Fale com a gente.</div>
@@ -6339,6 +6344,320 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════
+// PersonalPanel — Painel do Personal Trainer
+// ═══════════════════════════════════════════════════════
+const PersonalPanel = ({setToast, prefs}) => {
+  const uid = getUID();
+  const [students, setStudents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [inviteCode, setInviteCode] = React.useState(null);
+  const [inviteLoading, setInviteLoading] = React.useState(false);
+  const [selectedStudent, setSelectedStudent] = React.useState(null);
+  const [view, setView] = React.useState('list');
+
+  React.useEffect(() => {
+    if(!uid || !window._db) { setLoading(false); return; }
+    const unsub = window._db.collection('personal_links')
+      .where('personalUid', '==', uid)
+      .where('active', '==', true)
+      .onSnapshot(async snap => {
+        const links = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const enriched = await Promise.all(links.map(async link => {
+          try {
+            const userDoc = await window._db.collection('users').doc(link.studentUid).get();
+            const userData = userDoc.exists ? userDoc.data() : {};
+            let lastWorkout = null;
+            try {
+              const histDoc = await window._db.collection('users').doc(link.studentUid)
+                .collection('data').doc('history').get();
+              if(histDoc.exists){
+                const payload = histDoc.data().payload ? JSON.parse(histDoc.data().payload) : {};
+                const dates = Object.keys(payload).sort().reverse();
+                lastWorkout = dates[0] || null;
+              }
+            } catch(_){}
+            return { ...link, name: userData.name || userData.displayName || 'Aluno', photoURL: userData.photoURL || null, lastWorkout };
+          } catch(_){ return { ...link, name: 'Aluno', photoURL: null, lastWorkout: null }; }
+        }));
+        setStudents(enriched);
+        setLoading(false);
+      }, () => setLoading(false));
+    return () => unsub();
+  }, [uid]);
+
+  const generateInvite = async () => {
+    if(!uid || !window._db) return;
+    setInviteLoading(true);
+    try {
+      if(students.length >= 10){ setToast('Limite de 10 alunos atingido'); setInviteLoading(false); return; }
+      const code = 'PT-' + Math.random().toString(36).slice(2,7).toUpperCase();
+      await window._db.collection('personal_invites').doc(code).set({
+        personalUid: uid, personalName: prefs.name || 'Personal',
+        code, used: false, createdAt: Date.now(), expiresAt: Date.now() + 7*24*60*60*1000,
+      });
+      setInviteCode(code);
+    } catch(e){ setToast('Erro ao gerar convite'); }
+    setInviteLoading(false);
+  };
+
+  const removeStudent = async (link) => {
+    if(!window._db) return;
+    if(!confirm('Remover ' + link.name + ' da sua lista?')) return;
+    try { await window._db.collection('personal_links').doc(link.id).update({ active: false }); setToast('Aluno removido'); }
+    catch(_){ setToast('Erro ao remover aluno'); }
+  };
+
+  const copyInvite = () => {
+    const text = 'Código DarkSet Personal: ' + inviteCode + '\n\nAbra o app → Perfil → Meu Personal → cole o código.';
+    if(navigator.clipboard) navigator.clipboard.writeText(text);
+    setToast('Código copiado!');
+  };
+
+  if(view === 'student' && selectedStudent){
+    return <StudentView student={selectedStudent} setToast={setToast} prefs={prefs} onBack={()=>setView('list')}/>;
+  }
+
+  return (
+    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      <div style={{marginBottom:'1.5rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.05em'}}>
+          {'👨\u200d💼 Painel '}<span style={{color:'var(--color-accent)'}}>Personal</span>
+        </div>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginTop:'.2rem'}}>{students.length}/10 alunos vinculados</div>
+      </div>
+
+      <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
+        <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:'.5rem'}}>📨 Convidar Aluno</div>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginBottom:'.75rem'}}>Código válido por 7 dias. O aluno cola em Perfil → Meu Personal.</div>
+        {inviteCode ? (
+          <div>
+            <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+              <span style={{fontFamily:'monospace',fontSize:'1.3rem',fontWeight:900,letterSpacing:'.1em',color:'var(--color-accent)'}}>{inviteCode}</span>
+              <button onClick={copyInvite} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.4rem .8rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Copiar</button>
+            </div>
+            <div style={{fontSize:'.7rem',color:'#555'}}>Válido 7 dias · Uso único</div>
+            <button onClick={()=>setInviteCode(null)} style={{marginTop:'.5rem',background:'none',border:'none',color:'#555',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo</button>
+          </div>
+        ) : (
+          <button onClick={generateInvite} disabled={inviteLoading || students.length >= 10}
+            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.9rem',cursor:inviteLoading?'wait':'pointer',opacity:students.length>=10?.5:1}}>
+            {inviteLoading ? 'Gerando…' : '+ Gerar Código de Convite'}
+          </button>
+        )}
+      </div>
+
+      <div style={{fontWeight:700,fontSize:'.85rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Seus Alunos</div>
+      {loading ? (
+        <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
+      ) : students.length === 0 ? (
+        <div className="ds-card" style={{padding:'1.5rem',textAlign:'center',color:'#444'}}>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👤</div>
+          <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
+          <div style={{fontSize:'.75rem',marginTop:'.3rem',color:'#555'}}>Gere um código e compartilhe com seu aluno.</div>
+        </div>
+      ) : students.map((s,i) => (
+        <div key={i} className="ds-card" style={{padding:'.9rem 1rem',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+          <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>
+            {s.photoURL ? <img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '👤'}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:'.88rem'}}>{s.name}</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>{s.lastWorkout ? 'Último treino: '+s.lastWorkout : 'Sem treinos'}</div>
+          </div>
+          <div style={{display:'flex',gap:'.4rem'}}>
+            <button onClick={()=>{ setSelectedStudent(s); setView('student'); }}
+              style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.4rem .7rem',color:'var(--color-accent)',fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>Ver</button>
+            <button onClick={()=>removeStudent(s)}
+              style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.4rem .7rem',color:'#555',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── MeuPersonalSection: shown in Profile for all users (to link with a personal) ──
+const MeuPersonalSection = ({setToast}) => {
+  const uid = getUID();
+  const [personalInfo, setPersonalInfo] = React.useState(null);
+  const [inputCode, setInputCode] = React.useState('');
+  const [linking, setLinking] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if(!uid || !window._db) { setLoading(false); return; }
+    // Check if already linked
+    window._db.collection('personal_links')
+      .where('studentUid', '==', uid)
+      .where('active', '==', true)
+      .limit(1)
+      .get()
+      .then(async snap => {
+        if(!snap.empty){
+          const link = snap.docs[0].data();
+          try {
+            const pDoc = await window._db.collection('users').doc(link.personalUid).get();
+            const pData = pDoc.exists ? pDoc.data() : {};
+            setPersonalInfo({ name: pData.name || pData.displayName || 'Personal', photoURL: pData.photoURL || null, linkId: snap.docs[0].id });
+          } catch(_){ setPersonalInfo({ name: 'Personal', photoURL: null, linkId: snap.docs[0].id }); }
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [uid]);
+
+  const linkPersonal = async () => {
+    const code = inputCode.trim().toUpperCase();
+    if(!code) return;
+    if(!window._db) return;
+    setLinking(true);
+    try {
+      const inviteDoc = await window._db.collection('personal_invites').doc(code).get();
+      if(!inviteDoc.exists){ setToast('Código inválido'); setLinking(false); return; }
+      const invite = inviteDoc.data();
+      if(invite.used){ setToast('Código já utilizado'); setLinking(false); return; }
+      if(invite.expiresAt < Date.now()){ setToast('Código expirado'); setLinking(false); return; }
+      if(invite.personalUid === uid){ setToast('Você não pode se vincular a si mesmo'); setLinking(false); return; }
+      // Create link
+      await window._db.collection('personal_links').add({
+        personalUid: invite.personalUid, studentUid: uid,
+        active: true, linkedAt: Date.now(),
+      });
+      // Mark invite as used
+      await window._db.collection('personal_invites').doc(code).update({ used: true });
+      setPersonalInfo({ name: invite.personalName || 'Personal', photoURL: null });
+      setToast('Vinculado com sucesso! ✅');
+      setInputCode('');
+    } catch(e){ setToast('Erro ao vincular: ' + (e.message||'')); }
+    setLinking(false);
+  };
+
+  const unlinkPersonal = async () => {
+    if(!personalInfo?.linkId || !window._db) return;
+    if(!confirm('Desvincular do seu personal?')) return;
+    try {
+      await window._db.collection('personal_links').doc(personalInfo.linkId).update({ active: false });
+      setPersonalInfo(null);
+      setToast('Desvinculado');
+    } catch(_){ setToast('Erro ao desvincular'); }
+  };
+
+  if(loading) return null;
+
+  return (
+    <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.6rem',marginBottom:'.75rem'}}>
+      <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Meu Personal</div>
+      {personalInfo ? (
+        <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+          <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',flexShrink:0}}>
+            {personalInfo.photoURL ? <img src={personalInfo.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '👨‍💼'}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:'.88rem'}}>{personalInfo.name}</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>Personal vinculado</div>
+          </div>
+          <button onClick={unlinkPersonal} style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'8px',padding:'.3rem .65rem',color:'#f87171',fontSize:'.75rem',cursor:'pointer'}}>Desvincular</button>
+        </div>
+      ) : (
+        <div>
+          <div style={{fontSize:'.8rem',color:'var(--color-text-sub)',marginBottom:'.6rem'}}>Cole o código do seu personal para receber fichas diretamente no app.</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input
+              value={inputCode} onChange={e=>setInputCode(e.target.value.toUpperCase())}
+              placeholder="PT-XXXXX" maxLength={8}
+              style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .75rem',color:'#fff',fontSize:'.9rem',fontFamily:'monospace',letterSpacing:'.08em'}}
+            />
+            <button onClick={linkPersonal} disabled={linking||!inputCode.trim()}
+              style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem 1rem',color:'#fff',fontWeight:800,fontSize:'.85rem',cursor:linking?'wait':'pointer',opacity:!inputCode.trim()?.5:1}}>
+              {linking ? '…' : 'Vincular'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ── StudentView ──
+const StudentView = ({student, setToast, prefs, onBack}) => {
+  const [tab, setTab] = React.useState('history');
+  const [history, setHistory] = React.useState({});
+  const [fichas, setFichas] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if(!window._db || !student.studentUid) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const histDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('history').get();
+        if(histDoc.exists){ const p = histDoc.data().payload ? JSON.parse(histDoc.data().payload) : {}; setHistory(p); }
+        const plansDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('plans').get();
+        if(plansDoc.exists){ const p = plansDoc.data().payload ? JSON.parse(plansDoc.data().payload) : {}; setFichas(p.list || []); }
+      } catch(_){ setToast('Erro ao carregar dados'); }
+      setLoading(false);
+    })();
+  }, [student.studentUid]);
+
+  const histEntries = Object.entries(history).sort((a,b)=>b[0]>a[0]?1:-1).slice(0,20);
+  const TABS = [{id:'history',label:'📊 Histórico'},{id:'fichas',label:'📋 Fichas'},{id:'diet',label:'🥗 Dieta'}];
+
+  return (
+    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1.2rem'}}>
+        <button onClick={onBack} style={{background:'rgba(255,255,255,.06)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.4rem .7rem',color:'var(--color-text)',cursor:'pointer',fontSize:'1rem'}}>←</button>
+        <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',flexShrink:0}}>
+          {student.photoURL ? <img src={student.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '👤'}
+        </div>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase'}}>{student.name}</div>
+          <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{histEntries.length} treinos registrados</div>
+        </div>
+      </div>
+
+      <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem',background:'rgba(0,0,0,.3)',borderRadius:'10px',padding:'.3rem'}}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{flex:1,background:tab===t.id?'var(--color-accent)':'none',border:'none',borderRadius:'7px',padding:'.45rem .3rem',color:tab===t.id?'#fff':'var(--color-text-sub)',fontWeight:700,fontSize:'.72rem',cursor:'pointer',transition:'all .2s'}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
+      : tab === 'history' ? (
+        histEntries.length === 0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino ainda.</div>
+        : histEntries.map(([date, entry], i) => (
+          <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:'.85rem'}}>{entry.planName || 'Treino livre'}</div>
+              <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{(entry.entries||[]).length} exercícios · {date}</div>
+            </div>
+            <div style={{fontSize:'1.3rem'}}>💪</div>
+          </div>
+        ))
+      ) : tab === 'fichas' ? (
+        fichas.length === 0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhuma ficha.</div>
+        : fichas.map((f,i) => (
+          <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem'}}>
+            <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name || 'Ficha '+(i+1)}</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{Object.values(f.byDay||{}).reduce((a,b)=>a+b.length,0)} exercícios totais</div>
+          </div>
+        ))
+      ) : (
+        <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🥗</div>
+          <div style={{fontSize:'.85rem'}}>Prescrição de dieta em breve.</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
 function App(){
   const [screen,setScreen]=useState("home");
   // Apply saved theme immediately on load
@@ -6368,10 +6687,13 @@ function App(){
   useEffect(()=>{window._DS_HIST=history;},[history]);
   const [prefs,setPrefs]=usePrefs();
   const [planState, setPlanState] = useState(getDSPlan);
+  const [isPersonal, setIsPersonal] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('ds.isPersonal')||'false'); }catch(_){ return false; } });
+  window._DS_SETTERS = window._DS_SETTERS || {};
   const [paywallFeature, setPaywallFeature] = useState(null);
   const showPaywall = function(feat){ setPaywallFeature(feat); };
   window._showPaywall = showPaywall;
   const { tier, perms, isTrialActive, trialDaysLeft, trialUsed } = planState;
+  useEffect(()=>{ window._DS_SETTERS.isPersonal = setIsPersonal; return ()=>{ window._DS_SETTERS.isPersonal=null; }; },[]);
   const [toast,setToast]=useState(null);
   const [builderPlanId,setBuilderPlanId]=useState(null);
   const [viewerPlanId,setViewerPlanId]=useState(null);
@@ -6474,7 +6796,7 @@ function App(){
           })()}
         </div>
       )}
-      <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs}/>
+      <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={isPersonal}/>
       <header className="ds-hdr" style={{justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
           <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu">
@@ -6526,7 +6848,8 @@ function App(){
       {authed && screen==="diet"   && <Diet setToast={setToast}/>}
       {authed && screen==="measures" && <Measures setToast={setToast}/>}
       {authed && screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
-      {authed && screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history}/>}
+      {authed && screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history} setToast={setToast}/>}
+      {authed && isPersonal && screen==="personal" && <PersonalPanel setToast={setToast} prefs={prefs}/>}
 
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
