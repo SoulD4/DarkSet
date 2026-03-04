@@ -1,31 +1,67 @@
 // DarkSet Service Worker V5.7.6
-const CACHE = 'darkset-v5-7-6';
-const ASSETS = ['/', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE_NAME = 'darkset-v5-7-6';
+const ASSETS_TO_CACHE = [
+  '/',
+  './index.html',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
+];
 
-// ── Install ────────────────────────────────────────────────────────────────
+// ── Install: pre-cache core assets ────────────────────────────────────────
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS_TO_CACHE))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// ── Activate: clear old caches ─────────────────────────────────────────────
+// ── Activate: remove old caches ────────────────────────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// ── Fetch: network-first, cache fallback ───────────────────────────────────
+// ── Fetch: cache-first for assets, network-first for API/HTML ─────────────
 self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+
+  // Skip non-GET and cross-origin requests (Firebase, etc.)
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+
+  // Cache-first strategy for static assets (icons, images, fonts)
+  if (
+    e.request.destination === 'image' ||
+    e.request.destination === 'font' ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/screenshots/')
+  ) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-first strategy for HTML and manifest (always get latest)
   e.respondWith(
     fetch(e.request)
-      .then(r => {
-        const clone = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-        return r;
+      .then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+        return response;
       })
       .catch(() => caches.match(e.request))
   );
@@ -54,7 +90,7 @@ function scheduleDaily(hour, min) {
   }, delay);
 }
 
-// ── Messages — ÚNICO listener (era duplicado antes, causava bug) ───────────
+// ── Messages — listener único ──────────────────────────────────────────────
 self.addEventListener('message', e => {
   if (e.data?.type === 'scheduleNotif') {
     const { hour, min } = e.data;
