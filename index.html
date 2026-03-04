@@ -1155,7 +1155,7 @@ function getUID(){ try{return JSON.parse(localStorage.getItem('darkset.user'))?.
 function debounce(fn,ms){ let t; return (...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms);}; }
 
 // Global state setters — React components register these on mount
-window._DS_SETTERS = { plans: null, history: null, prefs: null };
+window._DS_SETTERS = { plans: null, history: null, prefs: null, isPersonal: null };
 
 async function fsWrite(uid, docName, data){
   if(!uid||!window._db) return;
@@ -6693,7 +6693,17 @@ function App(){
   const showPaywall = function(feat){ setPaywallFeature(feat); };
   window._showPaywall = showPaywall;
   const { tier, perms, isTrialActive, trialDaysLeft, trialUsed } = planState;
-  useEffect(()=>{ window._DS_SETTERS.isPersonal = setIsPersonal; return ()=>{ window._DS_SETTERS.isPersonal=null; }; },[]);
+  useEffect(()=>{
+    window._DS_SETTERS.isPersonal = setIsPersonal;
+    // Re-read from localStorage in case DSSync.pull ran before this effect
+    try{
+      const stored = JSON.parse(localStorage.getItem('ds.isPersonal')||'false');
+      if(stored) setIsPersonal(true);
+    }catch(_){}
+    // Also re-read planData (DarkGod/Elite tier set by admin)
+    try{ setPlanState(getDSPlan()); }catch(_){}
+    return ()=>{ window._DS_SETTERS.isPersonal=null; };
+  },[]);
   const [toast,setToast]=useState(null);
   const [builderPlanId,setBuilderPlanId]=useState(null);
   const [viewerPlanId,setViewerPlanId]=useState(null);
