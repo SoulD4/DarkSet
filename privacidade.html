@@ -7,180 +7,402 @@
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0b0b0b;color:#d4d4d4;line-height:1.75;padding:2rem 1rem}
-    .container{max-width:740px;margin:0 auto}
+    .container{max-width:760px;margin:0 auto}
     .logo{font-family:'Arial Black',sans-serif;font-size:1.8rem;font-weight:900;color:#e31b23;letter-spacing:.06em;margin-bottom:.2rem}
     .updated{font-size:.78rem;color:#444;margin-bottom:2.5rem}
     h1{font-size:1.3rem;color:#fff;margin-bottom:.4rem}
     .subtitle{font-size:.82rem;color:#555;margin-bottom:2rem}
-    h2{font-size:.85rem;color:#fff;margin:2.2rem 0 .6rem;text-transform:uppercase;letter-spacing:.08em;padding-bottom:.4rem;border-bottom:1px solid #1a1a1a}
+    h2{font-size:.85rem;color:#fff;margin:2.4rem 0 .6rem;text-transform:uppercase;letter-spacing:.08em;padding-bottom:.4rem;border-bottom:1px solid #1a1a1a}
+    h3{font-size:.85rem;color:#ccc;margin:1.2rem 0 .4rem;font-weight:600}
     p{color:#999;margin-bottom:.75rem;font-size:.88rem}
     ul{padding-left:1.3rem;margin-bottom:.75rem}
-    li{color:#999;font-size:.88rem;margin-bottom:.35rem}
+    li{color:#999;font-size:.88rem;margin-bottom:.4rem}
     a{color:#e31b23;text-decoration:none}
+    a:hover{text-decoration:underline}
+    strong{color:#ccc}
     .warning-box{background:rgba(227,27,35,.07);border:1px solid rgba(227,27,35,.2);border-radius:10px;padding:1rem 1.2rem;margin:1.5rem 0}
-    .warning-box p{color:#e31b23;font-weight:600;margin-bottom:.3rem;font-size:.85rem}
-    .warning-box ul li{color:#c0605f;font-size:.83rem}
+    .warning-box .wt{color:#e31b23;font-weight:700;margin-bottom:.4rem;font-size:.85rem}
+    .warning-box li{color:#c07070;font-size:.83rem}
+    .info-box{background:rgba(255,255,255,.03);border:1px solid #1e1e1e;border-radius:10px;padding:1rem 1.2rem;margin:1rem 0}
+    .info-box p{margin:0;font-size:.83rem;color:#666}
+    .table-wrap{overflow-x:auto;margin-bottom:1rem}
+    table{width:100%;border-collapse:collapse;font-size:.82rem}
+    th{text-align:left;color:#555;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;padding:.5rem .75rem;border-bottom:1px solid #1e1e1e;white-space:nowrap}
+    td{padding:.55rem .75rem;border-bottom:1px solid #151515;color:#888;vertical-align:top}
+    td:first-child{color:#ccc;white-space:nowrap}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-block;background:rgba(227,27,35,.12);color:#e31b23;font-size:.68rem;font-weight:700;letter-spacing:.06em;padding:.15rem .45rem;border-radius:4px;text-transform:uppercase;margin-right:.3rem}
     .divider{border:none;border-top:1px solid #151515;margin:2rem 0}
     .footer{font-size:.75rem;color:#333;margin-top:3rem;text-align:center;padding-top:1.5rem;border-top:1px solid #151515}
-    .toc{background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:1rem 1.2rem;margin-bottom:2rem}
-    .toc p{color:#555;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
-    .toc a{color:#555;font-size:.82rem;display:block;padding:.15rem 0;border:none}
-    .toc a:hover{color:#e31b23}
+    .toc{background:#0f0f0f;border:1px solid #1a1a1a;border-radius:10px;padding:1rem 1.2rem;margin-bottom:2.5rem}
+    .toc-title{color:#444;font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem}
+    .toc a{color:#555;font-size:.82rem;display:block;padding:.2rem 0;border:none}
+    .toc a:hover{color:#e31b23;text-decoration:none}
+    .dpo-box{background:rgba(255,255,255,.02);border:1px solid #222;border-radius:10px;padding:1.2rem 1.4rem;margin-top:1rem}
+    .dpo-box .dpo-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:#444;margin-bottom:.5rem}
+    .dpo-box .dpo-name{font-size:1rem;color:#ccc;font-weight:700;margin-bottom:.2rem}
+    .dpo-box .dpo-email{color:#e31b23;font-size:.88rem}
   </style>
 </head>
 <body>
 <div class="container">
+
   <div class="logo">DARKSET</div>
-  <div class="updated">Última atualização: junho de 2025 · Versão 1.0</div>
+  <div class="updated">Última atualização: junho de 2025 · Versão 2.0 · Elaborada em conformidade com a LGPD (Lei nº 13.709/2018)</div>
 
   <h1>Termos de Uso e Política de Privacidade</h1>
-  <p class="subtitle">Leia com atenção antes de utilizar o aplicativo DarkSet.</p>
+  <p class="subtitle">Leia com atenção antes de utilizar o aplicativo DarkSet. Ao criar sua conta ou utilizar o app, você declara ter lido e concordado com este documento.</p>
 
   <div class="toc">
-    <p>Índice</p>
+    <div class="toc-title">Índice</div>
     <a href="#saude">1. Aviso de saúde e atividade física</a>
     <a href="#uso">2. Termos de uso</a>
-    <a href="#privacidade">3. Política de privacidade</a>
-    <a href="#dados">4. Coleta e uso de dados</a>
-    <a href="#direitos">5. Seus direitos</a>
-    <a href="#contato">6. Contato</a>
+    <a href="#bases">3. Bases jurídicas do tratamento (LGPD)</a>
+    <a href="#dados">4. Coleta, finalidade e uso de dados</a>
+    <a href="#terceiros">5. Compartilhamento com terceiros e transferência internacional</a>
+    <a href="#cookies">6. Cookies e tecnologias similares</a>
+    <a href="#seguranca">7. Medidas de segurança</a>
+    <a href="#retencao">8. Retenção e exclusão de dados</a>
+    <a href="#direitos">9. Seus direitos (LGPD)</a>
+    <a href="#dpo">10. Encarregado de Proteção de Dados (DPO)</a>
+    <a href="#alteracoes">11. Alterações nesta política</a>
   </div>
 
-  <!-- AVISO DE SAÚDE -->
+  <!-- 1. AVISO DE SAÚDE -->
   <h2 id="saude">1. Aviso de saúde e atividade física ⚠️</h2>
 
   <div class="warning-box">
-    <p>⚠️ Leia este aviso antes de iniciar qualquer programa de exercícios</p>
+    <div class="wt">⚠️ Leia antes de iniciar qualquer programa de exercícios</div>
     <ul>
-      <li>O DarkSet é um aplicativo de registro e acompanhamento de treinos. Não é um serviço médico, não substitui avaliação médica nem orientação de profissional de educação física.</li>
+      <li>O DarkSet é um aplicativo de <strong>registro e acompanhamento</strong> de treinos. Não é um serviço médico e não substitui avaliação médica nem orientação de profissional de educação física habilitado.</li>
       <li>Consulte um médico antes de iniciar qualquer programa de exercícios, especialmente se tiver condições de saúde preexistentes, estiver grávida ou sedentária há muito tempo.</li>
       <li>Pare imediatamente qualquer atividade e procure atendimento médico se sentir dor no peito, falta de ar intensa, tontura ou desconforto incomum durante o exercício.</li>
+      <li>Informações calóricas e nutricionais são estimativas e não substituem orientação de nutricionista registrado.</li>
     </ul>
   </div>
 
-  <p>O DarkSet fornece informações gerais sobre exercícios físicos com finalidade exclusivamente educativa e de registro pessoal. Qualquer conteúdo presente no aplicativo (exercícios, séries, repetições, dicas de execução) é de caráter informativo e não constitui prescrição de treino individualizada.</p>
+  <p>O DarkSet fornece conteúdo sobre exercícios físicos com finalidade <strong>exclusivamente educativa e de registro pessoal</strong>. Nenhum conteúdo do app (exercícios, séries, repetições, dicas de execução, metas calóricas) constitui prescrição individualizada de treino ou dieta.</p>
 
-  <p>O uso do aplicativo implica reconhecimento de que:</p>
-  <ul>
-    <li>Você é o único responsável pelas decisões relacionadas à sua saúde e condicionamento físico.</li>
-    <li>O DarkSet não garante resultados específicos de perda de peso, ganho muscular ou melhora de desempenho.</li>
-    <li>Exercícios físicos realizados de forma inadequada podem causar lesões. Sempre busque orientação de um profissional qualificado.</li>
-    <li>As informações calóricas e nutricionais exibidas no app são estimativas e podem variar. Não substituem orientação de nutricionista.</li>
-  </ul>
-
-  <p>O DarkSet e seus criadores não se responsabilizam por lesões, danos à saúde ou qualquer consequência negativa decorrente do uso das informações presentes no aplicativo.</p>
+  <p>Ao usar o aplicativo, você reconhece que: (a) é o único responsável pelas decisões relacionadas à sua saúde; (b) o DarkSet não garante resultados específicos; (c) exercícios realizados inadequadamente podem causar lesões; (d) o DarkSet e seus criadores não se responsabilizam por lesões, danos à saúde ou qualquer consequência negativa decorrente do uso das informações presentes no app.</p>
 
   <hr class="divider">
 
-  <!-- TERMOS DE USO -->
+  <!-- 2. TERMOS DE USO -->
   <h2 id="uso">2. Termos de uso</h2>
 
-  <p>Ao utilizar o DarkSet, você concorda com os termos abaixo. Caso não concorde, não utilize o aplicativo.</p>
+  <h3>2.1 Elegibilidade</h3>
+  <p>O DarkSet é destinado a pessoas com <strong>13 anos ou mais</strong>. Usuários entre 13 e 17 anos devem ter autorização dos responsáveis legais. Não coletamos intencionalmente dados de crianças menores de 13 anos.</p>
 
-  <p><strong style="color:#fff">2.1 Elegibilidade</strong></p>
-  <p>O DarkSet é destinado a pessoas com 13 anos ou mais. Usuários entre 13 e 17 anos devem ter autorização dos responsáveis legais.</p>
-
-  <p><strong style="color:#fff">2.2 Uso permitido</strong></p>
+  <h3>2.2 Uso permitido</h3>
   <ul>
     <li>Registrar seus próprios treinos e acompanhar sua evolução física pessoal.</li>
     <li>Criar e compartilhar fichas de treino para uso educativo.</li>
     <li>Interagir com outros usuários de forma respeitosa no sistema de Squads.</li>
   </ul>
 
-  <p><strong style="color:#fff">2.3 Uso proibido</strong></p>
+  <h3>2.3 Uso proibido</h3>
   <ul>
-    <li>Utilizar o app para assédio, discriminação ou conteúdo ofensivo para outros usuários.</li>
-    <li>Tentar acessar dados de outros usuários sem autorização.</li>
-    <li>Compartilhar conteúdo falso ou enganoso no chat de Squads.</li>
-    <li>Realizar engenharia reversa ou tentar comprometer a segurança do aplicativo.</li>
+    <li>Assédio, discriminação ou envio de conteúdo ofensivo a outros usuários.</li>
+    <li>Acesso não autorizado a dados de outros usuários.</li>
+    <li>Compartilhamento de conteúdo falso ou enganoso no chat de Squads.</li>
+    <li>Engenharia reversa ou tentativas de comprometer a segurança do aplicativo.</li>
   </ul>
 
-  <p><strong style="color:#fff">2.4 Isenção de responsabilidade</strong></p>
-  <p>O DarkSet é fornecido "no estado em que se encontra", sem garantias de disponibilidade contínua ou ausência de erros. Podemos modificar ou descontinuar funcionalidades a qualquer momento. Não nos responsabilizamos por perda de dados decorrente de falhas técnicas.</p>
+  <h3>2.4 Isenção de responsabilidade</h3>
+  <p>O DarkSet é fornecido "no estado em que se encontra", sem garantias de disponibilidade contínua. Podemos modificar ou descontinuar funcionalidades a qualquer momento, com aviso prévio quando possível. Não nos responsabilizamos por perda de dados decorrente de falhas técnicas alheias ao nosso controle.</p>
 
-  <p><strong style="color:#fff">2.5 Propriedade intelectual</strong></p>
-  <p>O nome DarkSet, logotipo, design e código do aplicativo são propriedade de seus criadores. Os dados de treino registrados por você pertencem a você.</p>
+  <h3>2.5 Propriedade intelectual</h3>
+  <p>O nome DarkSet, logotipo, design e código do aplicativo são propriedade de seus criadores e protegidos por lei. Os dados de treino registrados por você pertencem a você.</p>
 
   <hr class="divider">
 
-  <!-- PRIVACIDADE -->
-  <h2 id="privacidade">3. Política de privacidade</h2>
+  <!-- 3. BASES JURÍDICAS -->
+  <h2 id="bases">3. Bases jurídicas do tratamento (LGPD)</h2>
 
-  <p>Respeitamos sua privacidade. Esta seção explica como tratamos suas informações pessoais.</p>
+  <p>Nos termos do art. 7º da Lei nº 13.709/2018 (LGPD), cada tratamento de dados pessoais realizado pelo DarkSet possui base jurídica específica, conforme detalhado abaixo:</p>
 
-  <p><strong style="color:#fff">3.1 Base legal</strong></p>
-  <p>Coletamos e processamos seus dados com base no seu consentimento (expresso ao criar sua conta) e no legítimo interesse de fornecer as funcionalidades do aplicativo. Você pode retirar seu consentimento a qualquer momento solicitando a exclusão da conta.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Atividade de tratamento</th>
+          <th>Base jurídica (LGPD)</th>
+          <th>Artigo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Criação de conta com e-mail e senha</td>
+          <td><span class="badge">Consentimento</span> Fornecido no momento do cadastro</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Login com Google</td>
+          <td><span class="badge">Consentimento</span> Implícito ao usar o botão Google Sign-In, com aviso exibido na tela</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Armazenamento de treinos, fichas e histórico</td>
+          <td><span class="badge">Execução de contrato</span> Necessário para entregar a funcionalidade principal do app</td>
+          <td>Art. 7º, V</td>
+        </tr>
+        <tr>
+          <td>Fotos de progresso corporal</td>
+          <td><span class="badge">Consentimento</span> Voluntário — o usuário opta por enviar</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Dados do Squad (chat, check-ins, ranking)</td>
+          <td><span class="badge">Consentimento</span> O usuário escolhe criar ou entrar em um Squad</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Registro de dieta e alimentos</td>
+          <td><span class="badge">Consentimento</span> Voluntário — o usuário opta por usar a funcionalidade</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Envio de notificações de treino</td>
+          <td><span class="badge">Consentimento</span> Solicitado explicitamente ao ativar a funcionalidade</td>
+          <td>Art. 7º, I</td>
+        </tr>
+        <tr>
+          <td>Autenticação e prevenção de acessos não autorizados</td>
+          <td><span class="badge">Interesse legítimo</span> Segurança da conta e integridade do serviço, sem impacto negativo ao titular</td>
+          <td>Art. 7º, IX</td>
+        </tr>
+        <tr>
+          <td>Logs técnicos de erro (Firebase Crashlytics)</td>
+          <td><span class="badge">Interesse legítimo</span> Manutenção e melhoria do serviço, dados anonimizados sempre que possível</td>
+          <td>Art. 7º, IX</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="info-box">
+    <p>Quando a base é <strong>interesse legítimo</strong>, realizamos internamente o teste de balanceamento (balancing test) exigido pela LGPD, avaliando se o interesse do controlador prevalece sobre os direitos fundamentais do titular. Os resultados dessas avaliações estão disponíveis mediante solicitação ao DPO.</p>
+  </div>
 
   <hr class="divider">
 
-  <!-- DADOS -->
-  <h2 id="dados">4. Coleta e uso de dados</h2>
+  <!-- 4. DADOS -->
+  <h2 id="dados">4. Coleta, finalidade e uso de dados</h2>
 
-  <p><strong style="color:#fff">4.1 O que coletamos</strong></p>
-  <ul>
-    <li><strong>Conta:</strong> nome, e-mail e foto de perfil (quando fornecidos)</li>
-    <li><strong>Treinos:</strong> fichas, exercícios, séries, repetições, cargas e histórico</li>
-    <li><strong>Corpo:</strong> peso, medidas e fotos de progresso (quando enviadas voluntariamente)</li>
-    <li><strong>Dieta:</strong> refeições e alimentos registrados</li>
-    <li><strong>Squad:</strong> nome e avatar visíveis para membros do mesmo grupo, mensagens de chat, check-ins</li>
-  </ul>
+  <h3>4.1 Dados coletados e suas finalidades</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Dado</th><th>Finalidade</th><th>Obrigatório?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>E-mail</td><td>Autenticação, recuperação de conta, envio de email de verificação</td><td>Sim (login por e-mail)</td></tr>
+        <tr><td>Nome e foto de perfil</td><td>Personalização do app e identificação no Squad</td><td>Não</td></tr>
+        <tr><td>Fichas e histórico de treinos</td><td>Funcionalidade principal — acompanhamento de evolução</td><td>Sim (para usar o app)</td></tr>
+        <tr><td>Peso, medidas corporais</td><td>Gráficos de evolução física</td><td>Não</td></tr>
+        <tr><td>Fotos de progresso</td><td>Comparativo visual de evolução</td><td>Não</td></tr>
+        <tr><td>Refeições e alimentos</td><td>Controle de dieta e calorias</td><td>Não</td></tr>
+        <tr><td>Mensagens do Squad</td><td>Comunicação entre membros do grupo</td><td>Não</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-  <p><strong style="color:#fff">4.2 O que não coletamos</strong></p>
+  <h3>4.2 Dados que não coletamos</h3>
   <ul>
     <li>Localização geográfica</li>
-    <li>Contatos do seu telefone</li>
+    <li>Contatos do dispositivo</li>
     <li>Dados de saúde do sistema operacional (Apple Health, Google Fit)</li>
     <li>Informações de pagamento (o app é gratuito)</li>
+    <li>Dados biométricos além dos voluntariamente informados pelo usuário</li>
   </ul>
-
-  <p><strong style="color:#fff">4.3 Como usamos seus dados</strong></p>
-  <ul>
-    <li>Sincronizar seu progresso entre dispositivos</li>
-    <li>Exibir seu histórico de treinos e evolução</li>
-    <li>Permitir funcionalidades do Squad (ranking, chat, check-ins)</li>
-    <li>Enviar notificações de lembrete de treino (somente se você ativar)</li>
-  </ul>
-
-  <p><strong style="color:#fff">4.4 Compartilhamento</strong></p>
-  <p>Não vendemos, alugamos nem compartilhamos seus dados pessoais com terceiros para fins comerciais. Utilizamos os seguintes serviços de infraestrutura:</p>
-  <ul>
-    <li><strong>Google Firebase</strong> — autenticação, banco de dados (Firestore) e armazenamento de arquivos (Storage). <a href="https://firebase.google.com/support/privacy" target="_blank">Política do Firebase</a></li>
-    <li><strong>Google Sign-In</strong> — login opcional com conta Google</li>
-  </ul>
-
-  <p><strong style="color:#fff">4.5 Segurança</strong></p>
-  <p>Seus dados são armazenados com autenticação obrigatória — nenhum dado é acessível sem login. Fotos de progresso são privadas e visíveis apenas por você. Utilizamos as práticas de segurança recomendadas pelo Google Firebase.</p>
-
-  <p><strong style="color:#fff">4.6 Retenção</strong></p>
-  <p>Mantemos seus dados enquanto sua conta estiver ativa. Após a exclusão da conta, os dados são removidos em até 30 dias, exceto quando exigido por lei.</p>
 
   <hr class="divider">
 
-  <!-- DIREITOS -->
-  <h2 id="direitos">5. Seus direitos</h2>
+  <!-- 5. TERCEIROS E TRANSFERÊNCIA INTERNACIONAL -->
+  <h2 id="terceiros">5. Compartilhamento com terceiros e transferência internacional</h2>
 
-  <p>Conforme a LGPD (Lei Geral de Proteção de Dados — Lei nº 13.709/2018), você tem direito a:</p>
-  <ul>
-    <li><strong>Acesso:</strong> visualizar todos os seus dados registrados no app</li>
-    <li><strong>Correção:</strong> atualizar seus dados pessoais (nome, email, foto) a qualquer momento</li>
-    <li><strong>Exclusão:</strong> solicitar a remoção completa de todos os seus dados e conta</li>
-    <li><strong>Portabilidade:</strong> exportar seu histórico de treinos pelo próprio app</li>
-    <li><strong>Revogação:</strong> retirar seu consentimento a qualquer momento</li>
-  </ul>
+  <p>Não vendemos, alugamos nem comercializamos dados pessoais. Utilizamos os seguintes serviços de infraestrutura, com os quais compartilhamos dados estritamente necessários para o funcionamento do app:</p>
 
-  <p>Para exercer qualquer desses direitos, entre em contato: <a href="mailto:suporte@darksetapp.com">suporte@darksetapp.com</a></p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Fornecedor</th><th>Dados compartilhados</th><th>Finalidade</th><th>Base legal</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Google Firebase Authentication</td>
+          <td>E-mail, nome, UID</td>
+          <td>Autenticação e gerenciamento de conta</td>
+          <td>Execução de contrato / consentimento</td>
+        </tr>
+        <tr>
+          <td>Google Firestore</td>
+          <td>Treinos, dieta, Squad, medidas</td>
+          <td>Armazenamento e sincronização dos dados do app</td>
+          <td>Execução de contrato</td>
+        </tr>
+        <tr>
+          <td>Google Firebase Storage</td>
+          <td>Fotos de progresso e avatar</td>
+          <td>Armazenamento de arquivos de mídia</td>
+          <td>Consentimento</td>
+        </tr>
+        <tr>
+          <td>Google Sign-In</td>
+          <td>Nome, e-mail, foto (conta Google)</td>
+          <td>Login social opcional</td>
+          <td>Consentimento</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>5.1 Transferência internacional de dados</h3>
+  <p>Os serviços do Google Firebase podem armazenar e processar dados em servidores localizados fora do Brasil, incluindo Estados Unidos e outros países. Essa transferência internacional é realizada com base no art. 33, II da LGPD — o Google LLC possui <strong>cláusulas contratuais padrão</strong> aprovadas por autoridades de proteção de dados e adere ao <strong>EU-U.S. Data Privacy Framework</strong>, garantindo nível adequado de proteção.</p>
+
+  <p>Para mais informações sobre as salvaguardas adotadas pelo Google: <a href="https://policies.google.com/privacy" target="_blank">policies.google.com/privacy</a></p>
 
   <hr class="divider">
 
-  <!-- CONTATO -->
-  <h2 id="contato">6. Contato</h2>
-  <p>Dúvidas, solicitações de exclusão de dados ou questões sobre privacidade:</p>
-  <p><a href="mailto:suporte@darksetapp.com">suporte@darksetapp.com</a></p>
-  <p>Respondemos em até 72 horas úteis.</p>
+  <!-- 6. COOKIES -->
+  <h2 id="cookies">6. Cookies e tecnologias similares</h2>
+
+  <p>O DarkSet é um Progressive Web App (PWA) e utiliza as seguintes tecnologias de armazenamento local:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Tecnologia</th><th>Finalidade</th><th>Tipo</th><th>Pode desativar?</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>localStorage</td>
+          <td>Salvar preferências, dados do usuário logado e configurações do app</td>
+          <td>Essencial</td>
+          <td>Não (o app para de funcionar)</td>
+        </tr>
+        <tr>
+          <td>Service Worker / Cache API</td>
+          <td>Permitir funcionamento offline e carregamento rápido</td>
+          <td>Essencial</td>
+          <td>Não (funcionalidade offline é perdida)</td>
+        </tr>
+        <tr>
+          <td>Firebase SDK (cookies de sessão)</td>
+          <td>Manter sessão de autenticação ativa entre sessões do navegador</td>
+          <td>Essencial</td>
+          <td>Não (o login seria perdido a cada acesso)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Não utilizamos</strong> cookies de rastreamento, pixels de marketing, cookies de terceiros para publicidade, Google Analytics, Facebook Pixel ou qualquer tecnologia de rastreamento comportamental. O DarkSet não exibe anúncios e não compartilha dados com redes de publicidade.</p>
+
+  <hr class="divider">
+
+  <!-- 7. SEGURANÇA -->
+  <h2 id="seguranca">7. Medidas de segurança</h2>
+
+  <p>Adotamos as seguintes medidas técnicas e organizacionais para proteger seus dados:</p>
+
+  <h3>7.1 Medidas técnicas</h3>
+  <ul>
+    <li><strong>Criptografia em trânsito:</strong> toda comunicação entre o app e os servidores utiliza TLS 1.2+ (HTTPS), impedindo interceptação de dados.</li>
+    <li><strong>Criptografia em repouso:</strong> dados armazenados no Firebase são criptografados em repouso pelo Google Cloud, utilizando AES-256.</li>
+    <li><strong>Autenticação obrigatória:</strong> nenhum dado pessoal é acessível sem login ativo. As regras de segurança do Firestore impedem acesso cruzado entre usuários.</li>
+    <li><strong>Acesso isolado por usuário:</strong> cada usuário acessa apenas seus próprios dados. Fotos de progresso são privadas e acessíveis somente pelo titular da conta.</li>
+    <li><strong>Senhas não armazenadas:</strong> senhas são gerenciadas pelo Firebase Authentication com hash seguro — não temos acesso às senhas dos usuários.</li>
+    <li><strong>Backups automáticos:</strong> realizados pelo Google Firebase com retenção configurável.</li>
+  </ul>
+
+  <h3>7.2 Medidas organizacionais</h3>
+  <ul>
+    <li>Acesso aos dados de produção restrito ao time responsável pelo app.</li>
+    <li>Revisão periódica das regras de segurança do Firestore e Storage.</li>
+    <li>Notificação ao titular em caso de incidente de segurança que afete seus dados, conforme exigido pela LGPD (art. 48).</li>
+  </ul>
+
+  <div class="info-box">
+    <p>Em caso de incidente de segurança relevante, a ANPD será notificada no prazo de 2 dias úteis, conforme Resolução CD/ANPD nº 15/2024, e os titulares afetados serão comunicados por e-mail.</p>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 8. RETENÇÃO -->
+  <h2 id="retencao">8. Retenção e exclusão de dados</h2>
+
+  <p>Mantemos seus dados enquanto sua conta estiver ativa. Após a solicitação de exclusão:</p>
+  <ul>
+    <li>Dados do Firestore (treinos, dieta, Squad): excluídos em até <strong>30 dias</strong>.</li>
+    <li>Fotos e arquivos no Storage: excluídos em até <strong>30 dias</strong>.</li>
+    <li>Conta de autenticação (Firebase Auth): desativada imediatamente, removida em até 30 dias.</li>
+    <li>Logs técnicos anonimizados: podem ser retidos por até 90 dias para fins de segurança e melhoria do serviço.</li>
+  </ul>
+  <p>Dados poderão ser retidos por prazo maior quando exigido por obrigação legal ou regulatória (art. 7º, II da LGPD).</p>
+
+  <hr class="divider">
+
+  <!-- 9. DIREITOS -->
+  <h2 id="direitos">9. Seus direitos (LGPD)</h2>
+
+  <p>Conforme o art. 18 da Lei nº 13.709/2018, você tem os seguintes direitos em relação aos seus dados pessoais:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Direito</th><th>Como exercer</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Confirmação de tratamento</td><td>E-mail ao DPO ou pelo próprio app (seção Perfil)</td></tr>
+        <tr><td>Acesso aos dados</td><td>Disponível diretamente no app (todos os dados são visíveis)</td></tr>
+        <tr><td>Correção de dados incompletos ou inexatos</td><td>Diretamente no app (editar perfil)</td></tr>
+        <tr><td>Anonimização ou bloqueio de dados desnecessários</td><td>Solicitação ao DPO por e-mail</td></tr>
+        <tr><td>Portabilidade (exportação)</td><td>Função disponível no app ou por solicitação ao DPO</td></tr>
+        <tr><td>Eliminação dos dados tratados com consentimento</td><td>Solicitação ao DPO — processado em até 30 dias</td></tr>
+        <tr><td>Revogação do consentimento</td><td>A qualquer momento, via e-mail ao DPO ou excluindo a conta</td></tr>
+        <tr><td>Informação sobre compartilhamento com terceiros</td><td>Detalhado na seção 5 desta política</td></tr>
+        <tr><td>Oposição ao tratamento por interesse legítimo</td><td>Solicitação ao DPO, que avaliará em até 15 dias</td></tr>
+        <tr><td>Petição à ANPD</td><td>Diretamente em <a href="https://www.gov.br/anpd" target="_blank">gov.br/anpd</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Responderemos a todas as solicitações em até <strong>15 dias úteis</strong>, conforme exigido pela LGPD.</p>
+
+  <hr class="divider">
+
+  <!-- 10. DPO -->
+  <h2 id="dpo">10. Encarregado de Proteção de Dados (DPO)</h2>
+
+  <p>Nos termos do art. 41 da LGPD, indicamos o seguinte Encarregado pelo Tratamento de Dados Pessoais (Data Protection Officer — DPO), responsável por atuar como canal de comunicação entre o DarkSet, os titulares de dados e a Autoridade Nacional de Proteção de Dados (ANPD):</p>
+
+  <div class="dpo-box">
+    <div class="dpo-title">Encarregado de Proteção de Dados (DPO)</div>
+    <div class="dpo-name">Equipe DarkSet — Privacidade e Dados</div>
+    <div class="dpo-email"><a href="mailto:privacidade@darksetapp.com">privacidade@darksetapp.com</a></div>
+    <p style="margin-top:.5rem;font-size:.78rem;color:#444">Prazo de resposta: até 15 dias úteis · Disponível em português</p>
+  </div>
+
+  <p style="margin-top:1rem">O DPO é responsável por: receber e responder solicitações de titulares; orientar colaboradores sobre práticas de proteção de dados; interagir com a ANPD quando necessário; e supervisionar a conformidade desta política com a LGPD.</p>
+
+  <hr class="divider">
+
+  <!-- 11. ALTERAÇÕES -->
+  <h2 id="alteracoes">11. Alterações nesta política</h2>
+
+  <p>Podemos atualizar esta política periodicamente. Alterações relevantes serão comunicadas por e-mail cadastrado ou por notificação no app com antecedência mínima de 10 dias. O uso continuado após a vigência das alterações implica aceitação da nova versão.</p>
+
+  <p>O histórico de versões desta política está disponível mediante solicitação ao DPO.</p>
+
+  <hr class="divider">
 
   <div class="footer">
-    DarkSet · Todos os direitos reservados · <a href="mailto:suporte@darksetapp.com">suporte@darksetapp.com</a>
+    DarkSet · Política de Privacidade v2.0 · Junho de 2025<br>
+    Em conformidade com a LGPD (Lei nº 13.709/2018) e regulamentações da ANPD<br><br>
+    <a href="mailto:privacidade@darksetapp.com">privacidade@darksetapp.com</a>
   </div>
+
 </div>
 </body>
 </html>
