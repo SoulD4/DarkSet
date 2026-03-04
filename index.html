@@ -1405,7 +1405,8 @@ const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
   const today=new Date();
   // Semana atual
   const weekStart=new Date(today); weekStart.setDate(today.getDate()-((today.getDay()||7)-1));
-  const thisWeekEntries=entries.filter(([iso])=>new Date(iso)>=weekStart);
+  const weekStartStr=localDateStr(weekStart);
+  const thisWeekEntries=entries.filter(([iso])=>iso>=weekStartStr);
   const thisWeek=thisWeekEntries.length;
 
   // Streak inteligente — dias de descanso programados não quebram
@@ -6492,8 +6493,17 @@ function App(){
           <div style={{fontSize:'3rem'}}>🔒</div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:'#fff',letterSpacing:'.06em'}}>DARK<span style={{color:'#e31b23'}}>SET</span></div>
           <div style={{fontSize:'.88rem',color:'#555',maxWidth:'260px',lineHeight:1.6}}>Faça login ou crie sua conta para começar a treinar.</div>
-          <button onClick={function(){window.openAuthModal&&window.openAuthModal('signIn');}} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem 2rem',color:'#fff',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:'.04em',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>Entrar / Criar conta</button>
-          <button onClick={function(){window.openAuthModal&&window.openAuthModal('signUp');}} style={{background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'12px',padding:'.65rem 1.5rem',color:'#888',fontWeight:700,fontSize:'.88rem',cursor:'pointer',fontFamily:'inherit'}}>Criar conta grátis</button>
+          <button onClick={function(){
+            var bd=document.getElementById('authModalBackdrop');
+            if(bd){ bd.style.display='flex'; bd.setAttribute('aria-hidden','false'); }
+            if(window.openAuthModal) window.openAuthModal('signIn');
+          }} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem 2rem',color:'#fff',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:'.04em',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>Entrar</button>
+          <button onClick={function(){
+            var bd=document.getElementById('authModalBackdrop');
+            if(bd){ bd.style.display='flex'; bd.setAttribute('aria-hidden','false'); }
+            if(window.openAuthModal) window.openAuthModal('signUp');
+            else if(bd){ var m=document.getElementById('authModalTitle'); if(m) m.textContent='Criar sua conta'; }
+          }} style={{background:'rgba(255,255,255,.05)',border:'1px solid #222',borderRadius:'12px',padding:'.65rem 1.5rem',color:'#888',fontWeight:700,fontSize:'.88rem',cursor:'pointer',fontFamily:'inherit'}}>Criar conta</button>
         </div>
       ) : null}
       {authed && screen==="home" && <Home goto={goto} plans={plans} history={history} prefs={prefs} setDrawerOpen={setDrawerOpen}/>}
@@ -7545,18 +7555,29 @@ root.render(<App/>);
     showError('');
   }
 
-  window.openAuthModal  = function(m){ 
-    setMode(m||'signIn'); 
-    backdrop.style.display='flex'; 
-    backdrop.setAttribute('aria-hidden','false');
-    // Always reset google button state on open
+  window.openAuthModal  = function(m){
+    // Re-fetch backdrop in case it wasn't in DOM when IIFE ran
+    if(!backdrop) backdrop = document.getElementById('authModalBackdrop');
+    setMode(m||'signIn');
+    if(backdrop){ backdrop.style.display='flex'; backdrop.setAttribute('aria-hidden','false'); }
     var gb = document.getElementById('ds-google-btn');
     if(gb){ gb.disabled=false; }
   };
-  window.closeAuthModal = function(){ backdrop.style.display='none'; backdrop.setAttribute('aria-hidden','true'); showError(''); };
+  window.closeAuthModal = function(){
+    if(!backdrop) backdrop = document.getElementById('authModalBackdrop');
+    if(backdrop){ backdrop.style.display='none'; backdrop.setAttribute('aria-hidden','true'); }
+    showError('');
+  };
 
-  closeBtn && closeBtn.addEventListener('click', closeAuthModal);
-  backdrop.addEventListener('click', function(e){ if(e.target===backdrop) closeAuthModal(); });
+  // Lazy-attach backdrop click (backdrop may not exist yet)
+  function attachBackdropListeners(){
+    if(!backdrop) backdrop = document.getElementById('authModalBackdrop');
+    if(!closeBtn) closeBtn = document.getElementById('authCloseBtn');
+    if(closeBtn && !closeBtn._authBound){ closeBtn.addEventListener('click', window.closeAuthModal); closeBtn._authBound=true; }
+    if(backdrop && !backdrop._authBound){ backdrop.addEventListener('click', function(e){ if(e.target===backdrop) window.closeAuthModal(); }); backdrop._authBound=true; }
+  }
+  attachBackdropListeners();
+  document.addEventListener('DOMContentLoaded', attachBackdropListeners);
 
   // Google — termos aceitos implicitamente (aviso visível abaixo do botão)
   googleBtn && googleBtn.addEventListener('click', async function(){
