@@ -1355,6 +1355,7 @@ const NAV_ITEMS = [
   {section: null,       icon:'🏟️', label:'DarkGym',     screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
   {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
+  {section: 'PERSONAL', icon:'👨‍💼', label:'Personal',    screen:'personal', personalOnly:true},
 ];
 
 const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
@@ -2706,7 +2707,7 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
   const [enabled, setEnabled] = useState(!!prefs.notifEnabled);
   const [hour, setHour] = useState(prefs.notifHour||7);
   const [min, setMin] = useState(prefs.notifMin||0);
-  const [perm, setPerm] = useState(Notification?.permission||'default');
+  const [perm, setPerm] = useState(('Notification' in window) ? window.Notification.permission : 'default');
 
   const requestAndSave = async() => {
     if('Notification' in window){
@@ -3684,8 +3685,8 @@ const Viewer = ({planId, plans, goto}) => {
 // Pede permissão de notificação uma vez
 function requestNotifPermission(){
   try{
-    if('Notification' in window && Notification.permission === 'default'){
-      Notification.requestPermission();
+    if('Notification' in window && window.Notification.permission === 'default'){
+      window.Notification.requestPermission();
     }
   }catch(_){}
 }
@@ -4749,7 +4750,6 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const fileRef=useRef(null);
 
   const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2))||JSON.stringify(trainDays)!==JSON.stringify(prefs.trainDays||[1,2,3,4,5,6]);
-  // Pre-computed plan state — avoids IIFE in JSX (breaks some mobile browsers)
   const _profilePlanState = React.useMemo(()=>{ try{ return getDSPlan(); }catch(_){ return {tier:'free',isTrialActive:false,trialDaysLeft:0}; } }, []);
 
   const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:trainDays.length,trainDays,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme,goal:prefs.goal,gymMode:prefs.gymMode,gymLocation:prefs.gymLocation,gymWifi:prefs.gymWifi,playlists:prefs.playlists,onboarded:prefs.onboarded});
@@ -7647,18 +7647,19 @@ root.render(<App/>);
               var clearKeys = [
                 'darkset.v3.plans','darkset.v3.history','darkset.v3.prefs',
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
-                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData'
+                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
               ];
               clearKeys.forEach(function(k){ localStorage.removeItem(k); });
               if(window._DS_SETTERS){
                 if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
                 if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
+                if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
               }
               // Retry até os setters do React estarem registrados (max 3s)
               var attempts=0;
               var tryPull=function(){
                 attempts++;
-                if(window._DS_SETTERS && window._DS_SETTERS.plans){
+                if(window._DS_SETTERS && window._DS_SETTERS.plans && window._DS_SETTERS.isPersonal){
                   window.DSSync.pull(user.uid);
                 } else if(attempts<30){
                   setTimeout(tryPull,100);
@@ -7677,7 +7678,7 @@ root.render(<App/>);
               'darkset.v3.plans', 'darkset.v3.history', 'darkset.v3.prefs',
               'darkset.v1.diet', 'darkset.measures', 'darkset.cardio.history',
               'ds.squad', 'darkset.squad.v1', 'darkset.squad.checkins', 'darkset.squad.chat',
-              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData'
+              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData', 'ds.isPersonal'
             ];
             keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
             // Reset React state to empty
@@ -7686,6 +7687,7 @@ root.render(<App/>);
               if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
               if(window._DS_SETTERS.prefs)   window._DS_SETTERS.prefs({name:'',avatar:'💀',unit:'kg',vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false});
               if(window._DS_SETTERS.authed)  window._DS_SETTERS.authed(false);
+              if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
             }
           }
         }catch(_){}
