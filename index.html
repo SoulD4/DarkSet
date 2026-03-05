@@ -6400,145 +6400,517 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 // ═══════════════════════════════════════════════════════
 // PersonalPanel — Painel do Personal Trainer
 // ═══════════════════════════════════════════════════════
-const PersonalPanel = ({setToast, prefs}) => {
-  const uid = getUID();
-  const [students, setStudents] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [inviteCode, setInviteCode] = React.useState(null);
-  const [inviteLoading, setInviteLoading] = React.useState(false);
-  const [selectedStudent, setSelectedStudent] = React.useState(null);
-  const [view, setView] = React.useState('list');
 
-  React.useEffect(() => {
-    if(!uid || !window._db) { setLoading(false); return; }
-    const unsub = window._db.collection('personal_links')
-      .where('personalUid', '==', uid)
-      .where('active', '==', true)
-      .onSnapshot(async snap => {
-        const links = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const enriched = await Promise.all(links.map(async link => {
-          try {
-            const userDoc = await window._db.collection('users').doc(link.studentUid).get();
-            const userData = userDoc.exists ? userDoc.data() : {};
-            // Fallback: read name from data/prefs subcollection (set when user saves profile)
-            let studentName = userData.name || userData.displayName || '';
-            let studentPhoto = userData.photoURL || null;
-            if(!studentName){
-              try {
-                const prefsDoc = await window._db.collection('users').doc(link.studentUid).collection('data').doc('prefs').get();
-                if(prefsDoc.exists){
-                  const pd = prefsDoc.data().payload ? JSON.parse(prefsDoc.data().payload) : {};
-                  studentName = pd.name || '';
-                  if(!studentPhoto && pd.avatarUrl) studentPhoto = pd.avatarUrl;
-                }
-              } catch(_){}
-            }
-            let lastWorkout = null;
-            try {
-              const histDoc = await window._db.collection('users').doc(link.studentUid)
-                .collection('data').doc('history').get();
-              if(histDoc.exists){
-                const payload = histDoc.data().payload ? JSON.parse(histDoc.data().payload) : {};
-                const dates = Object.keys(payload).sort().reverse();
-                lastWorkout = dates[0] || null;
-              }
-            } catch(_){}
-            return { ...link, name: studentName || link.studentEmail || 'Aluno', photoURL: studentPhoto, lastWorkout };
-          } catch(_){ return { ...link, name: 'Aluno', photoURL: null, lastWorkout: null }; }
-        }));
-        setStudents(enriched);
-        setLoading(false);
-      }, () => setLoading(false));
-    return () => unsub();
-  }, [uid]);
+// ── Tela de senha ──
+const PersonalLogin = ({onUnlock}) => {
+  const [pwd, setPwd] = React.useState('');
+  const [error, setError] = React.useState('');
 
-  const generateInvite = async () => {
-    if(!uid || !window._db) return;
-    setInviteLoading(true);
-    try {
-      if(students.length >= 10){ setToast('Limite de 10 alunos atingido'); setInviteLoading(false); return; }
-      const code = 'PT-' + Math.random().toString(36).slice(2,7).toUpperCase();
-      await window._db.collection('personal_invites').doc(code).set({
-        personalUid: uid, personalName: prefs.name || 'Personal',
-        code, used: false, createdAt: Date.now(), expiresAt: Date.now() + 7*24*60*60*1000,
-      });
-      setInviteCode(code);
-    } catch(e){ setToast('Erro ao gerar convite'); }
-    setInviteLoading(false);
+  const enter = () => {
+    if(!pwd){ setError('Digite sua senha ou PIN'); return; }
+    const pin = localStorage.getItem('ds.pt_pin');
+    if(pin){
+      if(pwd === pin){ onUnlock(); }
+      else { setError('PIN incorreto'); }
+      return;
+    }
+    // sem PIN ainda — tenta reauth Firebase, se falhar cria PIN
+    var auth = window._auth;
+    var cu = auth ? auth.currentUser : null;
+    var user = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user')||'null'); }catch(_){ return null; } })();
+    if(cu && user && user.email && window.firebase && window.firebase.auth && window.firebase.auth.EmailAuthProvider){
+      var cred = window.firebase.auth.EmailAuthProvider.credential(user.email, pwd);
+      cu.reauthenticateWithCredential(cred)
+        .then(function(){ onUnlock(); })
+        .catch(function(e){
+          if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential'){ setError('Senha incorreta'); }
+          else if(e.code==='auth/too-many-requests'){ setError('Muitas tentativas. Aguarde.'); }
+          else { setError('Use o botão abaixo para criar um PIN.'); }
+        });
+    } else {
+      setError('Use o botão abaixo para criar um PIN.');
+    }
   };
 
-  const removeStudent = async (link) => {
-    if(!window._db) return;
-    if(!confirm('Remover ' + link.name + ' da sua lista?')) return;
-    try { await window._db.collection('personal_links').doc(link.id).update({ active: false }); setToast('Aluno removido'); }
-    catch(_){ setToast('Erro ao remover aluno'); }
+  const createPin = () => {
+    if(pwd.length < 4){ setError('Use ao menos 4 caracteres'); return; }
+    localStorage.setItem('ds.pt_pin', pwd);
+    onUnlock();
   };
 
-  const copyInvite = () => {
-    const text = 'Código DarkSet Personal: ' + inviteCode + '\n\nAbra o app → Perfil → Meu Personal → cole o código.';
-    if(navigator.clipboard) navigator.clipboard.writeText(text);
-    setToast('Código copiado!');
-  };
-
-  if(view === 'student' && selectedStudent){
-    return <StudentView student={selectedStudent} setToast={setToast} prefs={prefs} onBack={()=>setView('list')}/>;
-  }
+  const hasPin = !!localStorage.getItem('ds.pt_pin');
 
   return (
-    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
-      <div style={{marginBottom:'1.5rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.05em'}}>
-          {'👨\u200d💼 Painel '}<span style={{color:'var(--color-accent)'}}>Personal</span>
-        </div>
-        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginTop:'.2rem'}}>{students.length}/10 alunos vinculados</div>
+    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
+        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
       </div>
-
-      <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
-        <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:'.5rem'}}>📨 Convidar Aluno</div>
-        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginBottom:'.75rem'}}>Código válido por 7 dias. O aluno cola em Perfil → Meu Personal.</div>
-        {inviteCode ? (
-          <div>
-            <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
-              <span style={{fontFamily:'monospace',fontSize:'1.3rem',fontWeight:900,letterSpacing:'.1em',color:'var(--color-accent)'}}>{inviteCode}</span>
-              <button onClick={copyInvite} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.4rem .8rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Copiar</button>
-            </div>
-            <div style={{fontSize:'.7rem',color:'#555'}}>Válido 7 dias · Uso único</div>
-            <button onClick={()=>setInviteCode(null)} style={{marginTop:'.5rem',background:'none',border:'none',color:'#555',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo</button>
-          </div>
-        ) : (
-          <button onClick={generateInvite} disabled={inviteLoading || students.length >= 10}
-            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.9rem',cursor:inviteLoading?'wait':'pointer',opacity:students.length>=10?.5:1}}>
-            {inviteLoading ? 'Gerando…' : '+ Gerar Código de Convite'}
+      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>
+        Modo Personal Trainer
+      </div>
+      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
+        <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',textAlign:'center'}}>
+          {hasPin ? 'Digite seu PIN para entrar' : 'Digite a senha do app para entrar'}
+        </div>
+        <input type="password" value={pwd}
+          onChange={function(e){ setPwd(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') enter(); }}
+          placeholder={hasPin ? 'PIN' : 'Senha'}
+          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.1em'}}
+        />
+        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center'}}>{error}</div>}
+        <button onClick={enter}
+          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
+          Entrar
+        </button>
+        {!hasPin && (
+          <button onClick={createPin}
+            style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem',color:'#777',fontSize:'.82rem',cursor:'pointer'}}>
+            Criar PIN (conta Google)
+          </button>
+        )}
+        {hasPin && (
+          <button onClick={function(){ if(confirm('Redefinir PIN do modo Personal?')){ localStorage.removeItem('ds.pt_pin'); setPwd(''); setError(''); } }}
+            style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>
+            Esqueci o PIN
           </button>
         )}
       </div>
+    </div>
+  );
+};
 
-      <div style={{fontWeight:700,fontSize:'.85rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Seus Alunos</div>
+// ── Seletor de aluno ──
+const PersonalStudentPicker = ({students, selectedUid, onSelect}) => (
+  <div style={{marginBottom:'1rem'}}>
+    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Aluno</div>
+    <select value={selectedUid||''} onChange={function(e){ onSelect(e.target.value); }}
+      style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .9rem',color:selectedUid?'#fff':'#555',fontSize:'.88rem'}}>
+      <option value="">Selecione um aluno…</option>
+      {students.map(function(s){ return <option key={s.studentUid} value={s.studentUid}>{s.name}</option>; })}
+    </select>
+  </div>
+);
+
+// ── Aba Alunos ──
+const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
+  const [inviteCode, setInviteCode] = React.useState(null);
+  const [inviteLoading, setInviteLoading] = React.useState(false);
+
+  const generateInvite = function() {
+    if(!uid||!window._db) return;
+    setInviteLoading(true);
+    if(students.length>=10){ setToast('Limite de 10 alunos'); setInviteLoading(false); return; }
+    var code = 'PT-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    window._db.collection('personal_invites').doc(code).set({
+      personalUid:uid, personalName:prefs.name||'Personal',
+      code:code, used:false, createdAt:Date.now(), expiresAt:Date.now()+7*24*60*60*1000
+    }).then(function(){ setInviteCode(code); setInviteLoading(false); })
+      .catch(function(){ setToast('Erro ao gerar convite.'); setInviteLoading(false); });
+  };
+
+  const copyInvite = function() {
+    if(navigator.clipboard) navigator.clipboard.writeText('Código DarkSet Personal: '+inviteCode+'\n\nAbra o app → Perfil → Meu Personal → cole o código.');
+    setToast('Código copiado!');
+  };
+
+  const removeStudent = function(link) {
+    if(!window._db||!confirm('Remover '+link.name+'?')) return;
+    window._db.collection('personal_links').doc(link.id).update({active:false})
+      .then(function(){ setToast('Aluno removido'); })
+      .catch(function(){ setToast('Erro ao remover'); });
+  };
+
+  return (
+    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
+        <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:'.4rem'}}>📨 Convidar Aluno</div>
+        <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',marginBottom:'.75rem'}}>{students.length}/10 alunos · Código válido 7 dias</div>
+        {inviteCode ? (
+          <div>
+            <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.4rem'}}>
+              <span style={{fontFamily:'monospace',fontSize:'1.3rem',fontWeight:900,letterSpacing:'.1em',color:'#e31b23'}}>{inviteCode}</span>
+              <button onClick={copyInvite} style={{background:'#e31b23',border:'none',borderRadius:'8px',padding:'.4rem .8rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Copiar</button>
+            </div>
+            <button onClick={function(){ setInviteCode(null); }} style={{background:'none',border:'none',color:'#555',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo</button>
+          </div>
+        ) : (
+          <button onClick={generateInvite} disabled={inviteLoading||students.length>=10}
+            style={{width:'100%',background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem',color:'#fff',fontWeight:800,fontSize:'.88rem',cursor:'pointer',opacity:students.length>=10?.5:1}}>
+            {inviteLoading?'Gerando…':'+ Gerar Código de Convite'}
+          </button>
+        )}
+      </div>
+      <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Seus Alunos</div>
       {loading ? (
         <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
-      ) : students.length === 0 ? (
+      ) : students.length===0 ? (
         <div className="ds-card" style={{padding:'1.5rem',textAlign:'center',color:'#444'}}>
-          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👤</div>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👥</div>
           <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
-          <div style={{fontSize:'.75rem',marginTop:'.3rem',color:'#555'}}>Gere um código e compartilhe com seu aluno.</div>
+          <div style={{fontSize:'.75rem',marginTop:'.3rem',color:'#555'}}>Gere um código e compartilhe.</div>
         </div>
-      ) : students.map((s,i) => (
-        <div key={i} className="ds-card" style={{padding:'.9rem 1rem',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-          <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>
-            {s.photoURL ? <img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '👤'}
+      ) : students.map(function(s,i) { return (
+        <div key={i} className="ds-card" style={{padding:'.85rem 1rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+          <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>
+            {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'👤'}
           </div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:'.88rem'}}>{s.name}</div>
-            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)'}}>{s.lastWorkout ? 'Último treino: '+s.lastWorkout : 'Sem treinos'}</div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{s.lastWorkout?'Último: '+s.lastWorkout:'Sem treinos'}</div>
           </div>
-          <div style={{display:'flex',gap:'.4rem'}}>
-            <button onClick={()=>{ setSelectedStudent(s); setView('student'); }}
-              style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.4rem .7rem',color:'var(--color-accent)',fontWeight:700,fontSize:'.78rem',cursor:'pointer'}}>Ver</button>
-            <button onClick={()=>removeStudent(s)}
-              style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.4rem .7rem',color:'#555',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
+          <button onClick={function(){ removeStudent(s); }} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>✕</button>
+        </div>
+      ); })}
+    </div>
+  );
+};
+
+// ── Aba Fichas ──
+const PersonalBuilderTab = ({students, personalName, setToast}) => {
+  const [selUid, setSelUid] = React.useState('');
+  const [planName, setPlanName] = React.useState('');
+  const EMPTY_DAYS = {'Segunda':[],'Terça':[],'Quarta':[],'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]};
+  const [byDay, setByDay] = React.useState(EMPTY_DAYS);
+  const [activeDay, setActiveDay] = React.useState('Segunda');
+  const [search, setSearch] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [sentPlans, setSentPlans] = React.useState([]);
+  const selStudent = students.find(function(s){ return s.studentUid===selUid; });
+
+  React.useEffect(function(){
+    if(!selUid||!window._db){ setSentPlans([]); return; }
+    window._db.collection('personal_plans').doc(selUid).collection('plans').get()
+      .then(function(snap){ setSentPlans(snap.docs.map(function(d){ return d.data(); })); })
+      .catch(function(){});
+  }, [selUid]);
+
+  var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; }, 0);
+  var suggestions = search.length>=1 ? EXS.filter(function(e){ return e.name.toLowerCase().includes(search.toLowerCase()); }).slice(0,8) : [];
+
+  var addEx = function(name){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[activeDay].push({name:name,setsPlanned:3}); return n; }); setSearch(''); };
+  var removeEx = function(day,idx){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[day].splice(idx,1); return n; }); };
+  var setSets = function(day,idx,val){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[day][idx].setsPlanned=Math.max(1,parseInt(val)||1); return n; }); };
+  var resetForm = function(){ setPlanName(''); setSearch(''); setByDay(JSON.parse(JSON.stringify(EMPTY_DAYS))); setActiveDay('Segunda'); };
+
+  var deletePlan = function(planId){
+    if(!confirm('Remover esta ficha?')) return;
+    window._db.collection('personal_plans').doc(selUid).collection('plans').doc(planId).delete()
+      .then(function(){ setSentPlans(function(p){ return p.filter(function(x){ return x.id!==planId; }); }); setToast('Ficha removida'); })
+      .catch(function(){ setToast('Erro ao remover'); });
+  };
+
+  var save = function(){
+    if(!selUid){ setToast('Selecione um aluno'); return; }
+    if(!planName.trim()){ setToast('Dê um nome à ficha'); return; }
+    if(totalExs===0){ setToast('Adicione ao menos um exercício'); return; }
+    setSaving(true);
+    var p = {id:'pt_'+Date.now(), name:planName.trim(), byDay:byDay, fromPersonal:true, personalName:personalName||'Personal', createdAt:Date.now()};
+    window._db.collection('personal_plans').doc(selUid).collection('plans').doc(p.id).set(p)
+      .then(function(){ setSentPlans(function(prev){ return prev.concat([p]); }); setToast('✅ Ficha enviada para '+(selStudent?selStudent.name:'aluno')+'!'); resetForm(); setSaving(false); })
+      .catch(function(){ setToast('Erro. Verifique regras do Firestore.'); setSaving(false); });
+  };
+
+  if(students.length===0) return (
+    <div style={{textAlign:'center',padding:'3rem 1rem',color:'#444'}}>
+      <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👥</div>
+      <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
+    </div>
+  );
+
+  return (
+    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      <PersonalStudentPicker students={students} selectedUid={selUid} onSelect={function(u){ setSelUid(u); resetForm(); }}/>
+      {!!selUid && (
+        <div>
+          {sentPlans.length>0 && (
+            <div style={{marginBottom:'1rem'}}>
+              <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Fichas enviadas</div>
+              {sentPlans.map(function(f,i){ return (
+                <div key={i} style={{background:'rgba(255,255,255,.03)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.6rem .9rem',marginBottom:'.3rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:'.85rem'}}>{f.name}</div>
+                    <div style={{fontSize:'.7rem',color:'#555'}}>{Object.values(f.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
+                  </div>
+                  <button onClick={function(){ deletePlan(f.id); }} style={{background:'none',border:'none',color:'#444',cursor:'pointer',fontSize:'.85rem'}}>✕</button>
+                </div>
+              ); })}
+            </div>
+          )}
+          <div style={{background:'rgba(227,27,35,.04)',border:'1px solid rgba(227,27,35,.12)',borderRadius:'12px',padding:'1rem'}}>
+            <div style={{fontWeight:700,fontSize:'.88rem',marginBottom:'.75rem',color:'#e31b23'}}>+ Nova Ficha</div>
+            <input value={planName} onChange={function(e){ setPlanName(e.target.value); }} placeholder="Nome da ficha"
+              style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem .85rem',color:'#fff',fontSize:'.88rem',marginBottom:'.75rem'}}/>
+            <div style={{display:'flex',gap:'.3rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.2rem'}}>
+              {DAYS.map(function(d){ return (
+                <button key={d} onClick={function(){ setActiveDay(d); }}
+                  style={{flexShrink:0,background:activeDay===d?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===d?'#e31b23':'#1e1e1e'),borderRadius:'8px',padding:'.3rem .55rem',color:activeDay===d?'#fff':'#666',fontWeight:700,fontSize:'.7rem',cursor:'pointer',position:'relative'}}>
+                  {d.slice(0,3)}
+                  {byDay[d].length>0 && <span style={{position:'absolute',top:'-4px',right:'-4px',background:'#e31b23',color:'#fff',borderRadius:'50%',width:'14px',height:'14px',fontSize:'.55rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>{byDay[d].length}</span>}
+                </button>
+              ); })}
+            </div>
+            <div style={{position:'relative',marginBottom:'.5rem'}}>
+              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Buscar exercício…"
+                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.55rem .85rem',color:'#fff',fontSize:'.85rem'}}/>
+              {suggestions.length>0 && (
+                <div style={{position:'absolute',top:'100%',left:0,right:0,background:'#141414',border:'1px solid #2a2a2a',borderRadius:'10px',zIndex:20,maxHeight:'180px',overflowY:'auto',marginTop:'2px'}}>
+                  {suggestions.map(function(ex,i){ return (
+                    <button key={i} onClick={function(){ addEx(ex.name); }}
+                      style={{display:'block',width:'100%',background:'none',border:'none',textAlign:'left',padding:'.5rem .85rem',color:'#f0f0f0',fontSize:'.82rem',cursor:'pointer',borderBottom:'1px solid #1a1a1a'}}>
+                      {ex.name}{ex.muscle&&<span style={{color:'#555',fontSize:'.7rem',marginLeft:'.4rem'}}>· {ex.muscle}</span>}
+                    </button>
+                  ); })}
+                </div>
+              )}
+            </div>
+            {byDay[activeDay].length===0 ? (
+              <div style={{textAlign:'center',padding:'1rem',color:'#333',fontSize:'.78rem'}}>Nenhum exercício em {activeDay}</div>
+            ) : byDay[activeDay].map(function(ex,i){ return (
+              <div key={i} style={{background:'rgba(0,0,0,.25)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .75rem',marginBottom:'.3rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
+                <div style={{flex:1,fontSize:'.82rem',fontWeight:600}}>{ex.name}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'.35rem'}}>
+                  <span style={{fontSize:'.68rem',color:'#555'}}>Séries:</span>
+                  <input type="number" value={ex.setsPlanned} min="1" max="10"
+                    onChange={function(e){ setSets(activeDay,i,e.target.value); }}
+                    style={{width:'40px',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'6px',padding:'.15rem .25rem',color:'#fff',fontSize:'.8rem',textAlign:'center'}}/>
+                </div>
+                <button onClick={function(){ removeEx(activeDay,i); }} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:'.85rem'}}>✕</button>
+              </div>
+            ); })}
+            <button onClick={save} disabled={saving||!planName.trim()||totalExs===0}
+              style={{width:'100%',background:'#e31b23',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.9rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',marginTop:'.75rem',cursor:(saving||!planName.trim()||totalExs===0)?'default':'pointer',opacity:(saving||!planName.trim()||totalExs===0)?.4:1}}>
+              {saving?'Enviando…':'Enviar para '+(selStudent?selStudent.name:'Aluno')}
+            </button>
           </div>
         </div>
-      ))}
+      )}
+    </div>
+  );
+};
+
+// ── Aba Gráficos ──
+const PersonalChartsTab = ({students, personalName, setToast}) => {
+  const [selUid, setSelUid] = React.useState('');
+  const [hist, setHist] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+  const [sharing, setSharing] = React.useState(false);
+  const canvasRef = React.useRef(null);
+  var selStudent = students.find(function(s){ return s.studentUid===selUid; });
+
+  React.useEffect(function(){
+    if(!selUid||!window._db){ setHist({}); return; }
+    setLoading(true);
+    window._db.collection('users').doc(selUid).collection('data').doc('history').get()
+      .then(function(doc){
+        if(doc.exists){ var p=doc.data().payload?JSON.parse(doc.data().payload):{};setHist(p); }
+        else setHist({});
+        setLoading(false);
+      }).catch(function(){ setLoading(false); });
+  }, [selUid]);
+
+  var entries = Object.entries(hist).sort(function(a,b){ return a[0].localeCompare(b[0]); });
+  var totalWorkouts = entries.length;
+  var totalVol = entries.reduce(function(a,b){ return a+(b[1].entries||[]).reduce(function(c,en){ return c+(en.sets||[]).reduce(function(d,s){ return d+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0); },0);
+  var lastDate = entries.length ? entries[entries.length-1][0] : '—';
+
+  // weekly vol for chart
+  var weeklyLabels=[], weeklyVals=[];
+  (function(){
+    var wk={};
+    entries.forEach(function(e){
+      var iso=e[0],obj=e[1];
+      var d=new Date(iso+'T00:00'); var s=new Date(d); s.setDate(d.getDate()-((d.getDay()+6)%7));
+      var w=s.toISOString().slice(0,10);
+      var vol=(obj.entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,sv){ return b+(parseFloat(sv.w)||0)*(parseInt(sv.r)||0); },0); },0);
+      wk[w]=(wk[w]||0)+vol;
+    });
+    var sorted=Object.entries(wk).sort(function(a,b){ return a[0].localeCompare(b[0]); }).slice(-12);
+    weeklyLabels=sorted.map(function(x){ return x[0].slice(5); });
+    weeklyVals=sorted.map(function(x){ return Math.round(x[1]); });
+  })();
+
+  React.useEffect(function(){
+    var canvas=canvasRef.current;
+    if(!canvas||!weeklyLabels.length) return;
+    var ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    var pl=52,pr=16,pt=20,pb=32,cW=W-pl-pr,cH=H-pt-pb;
+    var maxV=Math.max.apply(null,weeklyVals.concat([1]));
+    ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
+    for(var i=0;i<=4;i++){ var gy=pt+cH*(1-i/4); ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pl,gy); ctx.lineTo(pl+cW,gy); ctx.stroke(); }
+    var bw=Math.max(4,cW/weeklyLabels.length*0.6);
+    for(var j=0;j<weeklyVals.length;j++){
+      var v=weeklyVals[j], x=pl+(j+0.5)*(cW/weeklyLabels.length), bh=v/maxV*cH, y=pt+cH-bh;
+      var g=ctx.createLinearGradient(0,y,0,y+bh); g.addColorStop(0,'#e31b23'); g.addColorStop(1,'rgba(179,18,23,.3)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.rect(x-bw/2,y,bw,bh); ctx.fill();
+    }
+    ctx.fillStyle='#555'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    for(var k=0;k<weeklyLabels.length;k++){ ctx.fillText(weeklyLabels[k], pl+(k+0.5)*(cW/weeklyLabels.length), H-6); }
+    ctx.textAlign='right';
+    for(var m=0;m<=4;m++){ var mv=Math.round(maxV*m/4); ctx.fillStyle='#555'; ctx.font='9px sans-serif'; ctx.fillText(mv>999?(mv/1000).toFixed(1)+'t':mv+'kg', pl-4, pt+cH*(1-m/4)+3); }
+  }, [selUid, hist]);
+
+  var share = function(){
+    if(!selStudent){ setToast('Selecione um aluno'); return; }
+    setSharing(true);
+    try {
+      var W=720,H=880, sc=document.createElement('canvas'); sc.width=W; sc.height=H;
+      var ctx=sc.getContext('2d');
+      ctx.fillStyle='#080808'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#e31b23'; ctx.fillRect(0,0,W,6);
+      ctx.font='900 32px sans-serif'; ctx.textAlign='left';
+      ctx.fillStyle='#f0f0f0'; ctx.fillText('DARK',40,65);
+      ctx.fillStyle='#e31b23'; ctx.fillText('SET',40+ctx.measureText('DARK').width,65);
+      ctx.fillStyle='#555'; ctx.font='13px sans-serif'; ctx.fillText('Personal: '+(personalName||'Personal'),40,90);
+      ctx.fillStyle='#f0f0f0'; ctx.font='bold 42px sans-serif'; ctx.fillText((selStudent.name||'Aluno').toUpperCase(),40,145);
+      var stats=[{l:'Treinos',v:String(totalWorkouts)},{l:'Volume',v:(totalVol/1000).toFixed(1)+'t'},{l:'Último',v:lastDate.slice(5).split('-').reverse().join('/')}];
+      stats.forEach(function(s,i){
+        var sx=40+i*(W-80)/3, sy=165, sbw=(W-80)/3-12;
+        ctx.fillStyle='#111'; ctx.fillRect(sx,sy,sbw,72);
+        ctx.fillStyle='#e31b23'; ctx.font='bold 30px sans-serif'; ctx.textAlign='left'; ctx.fillText(s.v,sx+12,sy+36);
+        ctx.fillStyle='#555'; ctx.font='12px sans-serif'; ctx.fillText(s.l,sx+12,sy+58);
+      });
+      ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.textAlign='left'; ctx.fillText('VOLUME SEMANAL — ÚLTIMAS 12 SEMANAS',40,272);
+      if(canvasRef.current && weeklyLabels.length){ ctx.drawImage(canvasRef.current,40,285,W-80,200); }
+      else { ctx.fillStyle='#111'; ctx.fillRect(40,285,W-80,200); }
+      ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.fillText('ÚLTIMOS TREINOS',40,515);
+      var last5=entries.slice(-5).reverse();
+      last5.forEach(function(e,i){
+        var ey=530+i*58;
+        ctx.fillStyle='#111'; ctx.fillRect(40,ey,W-80,50);
+        var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
+        ctx.fillStyle='#f0f0f0'; ctx.font='bold 15px sans-serif'; ctx.fillText(e[1].planName||'Treino Livre',56,ey+18);
+        ctx.fillStyle='#555'; ctx.font='11px sans-serif'; ctx.fillText(e[0]+' · '+(e[1].entries||[]).length+' ex · '+Math.round(vol)+'kg',56,ey+38);
+      });
+      ctx.fillStyle='#222'; ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.fillText('darksetapp.com · DarkSet Personal',W/2,H-16);
+      sc.toBlob(function(blob){
+        var file=new File([blob],'progresso-'+selStudent.name+'.png',{type:'image/png'});
+        if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:'Progresso '+selStudent.name})
+            .then(function(){ setToast('Compartilhado!'); setSharing(false); })
+            .catch(function(){ setSharing(false); });
+        } else {
+          var url=URL.createObjectURL(blob), a=document.createElement('a');
+          a.href=url; a.download='progresso-'+selStudent.name+'.png';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+          setToast('Imagem salva!'); setSharing(false);
+        }
+      },'image/png');
+    } catch(e){ setToast('Erro ao gerar imagem'); setSharing(false); }
+  };
+
+  return (
+    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      <PersonalStudentPicker students={students} selectedUid={selUid} onSelect={setSelUid}/>
+      {!selUid ? (
+        <div style={{textAlign:'center',padding:'3rem 1rem',color:'#333'}}>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📊</div>
+          <div>Selecione um aluno</div>
+        </div>
+      ) : loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
+      : entries.length===0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino ainda.</div>
+      : (
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
+            {[{l:'Treinos',v:totalWorkouts},{l:'Volume',v:Math.round(totalVol/1000)+'t'},{l:'Último',v:lastDate.slice(5).split('-').reverse().join('/')}].map(function(s,i){ return (
+              <div key={i} className="ds-card" style={{padding:'.65rem .75rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#e31b23'}}>{s.v}</div>
+                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.l}</div>
+              </div>
+            ); })}
+          </div>
+          <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
+            <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Volume semanal (kg)</div>
+            {weeklyLabels.length ? <canvas ref={canvasRef} width={600} height={180} style={{width:'100%',height:'180px',borderRadius:'6px'}}/> : <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.82rem'}}>Dados insuficientes</div>}
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Últimos treinos</div>
+            {entries.slice(-6).reverse().map(function(e,i){
+              var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
+              return (
+                <div key={i} className="ds-card" style={{padding:'.65rem .9rem',marginBottom:'.35rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:'.85rem'}}>{e[1].planName||'Treino Livre'}</div>
+                    <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{e[0]} · {(e[1].entries||[]).length} exercícios</div>
+                  </div>
+                  {vol>0&&<div style={{fontSize:'.78rem',fontWeight:700,color:'#e31b23'}}>{Math.round(vol)}kg</div>}
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={share} disabled={sharing}
+            style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:sharing?'wait':'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
+            {sharing?'Gerando…':'📸 Compartilhar como Foto'}
+          </button>
+          <div style={{fontSize:'.68rem',color:'#444',textAlign:'center',marginTop:'.4rem'}}>Inclui nome do personal · ideal para Instagram</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── PersonalPanel — entry point ──
+const PersonalPanel = ({setToast, prefs}) => {
+  const uid = getUID();
+  const [unlocked, setUnlocked] = React.useState(false);
+  const [ptTab, setPtTab] = React.useState('alunos');
+  const [students, setStudents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(function(){
+    if(!unlocked||!uid||!window._db){ setLoading(false); return; }
+    var unsub = window._db.collection('personal_links')
+      .where('personalUid','==',uid).where('active','==',true)
+      .onSnapshot(function(snap){
+        var links = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+        Promise.all(links.map(function(link){
+          return window._db.collection('users').doc(link.studentUid).get()
+            .then(function(uDoc){
+              var uData = uDoc.exists ? uDoc.data() : {};
+              var name = uData.name||uData.displayName||'';
+              var photo = uData.photoURL||null;
+              return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
+                .then(function(hDoc){
+                  var lastWorkout = null;
+                  if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{}; lastWorkout=Object.keys(p).sort().reverse()[0]||null; }
+                  return Object.assign({},link,{name:name||'Aluno',photoURL:photo,lastWorkout:lastWorkout});
+                }).catch(function(){ return Object.assign({},link,{name:name||'Aluno',photoURL:photo,lastWorkout:null}); });
+            }).catch(function(){ return Object.assign({},link,{name:'Aluno',photoURL:null,lastWorkout:null}); });
+        })).then(function(enriched){ setStudents(enriched); setLoading(false); });
+      }, function(){ setLoading(false); });
+    return function(){ unsub(); };
+  }, [unlocked, uid]);
+
+  if(!unlocked) return React.createElement(PersonalLogin, {onUnlock: function(){ setUnlocked(true); }, setToast: setToast});
+
+  var PT_TABS = [{id:'alunos',label:'👥 Alunos'},{id:'fichas',label:'📋 Fichas'},{id:'graficos',label:'📊 Gráficos'}];
+
+  return (
+    <div style={{minHeight:'80vh'}}>
+      <div style={{padding:'1rem 1rem .5rem',borderBottom:'1px solid rgba(227,27,35,.1)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1}}>
+            DARK<span style={{color:'#e31b23'}}>SET</span> <span style={{color:'var(--color-text-sub)',fontWeight:400,fontSize:'1rem'}}>Personal</span>
+          </div>
+          <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>{prefs.name||'Personal'} · {students.length} aluno(s)</div>
+        </div>
+        <button onClick={function(){ setUnlocked(false); }}
+          style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.35rem .65rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>
+          Sair
+        </button>
+      </div>
+      <div style={{display:'flex',gap:'.35rem',padding:'.6rem 1rem',borderBottom:'1px solid #111'}}>
+        {PT_TABS.map(function(t){ return (
+          <button key={t.id} onClick={function(){ setPtTab(t.id); }}
+            style={{flex:1,background:ptTab===t.id?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(ptTab===t.id?'#e31b23':'#1e1e1e'),borderRadius:'8px',padding:'.45rem .3rem',color:ptTab===t.id?'#fff':'var(--color-text-sub)',fontWeight:700,fontSize:'.72rem',cursor:'pointer'}}>
+            {t.label}
+          </button>
+        ); })}
+      </div>
+      {ptTab==='alunos' && <PersonalStudentsTab students={students} loading={loading} uid={uid} prefs={prefs} setToast={setToast}/>}
+      {ptTab==='fichas' && <PersonalBuilderTab students={students} personalName={prefs.name} setToast={setToast}/>}
+      {ptTab==='graficos' && <PersonalChartsTab students={students} personalName={prefs.name} setToast={setToast}/>}
     </div>
   );
 };
@@ -7079,7 +7451,7 @@ function App(){
       {authed && screen==="measures" && <Measures setToast={setToast}/>}
       {authed && screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
       {authed && screen==="profile" && <ScreenErrorBoundary><Profile prefs={prefs} setPrefs={setPrefs} history={history} setToast={setToast}/></ScreenErrorBoundary>}
-      {authed && isPersonal && screen==="personal" && <PersonalPanel setToast={setToast} prefs={prefs}/>}
+      {authed && isPersonal && screen==="personal" && <ScreenErrorBoundary><PersonalPanel setToast={setToast} prefs={prefs}/></ScreenErrorBoundary>}
 
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
       {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
