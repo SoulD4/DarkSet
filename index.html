@@ -6403,18 +6403,19 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 
 // ── Tela de entrada / cadastro ──
 const PersonalLogin = ({onUnlock, setToast}) => {
-  const [step, setStep] = React.useState('init'); // init | senha | cref | pin
+  const [step, setStep] = React.useState('init'); // init | senha | pin_criar | pin_entrar | cref
   const [pwd, setPwd] = React.useState('');
-  const [cref, setCref] = React.useState('');
+  const [pinA, setPinA] = React.useState('');
+  const [pinB, setPinB] = React.useState('');
+  const [crefVal, setCrefVal] = React.useState('');
   const [error, setError] = React.useState('');
-  const [pinMode, setPinMode] = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
 
-  // Checar estado inicial
   React.useEffect(function(){
     var hasPin = !!localStorage.getItem('ds.pt_pin');
-    var savedCref = localStorage.getItem('ds.pt_cref') || '';
-    setCref(savedCref);
-    if(hasPin){ setStep('pin'); }
+    var hasCref = !!localStorage.getItem('ds.pt_cref');
+    if(hasPin && hasCref){ setStep('pin_entrar'); }
+    else if(hasPin){ setStep('cref'); }
     else { setStep('senha'); }
   }, []);
 
@@ -6422,10 +6423,10 @@ const PersonalLogin = ({onUnlock, setToast}) => {
     return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase());
   };
 
-  // Passo 1: senha do app (email/pass) ou ir pra PIN
-  var tentarEntrar = function(){
+  var tentarSenha = function(){
     var p = pwd.trim();
     if(!p){ setError('Digite sua senha'); return; }
+    setChecking(true); setError('');
     var auth = window._auth;
     var cu = auth ? auth.currentUser : null;
     var user = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user')||'null'); }catch(_){ return null; } })();
@@ -6433,171 +6434,208 @@ const PersonalLogin = ({onUnlock, setToast}) => {
       var cred = window.firebase.auth.EmailAuthProvider.credential(user.email, p);
       cu.reauthenticateWithCredential(cred)
         .then(function(){
-          var savedCref = localStorage.getItem('ds.pt_cref');
-          if(savedCref){ onUnlock(); }
-          else { setPwd(''); setError(''); setStep('cref'); }
+          setChecking(false); setPwd(''); setError('');
+          var hasCref = !!localStorage.getItem('ds.pt_cref');
+          if(hasCref){ onUnlock(); } else { setStep('cref'); }
         })
         .catch(function(e){
+          setChecking(false);
           if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential'){ setError('Senha incorreta'); }
           else if(e.code==='auth/too-many-requests'){ setError('Muitas tentativas. Aguarde.'); }
-          else { setPinMode(true); setError('Conta Google? Use o botão "Criar PIN" abaixo.'); }
+          else { setError('Conta Google detectada. Crie um PIN abaixo.'); setStep('pin_criar'); setPwd(''); }
         });
     } else {
-      setPinMode(true);
-      setError('Conta Google? Use o botão "Criar PIN" abaixo.');
+      setChecking(false);
+      setError('Conta Google detectada. Crie um PIN abaixo.');
+      setStep('pin_criar'); setPwd('');
     }
   };
 
-  // Criar PIN (conta Google)
   var criarPin = function(){
-    var p = pwd.trim();
-    if(p.length < 4){ setError('PIN deve ter ao menos 4 caracteres'); return; }
-    localStorage.setItem('ds.pt_pin', p);
-    var savedCref = localStorage.getItem('ds.pt_cref');
-    setPwd(''); setError('');
-    if(savedCref){ onUnlock(); }
-    else { setStep('cref'); }
+    if(pinA.length < 4){ setError('PIN deve ter ao menos 4 caracteres'); return; }
+    if(pinA !== pinB){ setError('Os PINs não coincidem'); return; }
+    localStorage.setItem('ds.pt_pin', pinA);
+    setPinA(''); setPinB(''); setError('');
+    var hasCref = !!localStorage.getItem('ds.pt_cref');
+    if(hasCref){ onUnlock(); } else { setStep('cref'); }
   };
 
-  // Entrar com PIN salvo
   var entrarPin = function(){
     var p = pwd.trim();
     if(!p){ setError('Digite seu PIN'); return; }
     var pin = localStorage.getItem('ds.pt_pin');
     if(p === pin){
-      onUnlock();
+      setPwd(''); setError('');
+      var hasCref = !!localStorage.getItem('ds.pt_cref');
+      if(hasCref){ onUnlock(); } else { setStep('cref'); }
     } else {
       setError('PIN incorreto');
     }
   };
 
-  // Salvar CREF
   var salvarCref = function(){
-    var v = cref.trim().toUpperCase();
-    if(!validarCref(v)){
-      setError('Formato inválido. Exemplo: 123456-G/SP');
-      return;
+    var v = crefVal.trim().toUpperCase();
+    if(!validarCref(v)){ setError('Formato inválido. Exemplo: 123456-G/SP'); return; }
+    setChecking(true); setError('');
+    // Checar duplicata no Firestore
+    if(window._db){
+      window._db.collection('personals').where('cref','==',v).get()
+        .then(function(snap){
+          if(!snap.empty){
+            setChecking(false);
+            setError('Este CREF já está cadastrado em outra conta.');
+            return;
+          }
+          var uid = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.uid?u.uid:''; }catch(_){ return ''; } })();
+          var saveData = {cref:v, uid:uid, createdAt:Date.now()};
+          window._db.collection('personals').doc(uid||v).set(saveData, {merge:true})
+            .then(function(){
+              localStorage.setItem('ds.pt_cref', v);
+              setChecking(false);
+              onUnlock();
+            }).catch(function(){
+              // Firestore write failed but save locally anyway
+              localStorage.setItem('ds.pt_cref', v);
+              setChecking(false);
+              onUnlock();
+            });
+        }).catch(function(){
+          // No DB access — save locally
+          localStorage.setItem('ds.pt_cref', v);
+          setChecking(false);
+          onUnlock();
+        });
+    } else {
+      localStorage.setItem('ds.pt_cref', v);
+      setChecking(false);
+      onUnlock();
     }
-    localStorage.setItem('ds.pt_cref', v);
-    onUnlock();
   };
 
-  if(step === 'init') return (
+  // ── Helpers de layout ──
+  var Header = function(){
+    return (
+      <div style={{textAlign:'center',marginBottom:'2rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.6rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>
+          DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+        </div>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.18em',textTransform:'uppercase',marginTop:'.2rem'}}>
+          Modo Personal Trainer
+        </div>
+      </div>
+    );
+  };
+
+  var Card = function(props){ return (
+    <div style={{width:'100%',maxWidth:'320px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.75rem',display:'grid',gap:'.85rem'}}>
+      {props.children}
+    </div>
+  ); };
+
+  var Label = function(props){ return <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',textAlign:'center',lineHeight:1.5}}>{props.children}</div>; };
+
+  var Input = function(props){ return (
+    <input {...props} style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid '+(error&&props.showErr?'var(--color-accent)':'rgba(255,255,255,.08)'),borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',letterSpacing:props.mono?'.12em':'normal',fontFamily:props.mono?'monospace':'inherit',outline:'none'}}/>
+  ); };
+
+  var Btn = function(props){ return (
+    <button onClick={props.onClick} disabled={props.disabled}
+      style={{background:props.ghost?'none':props.secondary?'rgba(255,255,255,.05)':'var(--color-accent)',border:props.ghost?'none':props.secondary?'1px solid rgba(255,255,255,.08)':'none',borderRadius:'10px',padding:props.ghost?'.4rem':'.8rem',color:props.ghost?'rgba(255,255,255,.3)':props.secondary?'#aaa':'#fff',fontWeight:props.ghost?400:800,fontSize:props.ghost?'.72rem':'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:props.ghost?'none':'uppercase',letterSpacing:props.ghost?'normal':'.06em',cursor:props.disabled?'default':'pointer',opacity:props.disabled?.5:1}}>
+      {props.children}
+    </button>
+  ); };
+
+  var Err = function(){ return error ? <div style={{fontSize:'.75rem',color:'var(--color-accent)',textAlign:'center',lineHeight:1.4,padding:'.4rem .6rem',background:'rgba(227,27,35,.08)',borderRadius:'8px'}}>{error}</div> : null; };
+
+  if(step==='init') return (
     <div style={{minHeight:'70vh',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{color:'#444',fontSize:'.85rem'}}>Carregando…</div>
     </div>
   );
 
-  // ── Tela PIN ──
-  if(step === 'pin') return (
-    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
-        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
-      </div>
-      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Modo Personal Trainer</div>
-      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
-        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',textAlign:'center'}}>Digite seu PIN para entrar</div>
-        <input type="password" value={pwd}
-          onChange={function(e){ setPwd(e.target.value); setError(''); }}
-          onKeyDown={function(e){ if(e.key==='Enter') entrarPin(); }}
-          placeholder="PIN"
-          autoFocus
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.15em'}}
-        />
-        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center'}}>{error}</div>}
-        <button onClick={entrarPin}
-          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
-          Entrar
-        </button>
-        <button onClick={function(){
-          if(confirm('Redefinir PIN? Você precisará da senha do app.')){ localStorage.removeItem('ds.pt_pin'); setStep('senha'); setPwd(''); setError(''); }
-        }} style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>
-          Esqueci o PIN
-        </button>
-      </div>
-    </div>
+  var body = null;
+
+  if(step==='senha') body = (
+    <Card>
+      <Label>Digite a senha da sua conta para ativar o modo Personal</Label>
+      <Input type="password" value={pwd} showErr placeholder="Senha do app" autoFocus
+        onChange={function(e){ setPwd(e.target.value); setError(''); }}
+        onKeyDown={function(e){ if(e.key==='Enter') tentarSenha(); }}/>
+      <Err/>
+      <Btn onClick={tentarSenha} disabled={checking}>{checking?'Verificando…':'Continuar'}</Btn>
+      <Btn secondary onClick={function(){ setStep('pin_criar'); setError(''); setPwd(''); }}>Conta Google — Criar PIN</Btn>
+    </Card>
   );
 
-  // ── Tela Senha ──
-  if(step === 'senha') return (
-    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
-        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+  if(step==='pin_criar') body = (
+    <Card>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🔐</div>
+        <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.2rem'}}>Criar PIN</div>
+        <Label>Escolha um PIN de ao menos 4 caracteres para acessar o modo Personal</Label>
       </div>
-      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Modo Personal Trainer</div>
-      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
-        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',textAlign:'center',lineHeight:1.5}}>
-          Digite a senha da sua conta para ativar o modo Personal
-        </div>
-        <input type="password" value={pwd}
-          onChange={function(e){ setPwd(e.target.value); setError(''); setPinMode(false); }}
-          onKeyDown={function(e){ if(e.key==='Enter') tentarEntrar(); }}
-          placeholder="Senha do app"
-          autoFocus
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.08em'}}
-        />
-        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center',lineHeight:1.4}}>{error}</div>}
-        <button onClick={tentarEntrar}
-          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
-          Continuar
-        </button>
-        {pinMode && (
-          <button onClick={criarPin}
-            style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem',color:'#aaa',fontSize:'.85rem',cursor:'pointer'}}>
-            Criar PIN com este valor
-          </button>
-        )}
-        <div style={{fontSize:'.68rem',color:'#333',textAlign:'center'}}>Conta Google → clique em "Continuar" e depois crie um PIN</div>
-      </div>
-    </div>
+      <Input type="password" value={pinA} showErr placeholder="Novo PIN" autoFocus
+        onChange={function(e){ setPinA(e.target.value); setError(''); }}
+        onKeyDown={function(e){ if(e.key==='Enter') document.getElementById('pt-pin-b')&&document.getElementById('pt-pin-b').focus(); }}/>
+      <Input id="pt-pin-b" type="password" value={pinB} showErr placeholder="Confirmar PIN"
+        onChange={function(e){ setPinB(e.target.value); setError(''); }}
+        onKeyDown={function(e){ if(e.key==='Enter') criarPin(); }}/>
+      <Err/>
+      <Btn onClick={criarPin}>Salvar PIN</Btn>
+      <Btn ghost onClick={function(){ setStep('senha'); setPinA(''); setPinB(''); setError(''); }}>← Voltar</Btn>
+    </Card>
   );
 
-  // ── Tela CREF ──
+  if(step==='pin_entrar') body = (
+    <Card>
+      <Label>Digite seu PIN para entrar no modo Personal</Label>
+      <Input type="password" value={pwd} showErr placeholder="PIN" autoFocus
+        onChange={function(e){ setPwd(e.target.value); setError(''); }}
+        onKeyDown={function(e){ if(e.key==='Enter') entrarPin(); }}/>
+      <Err/>
+      <Btn onClick={entrarPin}>Entrar</Btn>
+      <Btn ghost onClick={function(){
+        if(confirm('Redefinir PIN? Você voltará para a tela de senha.')){
+          localStorage.removeItem('ds.pt_pin'); setStep('senha'); setPwd(''); setError('');
+        }
+      }}>Esqueci o PIN</Btn>
+    </Card>
+  );
+
+  if(step==='cref') body = (
+    <Card>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🪪</div>
+        <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.2rem'}}>Registro CREF</div>
+        <Label>Digite seu número de registro no Conselho Regional de Educação Física</Label>
+      </div>
+      <div style={{background:'rgba(0,0,0,.25)',borderRadius:'8px',padding:'.6rem .85rem',textAlign:'center'}}>
+        <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#666',marginBottom:'.15rem'}}>123456-G/SP</div>
+        <div style={{fontSize:'.62rem',color:'#444'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
+      </div>
+      <Input type="text" value={crefVal} showErr placeholder="000000-G/UF" mono autoFocus maxLength={11}
+        onChange={function(e){ setCrefVal(e.target.value.toUpperCase()); setError(''); }}
+        onKeyDown={function(e){ if(e.key==='Enter') salvarCref(); }}/>
+      <Err/>
+      <Btn onClick={salvarCref} disabled={checking}>{checking?'Verificando…':'Ativar Modo Personal'}</Btn>
+      <div style={{fontSize:'.62rem',color:'#333',textAlign:'center'}}>O CREF é verificado para evitar cadastros duplicados</div>
+    </Card>
+  );
+
   return (
     <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
-        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
-      </div>
-      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Cadastro de Personal</div>
-      <div style={{width:'100%',maxWidth:'320px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.75rem'}}>
-        <div style={{textAlign:'center'}}>
-          <div style={{fontSize:'1.5rem',marginBottom:'.4rem'}}>🪪</div>
-          <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.3rem'}}>Registro CREF</div>
-          <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
-            Digite seu número de registro no Conselho Regional de Educação Física
-          </div>
-        </div>
-        <div style={{background:'rgba(0,0,0,.2)',borderRadius:'8px',padding:'.6rem .8rem'}}>
-          <div style={{fontSize:'.65rem',color:'#555',marginBottom:'.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>Formato</div>
-          <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#888'}}>123456-G/SP</div>
-          <div style={{fontSize:'.65rem',color:'#444',marginTop:'.3rem'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
-        </div>
-        <input value={cref}
-          onChange={function(e){ setCref(e.target.value.toUpperCase()); setError(''); }}
-          onKeyDown={function(e){ if(e.key==='Enter') salvarCref(); }}
-          placeholder="000000-G/UF"
-          maxLength={11}
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.12em',fontFamily:'monospace'}}
-        />
-        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center'}}>{error}</div>}
-        <button onClick={salvarCref}
-          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
-          Ativar Modo Personal
-        </button>
-        <div style={{fontSize:'.68rem',color:'#333',textAlign:'center'}}>
-          Este registro é salvo localmente no dispositivo
-        </div>
-      </div>
+      <Header/>
+      {body}
     </div>
   );
 };
 
 // ── Seletor de aluno ──
-const PersonalStudentPicker = ({students, selectedUid, onSelect}) => (
+const PersonalStudentPicker = ({students, selectedUid, onSelect, label}) => (
   <div style={{marginBottom:'1rem'}}>
-    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Aluno</div>
+    {label!==false && <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.35rem',fontWeight:700}}>{label||'Aluno'}</div>}
     <select value={selectedUid||''} onChange={function(e){ onSelect(e.target.value); }}
-      style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .9rem',color:selectedUid?'#fff':'#555',fontSize:'.88rem'}}>
+      style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.7rem .9rem',color:selectedUid?'#f0f0f0':'#555',fontSize:'.9rem',appearance:'none',backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right .85rem center'}}>
       <option value="">Selecione um aluno…</option>
       {students.map(function(s){ return <option key={s.studentUid} value={s.studentUid}>{s.name}</option>; })}
     </select>
@@ -6608,6 +6646,7 @@ const PersonalStudentPicker = ({students, selectedUid, onSelect}) => (
 const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
   const [inviteCode, setInviteCode] = React.useState(null);
   const [inviteLoading, setInviteLoading] = React.useState(false);
+  var cref = localStorage.getItem('ds.pt_cref') || '';
 
   var generateInvite = function(){
     if(!uid||!window._db) return;
@@ -6633,59 +6672,65 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
       .catch(function(){ setToast('Erro ao remover'); });
   };
 
-  var cref = localStorage.getItem('ds.pt_cref') || '';
-
   return (
-    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
-      {cref && (
-        <div style={{background:'rgba(74,222,128,.05)',border:'1px solid rgba(74,222,128,.15)',borderRadius:'10px',padding:'.6rem .9rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.5rem'}}>
-          <span style={{fontSize:'.8rem'}}>🪪</span>
-          <div>
-            <div style={{fontSize:'.72rem',color:'#4ade80',fontWeight:700}}>CREF {cref}</div>
-            <div style={{fontSize:'.65rem',color:'#444'}}>Registro validado</div>
-          </div>
-          <button onClick={function(){
-            if(confirm('Alterar CREF?')){ localStorage.removeItem('ds.pt_cref'); window.location.reload(); }
-          }} style={{marginLeft:'auto',background:'none',border:'none',color:'#333',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Alterar</button>
+    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
+
+      {/* Perfil do Personal */}
+      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.08),rgba(0,0,0,0))',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.1rem 1.25rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+        <div style={{width:'48px',height:'48px',borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#8b0000)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem',flexShrink:0}}>👨‍💼</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.04em'}}>{prefs.name||'Personal'}</div>
+          {cref && <div style={{fontSize:'.72rem',color:'var(--color-accent)',fontWeight:700,marginTop:'.1rem'}}>CREF {cref}</div>}
+          <div style={{fontSize:'.68rem',color:'#555',marginTop:'.1rem'}}>{students.length}/10 alunos vinculados</div>
         </div>
-      )}
-      <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
-        <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:'.4rem'}}>📨 Convidar Aluno</div>
-        <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',marginBottom:'.75rem'}}>{students.length}/10 alunos · Código válido 7 dias</div>
+        <button onClick={function(){
+          if(confirm('Alterar CREF?')){ localStorage.removeItem('ds.pt_cref'); window.location.reload(); }
+        }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',fontSize:'.7rem',cursor:'pointer',flexShrink:0}}>
+          Alterar CREF
+        </button>
+      </div>
+
+      {/* Convidar */}
+      <div style={{marginBottom:'1.25rem'}}>
+        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Convidar Aluno</div>
         {inviteCode ? (
-          <div>
-            <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.4rem'}}>
-              <span style={{fontFamily:'monospace',fontSize:'1.3rem',fontWeight:900,letterSpacing:'.1em',color:'#e31b23'}}>{inviteCode}</span>
-              <button onClick={copyInvite} style={{background:'#e31b23',border:'none',borderRadius:'8px',padding:'.4rem .8rem',color:'#fff',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>Copiar</button>
+          <div style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.18)',borderRadius:'12px',padding:'1rem'}}>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginBottom:'.5rem'}}>Compartilhe este código com seu aluno · válido 7 dias</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'.5rem'}}>
+              <div style={{flex:1,fontFamily:'monospace',fontSize:'1.5rem',fontWeight:900,letterSpacing:'.12em',color:'var(--color-accent)'}}>{inviteCode}</div>
+              <button onClick={copyInvite} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .9rem',color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',flexShrink:0}}>Copiar</button>
             </div>
-            <button onClick={function(){ setInviteCode(null); }} style={{background:'none',border:'none',color:'#555',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo</button>
+            <button onClick={function(){ setInviteCode(null); }} style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo código</button>
           </div>
         ) : (
           <button onClick={generateInvite} disabled={inviteLoading||students.length>=10}
-            style={{width:'100%',background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem',color:'#fff',fontWeight:800,fontSize:'.88rem',cursor:'pointer',opacity:students.length>=10?.5:1}}>
+            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',opacity:students.length>=10?.4:1}}>
             {inviteLoading?'Gerando…':'+ Gerar Código de Convite'}
           </button>
         )}
       </div>
-      <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Seus Alunos</div>
+
+      {/* Lista de alunos */}
+      <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Seus Alunos</div>
       {loading ? (
-        <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
+        <div style={{textAlign:'center',padding:'2.5rem',color:'#333'}}>Carregando…</div>
       ) : students.length===0 ? (
-        <div className="ds-card" style={{padding:'1.5rem',textAlign:'center',color:'#444'}}>
-          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👥</div>
-          <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
-          <div style={{fontSize:'.75rem',marginTop:'.3rem',color:'#555'}}>Gere um código e compartilhe.</div>
+        <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#333',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
+          <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
+          <div style={{fontSize:'.88rem',color:'#555',fontWeight:600}}>Nenhum aluno ainda</div>
+          <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>Gere um código e compartilhe com seu aluno</div>
         </div>
       ) : students.map(function(s,i){ return (
-        <div key={i} className="ds-card" style={{padding:'.85rem 1rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-          <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>
+        <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.9rem 1rem',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.85rem'}}>
+          <div style={{width:'42px',height:'42px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid rgba(255,255,255,.06)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>
             {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'👤'}
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:'.88rem'}}>{s.name}</div>
-            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{s.lastWorkout?'Último: '+s.lastWorkout:'Sem treinos'}</div>
+            <div style={{fontWeight:700,fontSize:'.9rem'}}>{s.name}</div>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{s.lastWorkout?'Último treino: '+s.lastWorkout:'Sem treinos registrados'}</div>
           </div>
-          <button onClick={function(){ removeStudent(s); }} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>✕</button>
+          <button onClick={function(){ removeStudent(s); }}
+            style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.35rem .6rem',color:'#444',fontSize:'.75rem',cursor:'pointer'}}>✕</button>
         </div>
       ); })}
     </div>
@@ -6702,27 +6747,31 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
   const [search, setSearch] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [sentPlans, setSentPlans] = React.useState([]);
+  const [loadingPlans, setLoadingPlans] = React.useState(false);
   var selStudent = students.find(function(s){ return s.studentUid===selUid; });
   var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; }, 0);
   var suggestions = search.length>=1 ? EXS.filter(function(e){ return e.name.toLowerCase().includes(search.toLowerCase()); }).slice(0,8) : [];
 
   React.useEffect(function(){
     if(!selUid||!window._db){ setSentPlans([]); return; }
+    setLoadingPlans(true);
     window._db.collection('personal_plans').doc(selUid).collection('plans').get()
-      .then(function(snap){ setSentPlans(snap.docs.map(function(d){ return d.data(); })); })
-      .catch(function(){});
+      .then(function(snap){ setSentPlans(snap.docs.map(function(d){ return d.data(); })); setLoadingPlans(false); })
+      .catch(function(){ setLoadingPlans(false); });
   }, [selUid]);
 
   var resetForm = function(){ setPlanName(''); setSearch(''); setByDay(JSON.parse(JSON.stringify(EMPTY))); setActiveDay('Segunda'); };
   var addEx = function(name){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay].push({name:name,setsPlanned:3}); return n; }); setSearch(''); };
   var removeEx = function(day,idx){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day].splice(idx,1); return n; }); };
   var setSets = function(day,idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day][idx].setsPlanned=Math.max(1,parseInt(val)||1); return n; }); };
+
   var deletePlan = function(planId){
     if(!confirm('Remover esta ficha?')) return;
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(planId).delete()
       .then(function(){ setSentPlans(function(p){ return p.filter(function(x){ return x.id!==planId; }); }); setToast('Ficha removida'); })
       .catch(function(){ setToast('Erro ao remover'); });
   };
+
   var save = function(){
     if(!selUid){ setToast('Selecione um aluno'); return; }
     if(!planName.trim()){ setToast('Dê um nome à ficha'); return; }
@@ -6735,75 +6784,91 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
   };
 
   if(students.length===0) return (
-    <div style={{textAlign:'center',padding:'3rem 1rem',color:'#444'}}>
-      <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👥</div>
-      <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
-      <div style={{fontSize:'.72rem',color:'#333',marginTop:'.3rem'}}>Vincule alunos na aba Alunos.</div>
+    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
+      <div style={{textAlign:'center',padding:'3rem 1rem',color:'#444',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
+        <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
+        <div style={{fontSize:'.88rem',color:'#555',fontWeight:600}}>Nenhum aluno ainda</div>
+        <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>Vincule alunos na aba Alunos</div>
+      </div>
     </div>
   );
 
   return (
-    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
       <PersonalStudentPicker students={students} selectedUid={selUid} onSelect={function(u){ setSelUid(u); resetForm(); }}/>
+
       {!!selUid && (
         <div>
-          {sentPlans.length>0 && (
-            <div style={{marginBottom:'1rem'}}>
-              <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Fichas enviadas</div>
+          {/* Fichas já enviadas */}
+          {loadingPlans ? <div style={{color:'#444',fontSize:'.82rem',marginBottom:'1rem',textAlign:'center'}}>Carregando fichas…</div>
+          : sentPlans.length>0 && (
+            <div style={{marginBottom:'1.25rem'}}>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Fichas Enviadas</div>
               {sentPlans.map(function(f,i){ return (
-                <div key={i} style={{background:'rgba(255,255,255,.03)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.6rem .9rem',marginBottom:'.3rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.75rem 1rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                  <div style={{width:'36px',height:'36px',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.9rem',flexShrink:0}}>📋</div>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'.85rem'}}>{f.name}</div>
-                    <div style={{fontSize:'.7rem',color:'#555'}}>{Object.values(f.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
+                    <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name}</div>
+                    <div style={{fontSize:'.7rem',color:'#555',marginTop:'.1rem'}}>{Object.values(f.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
                   </div>
-                  <button onClick={function(){ deletePlan(f.id); }} style={{background:'none',border:'none',color:'#444',cursor:'pointer',fontSize:'.85rem'}}>✕</button>
+                  <button onClick={function(){ deletePlan(f.id); }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.3rem .55rem',color:'#444',cursor:'pointer',fontSize:'.82rem'}}>✕</button>
                 </div>
               ); })}
             </div>
           )}
-          <div style={{background:'rgba(227,27,35,.04)',border:'1px solid rgba(227,27,35,.12)',borderRadius:'12px',padding:'1rem'}}>
-            <div style={{fontWeight:700,fontSize:'.88rem',marginBottom:'.75rem',color:'#e31b23'}}>+ Nova Ficha</div>
+
+          {/* Nova ficha */}
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Nova Ficha</div>
+          <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'14px',padding:'1rem'}}>
             <input value={planName} onChange={function(e){ setPlanName(e.target.value); }} placeholder="Nome da ficha (ex: Treino A — Peito)"
-              style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem .85rem',color:'#fff',fontSize:'.88rem',marginBottom:'.75rem'}}/>
-            <div style={{display:'flex',gap:'.3rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.2rem'}}>
-              {DAYS.map(function(d){ return (
+              style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',padding:'.65rem .9rem',color:'#fff',fontSize:'.9rem',marginBottom:'.85rem',outline:'none'}}/>
+
+            {/* Days */}
+            <div style={{display:'flex',gap:'.25rem',marginBottom:'.85rem',overflowX:'auto',paddingBottom:'.2rem'}}>
+              {DAYS.map(function(d){ var cnt=byDay[d].length; return (
                 <button key={d} onClick={function(){ setActiveDay(d); }}
-                  style={{flexShrink:0,background:activeDay===d?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===d?'#e31b23':'#1e1e1e'),borderRadius:'8px',padding:'.3rem .55rem',color:activeDay===d?'#fff':'#666',fontWeight:700,fontSize:'.7rem',cursor:'pointer',position:'relative'}}>
+                  style={{flexShrink:0,background:activeDay===d?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===d?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'8px',padding:'.3rem .5rem',color:activeDay===d?'#fff':'#666',fontWeight:700,fontSize:'.7rem',cursor:'pointer',position:'relative',minWidth:'36px'}}>
                   {d.slice(0,3)}
-                  {byDay[d].length>0 && <span style={{position:'absolute',top:'-4px',right:'-4px',background:'#e31b23',color:'#fff',borderRadius:'50%',width:'14px',height:'14px',fontSize:'.55rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>{byDay[d].length}</span>}
+                  {cnt>0 && <span style={{position:'absolute',top:'-5px',right:'-5px',background:'var(--color-accent)',color:'#fff',borderRadius:'50%',width:'15px',height:'15px',fontSize:'.5rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,border:'1px solid #080808'}}>{cnt}</span>}
                 </button>
               ); })}
             </div>
-            <div style={{position:'relative',marginBottom:'.5rem'}}>
-              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Buscar exercício…"
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.55rem .85rem',color:'#fff',fontSize:'.85rem'}}/>
+
+            {/* Search */}
+            <div style={{position:'relative',marginBottom:'.6rem'}}>
+              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="🔍  Buscar exercício…"
+                style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',padding:'.6rem .9rem',color:'#fff',fontSize:'.85rem',outline:'none'}}/>
               {suggestions.length>0 && (
-                <div style={{position:'absolute',top:'100%',left:0,right:0,background:'#141414',border:'1px solid #2a2a2a',borderRadius:'10px',zIndex:20,maxHeight:'180px',overflowY:'auto',marginTop:'2px'}}>
+                <div style={{position:'absolute',top:'100%',left:0,right:0,background:'#121212',border:'1px solid rgba(255,255,255,.1)',borderRadius:'10px',zIndex:20,maxHeight:'200px',overflowY:'auto',marginTop:'3px',boxShadow:'0 8px 32px rgba(0,0,0,.6)'}}>
                   {suggestions.map(function(ex,i){ return (
                     <button key={i} onClick={function(){ addEx(ex.name); }}
-                      style={{display:'block',width:'100%',background:'none',border:'none',textAlign:'left',padding:'.5rem .85rem',color:'#f0f0f0',fontSize:'.82rem',cursor:'pointer',borderBottom:'1px solid #1a1a1a'}}>
-                      {ex.name}{ex.muscle&&<span style={{color:'#555',fontSize:'.7rem',marginLeft:'.4rem'}}>· {ex.muscle}</span>}
+                      style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',background:'none',border:'none',borderBottom:'1px solid rgba(255,255,255,.04)',textAlign:'left',padding:'.55rem .9rem',color:'#f0f0f0',fontSize:'.85rem',cursor:'pointer'}}>
+                      <span>{ex.name}</span>
+                      {ex.muscle&&<span style={{color:'#444',fontSize:'.72rem'}}>{ex.muscle}</span>}
                     </button>
                   ); })}
                 </div>
               )}
             </div>
+
+            {/* Day exercises */}
             {byDay[activeDay].length===0 ? (
-              <div style={{textAlign:'center',padding:'1rem',color:'#333',fontSize:'.78rem'}}>Nenhum exercício em {activeDay}</div>
+              <div style={{textAlign:'center',padding:'.85rem',color:'#333',fontSize:'.8rem',border:'1px dashed #1a1a1a',borderRadius:'8px'}}>Nenhum exercício em {activeDay}</div>
             ) : byDay[activeDay].map(function(ex,i){ return (
-              <div key={i} style={{background:'rgba(0,0,0,.25)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.5rem .75rem',marginBottom:'.3rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
-                <div style={{flex:1,fontSize:'.82rem',fontWeight:600}}>{ex.name}</div>
-                <div style={{display:'flex',alignItems:'center',gap:'.35rem'}}>
-                  <span style={{fontSize:'.68rem',color:'#555'}}>Séries:</span>
+              <div key={i} style={{background:'rgba(0,0,0,.25)',border:'1px solid rgba(255,255,255,.05)',borderRadius:'8px',padding:'.5rem .75rem',marginBottom:'.3rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
+                <div style={{flex:1,fontSize:'.85rem',fontWeight:600}}>{ex.name}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
+                  <span style={{fontSize:'.68rem',color:'#555'}}>séries</span>
                   <input type="number" value={ex.setsPlanned} min="1" max="10"
                     onChange={function(e){ setSets(activeDay,i,e.target.value); }}
-                    style={{width:'40px',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'6px',padding:'.15rem .25rem',color:'#fff',fontSize:'.8rem',textAlign:'center'}}/>
+                    style={{width:'38px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'6px',padding:'.2rem .25rem',color:'#fff',fontSize:'.85rem',textAlign:'center',outline:'none'}}/>
                 </div>
-                <button onClick={function(){ removeEx(activeDay,i); }} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:'.85rem'}}>✕</button>
+                <button onClick={function(){ removeEx(activeDay,i); }} style={{background:'none',border:'none',color:'#444',cursor:'pointer',fontSize:'.9rem',flexShrink:0}}>✕</button>
               </div>
             ); })}
+
             <button onClick={save} disabled={saving||!planName.trim()||totalExs===0}
-              style={{width:'100%',background:'#e31b23',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.9rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',marginTop:'.75rem',cursor:(saving||!planName.trim()||totalExs===0)?'default':'pointer',opacity:(saving||!planName.trim()||totalExs===0)?.4:1}}>
+              style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',marginTop:'.85rem',cursor:(saving||!planName.trim()||totalExs===0)?'default':'pointer',opacity:(saving||!planName.trim()||totalExs===0)?.35:1}}>
               {saving?'Enviando…':'Enviar para '+(selStudent?selStudent.name:'Aluno')}
             </button>
           </div>
@@ -6860,17 +6925,17 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
     var pl=52,pr=16,pt=20,pb=32,cW=W-pl-pr,cH=H-pt-pb;
     var maxV=Math.max.apply(null,weeklyVals.concat([1]));
     ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
-    for(var i=0;i<=4;i++){ var gy=pt+cH*(1-i/4); ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pl,gy); ctx.lineTo(pl+cW,gy); ctx.stroke(); }
-    var bw=Math.max(4,cW/weeklyLabels.length*0.6);
+    for(var i=0;i<=4;i++){ var gy=pt+cH*(1-i/4); ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pl,gy); ctx.lineTo(pl+cW,gy); ctx.stroke(); }
+    var bw=Math.max(4,cW/weeklyLabels.length*0.55);
     for(var j=0;j<weeklyVals.length;j++){
-      var v=weeklyVals[j], x=pl+(j+0.5)*(cW/weeklyLabels.length), bh=v/maxV*cH, y=pt+cH-bh;
-      var g=ctx.createLinearGradient(0,y,0,y+bh); g.addColorStop(0,'#e31b23'); g.addColorStop(1,'rgba(179,18,23,.3)');
-      ctx.fillStyle=g; ctx.beginPath(); ctx.rect(x-bw/2,y,bw,bh); ctx.fill();
+      var v=weeklyVals[j], bx=pl+(j+0.5)*(cW/weeklyLabels.length), bh=v/maxV*cH, by=pt+cH-bh;
+      var g=ctx.createLinearGradient(0,by,0,by+bh); g.addColorStop(0,'#e31b23'); g.addColorStop(1,'rgba(179,18,23,.2)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.rect(bx-bw/2,by,bw,bh); ctx.fill();
     }
-    ctx.fillStyle='#555'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle='#444'; ctx.font='9px sans-serif'; ctx.textAlign='center';
     for(var k=0;k<weeklyLabels.length;k++){ ctx.fillText(weeklyLabels[k], pl+(k+0.5)*(cW/weeklyLabels.length), H-6); }
     ctx.textAlign='right';
-    for(var m=0;m<=4;m++){ var mv=Math.round(maxV*m/4); ctx.fillStyle='#555'; ctx.font='9px sans-serif'; ctx.fillText(mv>999?(mv/1000).toFixed(1)+'t':mv+'kg', pl-4, pt+cH*(1-m/4)+3); }
+    for(var m=0;m<=4;m++){ var mv=Math.round(maxV*m/4); ctx.fillStyle='#444'; ctx.font='9px sans-serif'; ctx.fillText(mv>999?(mv/1000).toFixed(1)+'t':mv+'kg', pl-4, pt+cH*(1-m/4)+3); }
   }, [selUid, hist]);
 
   var share = function(){
@@ -6923,51 +6988,63 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
   };
 
   return (
-    <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
       <PersonalStudentPicker students={students} selectedUid={selUid} onSelect={setSelUid}/>
       {!selUid ? (
-        <div style={{textAlign:'center',padding:'3rem 1rem',color:'#333'}}>
-          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📊</div>
-          <div>Selecione um aluno</div>
+        <div style={{textAlign:'center',padding:'3rem 1rem',color:'#333',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
+          <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>📊</div>
+          <div style={{fontSize:'.88rem',color:'#555',fontWeight:600}}>Selecione um aluno</div>
+          <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>para ver os gráficos de evolução</div>
         </div>
       ) : loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
-      : entries.length===0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino registrado ainda.</div>
-      : (
+      : entries.length===0 ? (
+        <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#444',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📭</div>
+          <div style={{fontSize:'.85rem'}}>Nenhum treino registrado ainda</div>
+        </div>
+      ) : (
         <div>
+          {/* Stats */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
             {[{l:'Treinos',v:totalWorkouts},{l:'Volume',v:Math.round(totalVol/1000)+'t'},{l:'Último',v:lastDate.slice(5).split('-').reverse().join('/')}].map(function(s,i){ return (
-              <div key={i} className="ds-card" style={{padding:'.65rem .75rem',textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#e31b23'}}>{s.v}</div>
-                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.l}</div>
+              <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.75rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:'var(--color-accent)',lineHeight:1}}>{s.v}</div>
+                <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'.2rem'}}>{s.l}</div>
               </div>
             ); })}
           </div>
-          <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
-            <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Volume semanal (kg)</div>
+
+          {/* Chart */}
+          <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.6rem',fontWeight:700}}>Volume Semanal (kg)</div>
             {weeklyLabels.length
               ? <canvas ref={canvasRef} width={600} height={180} style={{width:'100%',height:'180px',borderRadius:'6px'}}/>
               : <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.82rem'}}>Dados insuficientes</div>}
           </div>
+
+          {/* Recent workouts */}
           <div style={{marginBottom:'1rem'}}>
-            <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Últimos treinos</div>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Últimos Treinos</div>
             {entries.slice(-6).reverse().map(function(e,i){
               var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
               return (
-                <div key={i} className="ds-card" style={{padding:'.65rem .9rem',marginBottom:'.35rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.7rem .9rem',marginBottom:'.4rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
-                    <div style={{fontWeight:700,fontSize:'.85rem'}}>{e[1].planName||'Treino Livre'}</div>
-                    <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{e[0]} · {(e[1].entries||[]).length} exercícios</div>
+                    <div style={{fontWeight:700,fontSize:'.88rem'}}>{e[1].planName||'Treino Livre'}</div>
+                    <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{e[0]} · {(e[1].entries||[]).length} exercícios</div>
                   </div>
-                  {vol>0&&<div style={{fontSize:'.78rem',fontWeight:700,color:'#e31b23'}}>{Math.round(vol)}kg</div>}
+                  {vol>0&&<div style={{fontSize:'.82rem',fontWeight:900,color:'var(--color-accent)',fontFamily:"'Barlow Condensed',sans-serif"}}>{Math.round(vol)}kg</div>}
                 </div>
               );
             })}
           </div>
+
+          {/* Share */}
           <button onClick={share} disabled={sharing}
-            style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:sharing?'wait':'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
-            {sharing?'Gerando…':'📸 Compartilhar como Foto'}
+            style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:sharing?'wait':'pointer',boxShadow:'0 4px 24px rgba(227,27,35,.25)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+            {sharing?'Gerando…':'📸  Compartilhar como Foto'}
           </button>
-          <div style={{fontSize:'.68rem',color:'#444',textAlign:'center',marginTop:'.4rem'}}>Inclui nome do personal · ideal para Instagram</div>
+          <div style={{fontSize:'.65rem',color:'#333',textAlign:'center',marginTop:'.4rem'}}>Inclui nome do personal · ideal para Instagram</div>
         </div>
       )}
     </div>
@@ -6981,7 +7058,6 @@ const PersonalPanel = ({setToast, prefs}) => {
   const [ptTab, setPtTab] = React.useState('alunos');
   const [students, setStudents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  var cref = localStorage.getItem('ds.pt_cref') || '';
 
   React.useEffect(function(){
     if(!unlocked||!uid||!window._db){ setLoading(false); return; }
@@ -6997,7 +7073,7 @@ const PersonalPanel = ({setToast, prefs}) => {
               var photo = uData.photoURL||null;
               return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
                 .then(function(hDoc){
-                  var lw = null;
+                  var lw=null;
                   if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{};lw=Object.keys(p).sort().reverse()[0]||null; }
                   return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:lw});
                 }).catch(function(){ return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null}); });
@@ -7009,30 +7085,44 @@ const PersonalPanel = ({setToast, prefs}) => {
 
   if(!unlocked) return React.createElement(PersonalLogin, {onUnlock:function(){ setUnlocked(true); }, setToast:setToast});
 
-  var PT_TABS = [{id:'alunos',label:'👥 Alunos'},{id:'fichas',label:'📋 Fichas'},{id:'graficos',label:'📊 Gráficos'}];
+  var PT_TABS = [
+    {id:'alunos', icon:'👥', label:'Alunos'},
+    {id:'fichas', icon:'📋', label:'Fichas'},
+    {id:'graficos',icon:'📊', label:'Gráficos'}
+  ];
+  var cref = localStorage.getItem('ds.pt_cref') || '';
 
   return (
     <div style={{minHeight:'80vh'}}>
-      <div style={{padding:'1rem 1rem .5rem',borderBottom:'1px solid rgba(227,27,35,.1)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1}}>
-            DARK<span style={{color:'#e31b23'}}>SET</span> <span style={{color:'var(--color-text-sub)',fontWeight:400,fontSize:'1rem'}}>Personal</span>
+      {/* Header */}
+      <div style={{padding:'.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,.05)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(0,0,0,.3)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+          <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#8b0000)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.9rem',flexShrink:0}}>👨‍💼</div>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1}}>
+              {prefs.name||'Personal'} <span style={{color:'var(--color-accent)'}}>·</span> <span style={{color:'var(--color-text-sub)',fontWeight:400,fontSize:'.9rem'}}>Personal</span>
+            </div>
+            {cref && <div style={{fontSize:'.65rem',color:'#555',marginTop:'.1rem'}}>CREF {cref} · {students.length} aluno(s)</div>}
           </div>
-          <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>{prefs.name||'Personal'}{cref?' · CREF '+cref:''} · {students.length} aluno(s)</div>
         </div>
         <button onClick={function(){ setUnlocked(false); }}
-          style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.35rem .65rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>
+          style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.35rem .65rem',color:'#555',fontSize:'.72rem',cursor:'pointer'}}>
           Sair
         </button>
       </div>
-      <div style={{display:'flex',gap:'.35rem',padding:'.6rem 1rem',borderBottom:'1px solid #111'}}>
+
+      {/* Tab bar */}
+      <div style={{display:'flex',borderBottom:'1px solid rgba(255,255,255,.05)',background:'rgba(0,0,0,.2)'}}>
         {PT_TABS.map(function(t){ return (
           <button key={t.id} onClick={function(){ setPtTab(t.id); }}
-            style={{flex:1,background:ptTab===t.id?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(ptTab===t.id?'#e31b23':'#1e1e1e'),borderRadius:'8px',padding:'.45rem .3rem',color:ptTab===t.id?'#fff':'var(--color-text-sub)',fontWeight:700,fontSize:'.72rem',cursor:'pointer'}}>
-            {t.label}
+            style={{flex:1,background:'none',border:'none',borderBottom:'2px solid '+(ptTab===t.id?'var(--color-accent)':'transparent'),padding:'.7rem .3rem',color:ptTab===t.id?'#f0f0f0':'#555',fontWeight:700,fontSize:'.78rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'.2rem',transition:'color .15s'}}>
+            <span style={{fontSize:'1rem'}}>{t.icon}</span>
+            <span style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.06em'}}>{t.label}</span>
           </button>
         ); })}
       </div>
+
+      {/* Content */}
       {ptTab==='alunos' && <PersonalStudentsTab students={students} loading={loading} uid={uid} prefs={prefs} setToast={setToast}/>}
       {ptTab==='fichas' && <PersonalBuilderTab students={students} personalName={prefs.name} setToast={setToast}/>}
       {ptTab==='graficos' && <PersonalChartsTab students={students} personalName={prefs.name} setToast={setToast}/>}
