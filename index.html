@@ -1355,7 +1355,6 @@ const NAV_ITEMS = [
   {section: null,       icon:'🏟️', label:'DarkGym',     screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
   {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
-  {section: 'PERSONAL', icon:'👨‍💼', label:'Personal',    screen:'personal', personalOnly:true},
 ];
 
 const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
@@ -3948,21 +3947,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const [started, setStarted] = useState(false);
   const [day, setDay] = useState(DAYS[(new Date().getDay() || 7) - 1]);
   const [cursor, setCursor] = useState(0);
-  // Personal plans from Firestore
-  const [personalPlans, setPersonalPlans] = useState([]);
-  const [selectedPlanId, setSelectedPlanId] = useState(null);
-  useEffect(() => {
-    const uid = getUID();
-    if(!uid || !window._db) return;
-    window._db.collection('personal_plans').doc(uid).collection('plans').get()
-      .then(snap => { if(!snap.empty) setPersonalPlans(snap.docs.map(d=>d.data())); })
-      .catch(()=>{});
-  }, []);
-  const allPlansForSelect = [...plans.list, ...personalPlans];
-  const resolvedPlanId = selectedPlanId || activePlanId;
-  const resolvedPlan = allPlansForSelect.find(p => p.id === resolvedPlanId) || activePlan || null;
-  const isPersonalPlan = resolvedPlan?.fromPersonal === true;
-  const planItems = resolvedPlan?.byDay?.[day] || [];
+  const planItems = activePlan?.byDay?.[day] || [];
   // allSets: mapa de índice → {sets, rir} — persiste enquanto sessão ativa
   const [allSets, setAllSets] = useState({});
   // sets/rir do exercício atual (derivados de allSets)
@@ -4034,7 +4019,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     let saved = 0;
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planId: resolvedPlan?.id || activePlanId, planName: resolvedPlan?.name || activePlan?.name, day, entries: []};
+      if (!copy[dateKey]) copy[dateKey] = {planId: activePlanId, planName: activePlan.name, day, entries: []};
       planItems.forEach((ex, ci) => {
         const exSets = allSets[ci]?.sets || [];
         const exRir  = allSets[ci]?.rir  || [];
@@ -4124,28 +4109,14 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
 
       {mode === 'plan' && (
         <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
-          {allPlansForSelect.length === 0 ? (
+          {!activePlan ? (
             <div>
               <div style={{color:'#555',fontSize:'.85rem',marginBottom:'.75rem'}}>Nenhuma ficha ativa. Crie uma primeiro.</div>
               <Button onClick={() => goto('plans')} variant="ghost">Ir para Fichas</Button>
             </div>
           ) : (
             <div className="grid gap-3">
-              {/* Plan selector — shows personal plans too */}
-              {allPlansForSelect.length > 1 && (
-                <select
-                  style={{background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.4rem .75rem',fontSize:'.85rem',color:'#fff',width:'100%'}}
-                  value={resolvedPlanId || ''}
-                  onChange={e => { setSelectedPlanId(e.target.value); setCursor(0); }}>
-                  {plans.list.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  {personalPlans.length > 0 && <option disabled>── Fichas do Personal ──</option>}
-                  {personalPlans.map(p => <option key={p.id} value={p.id}>👨‍💼 {p.name}</option>)}
-                </select>
-              )}
-              <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.3rem',fontWeight:800,textTransform:'uppercase',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{resolvedPlan?.name}</div>
-                {isPersonalPlan && <span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'6px',padding:'.15rem .45rem',fontSize:'.65rem',fontWeight:800,color:'var(--color-accent)',whiteSpace:'nowrap'}}>👨‍💼 PERSONAL</span>}
-              </div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:800,textTransform:'uppercase'}}>{activePlan.name}</div>
               <div className="flex items-center gap-2">
                 <span style={{fontSize:'.8rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>Dia:</span>
                 <select style={{background:'rgba(0,0,0,.4)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.4rem .75rem',fontSize:'.85rem',color:'#fff',flex:1}} value={day} onChange={e => {setDay(e.target.value); setCursor(0);}}>
@@ -4304,7 +4275,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
         <div className="flex items-center justify-between" style={{marginBottom:'.6rem'}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.5rem'}}>
-              <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{resolvedPlan?.name} · {day}</div>
+              <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePlan.name} · {day}</div>
               <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'.85rem',color:'#333'}}>/{planItems.length}</span></div>
                 <Button variant="ghost" onClick={back} style={{fontSize:'.62rem',padding:'.22rem .5rem',flexShrink:0}}>Sair</Button>
@@ -4729,6 +4700,27 @@ const History=({history,setHistory,prefs})=>{
 
 // Profile
 
+// ── ErrorBoundary — prevents full black screen on component crash ──
+class ScreenErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={hasError:false,msg:''}; }
+  static getDerivedStateFromError(e){ return {hasError:true,msg:e&&e.message?e.message:'Erro desconhecido'}; }
+  componentDidCatch(e,info){ console.warn('[DarkSet] Screen crash:',e,info); }
+  render(){
+    if(this.state.hasError) return (
+      <div style={{padding:'2rem 1rem',textAlign:'center'}}>
+        <div style={{fontSize:'2rem',marginBottom:'.75rem'}}>⚠️</div>
+        <div style={{fontWeight:700,fontSize:'1rem',marginBottom:'.4rem',color:'#f0f0f0'}}>Algo deu errado</div>
+        <div style={{fontSize:'.78rem',color:'#555',marginBottom:'1.2rem'}}>{this.state.msg}</div>
+        <button onClick={()=>this.setState({hasError:false,msg:''})}
+          style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem 1.4rem',color:'#fff',fontWeight:800,fontSize:'.88rem',cursor:'pointer'}}>
+          Tentar novamente
+        </button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const [tab,setTab]=useState('config');
   const [name,setName]=useState(prefs.name||'');
@@ -4757,6 +4749,8 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const fileRef=useRef(null);
 
   const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2))||JSON.stringify(trainDays)!==JSON.stringify(prefs.trainDays||[1,2,3,4,5,6]);
+  // Pre-computed plan state — avoids IIFE in JSX (breaks some mobile browsers)
+  const _profilePlanState = React.useMemo(()=>{ try{ return getDSPlan(); }catch(_){ return {tier:'free',isTrialActive:false,trialDaysLeft:0}; } }, []);
 
   const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:trainDays.length,trainDays,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme,goal:prefs.goal,gymMode:prefs.gymMode,gymLocation:prefs.gymLocation,gymWifi:prefs.gymWifi,playlists:prefs.playlists,onboarded:prefs.onboarded});
 
@@ -4837,14 +4831,12 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,color:'var(--color-text)'}}>{name||'Sem nome'}</div>
             <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>Meta: {goal} treinos/semana</div>
-            {(function(){ var _ps=getDSPlan(); return (
-              <div style={{marginTop:'5px',display:'flex',gap:'5px',flexWrap:'wrap'}}>
-                {_ps.tier==='elite' ? <span style={{background:'linear-gradient(90deg,#e31b23,#b31217)',color:'#fff',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>⚡ ELITE</span> : null}
-                {_ps.tier==='darkgod' ? <span style={{background:'#0d0d0f',border:'1px solid #e31b23',color:'#e31b23',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>👑 DARKGOD</span> : null}
-                {(!_ps.tier||_ps.tier==='free')&&!_ps.isTrialActive ? <span style={{background:'rgba(255,255,255,.05)',color:'#555',fontSize:'.62rem',fontWeight:600,padding:'.15rem .5rem',borderRadius:'20px',cursor:'pointer'}} onClick={function(){window._showPaywall&&window._showPaywall('Recursos avançados');}}>Gratuito — Ver Elite ›</span> : null}
-                {_ps.isTrialActive ? <span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',color:'#e31b23',fontSize:'.62rem',fontWeight:700,padding:'.15rem .5rem',borderRadius:'20px'}}>✨ Trial Elite — {_ps.trialDaysLeft}d</span> : null}
+            <div style={{marginTop:'5px',display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                {_profilePlanState.tier==='elite' ? <span style={{background:'linear-gradient(90deg,#e31b23,#b31217)',color:'#fff',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>⚡ ELITE</span> : null}
+                {_profilePlanState.tier==='darkgod' ? <span style={{background:'#0d0d0f',border:'1px solid #e31b23',color:'#e31b23',fontSize:'.62rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px'}}>👑 DARKGOD</span> : null}
+                {(!_profilePlanState.tier||_profilePlanState.tier==='free')&&!_profilePlanState.isTrialActive ? <span style={{background:'rgba(255,255,255,.05)',color:'#555',fontSize:'.62rem',fontWeight:600,padding:'.15rem .5rem',borderRadius:'20px',cursor:'pointer'}} onClick={function(){window._showPaywall&&window._showPaywall('Recursos avançados');}}>Gratuito — Ver Elite ›</span> : null}
+                {_profilePlanState.isTrialActive ? <span style={{background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',color:'#e31b23',fontSize:'.62rem',fontWeight:700,padding:'.15rem .5rem',borderRadius:'20px'}}>✨ Trial Elite — {_profilePlanState.trialDaysLeft}d</span> : null}
               </div>
-            ); })()}
           </div>
         </div>
         {uploading&&<div style={{marginTop:'.5rem',fontSize:'.72rem',color:'var(--color-text-sub)'}}>Carregando...</div>}
@@ -6609,175 +6601,29 @@ const MeuPersonalSection = ({setToast}) => {
 };
 
 
-// ── PlanBuilderModal — Personal cria ficha para o aluno ──
-const PlanBuilderModal = ({studentUid, studentName, personalName, onClose, setToast}) => {
-  const [planName, setPlanName] = React.useState('');
-  const [byDay, setByDay] = React.useState({
-    'Segunda':[],'Terça':[],'Quarta':[],'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]
-  });
-  const [activeDay, setActiveDay] = React.useState('Segunda');
-  const [search, setSearch] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-
-  const addExercise = (name) => {
-    setByDay(prev => ({...prev, [activeDay]: [...prev[activeDay], {name, setsPlanned:3}]}));
-    setSearch('');
-  };
-  const removeExercise = (day, idx) => setByDay(prev => ({...prev, [day]: prev[day].filter((_,i)=>i!==idx)}));
-  const updateSets = (day, idx, val) => setByDay(prev => ({
-    ...prev, [day]: prev[day].map((ex,i)=>i===idx?{...ex,setsPlanned:Math.max(1,parseInt(val)||1)}:ex)
-  }));
-
-  const totalExs = Object.values(byDay).reduce((a,b)=>a+b.length,0);
-  const suggestions = search.length >= 1 ? EXS.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())).slice(0,8) : [];
-
-  const save = async () => {
-    if(!planName.trim()){ setToast('Dê um nome para a ficha'); return; }
-    if(totalExs === 0){ setToast('Adicione ao menos um exercício'); return; }
-    if(!window._db){ setToast('Banco de dados indisponível'); return; }
-    setSaving(true);
-    try {
-      const newPlan = {
-        id: 'pt_' + Date.now(),
-        name: planName.trim(),
-        byDay,
-        fromPersonal: true,
-        personalName: personalName || 'Personal',
-        createdAt: Date.now(),
-      };
-      // Salva em personal_plans/{studentUid}/plans/{planId}
-      await window._db.collection('personal_plans').doc(studentUid).collection('plans').doc(newPlan.id).set(newPlan);
-      setToast('✅ Ficha enviada para ' + studentName + '!');
-      onClose();
-    } catch(e) {
-      setToast('Erro ao salvar ficha. Verifique as regras do Firestore.');
-      console.warn('[PersonalPlan] save error', e);
-    }
-    setSaving(false);
-  };
-
-  return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',flexDirection:'column',overflowY:'auto'}}>
-      <div style={{background:'#0f0f0f',borderBottom:'1px solid #1e1e1e',padding:'.9rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',position:'sticky',top:0,zIndex:10}}>
-        <button onClick={onClose} style={{background:'rgba(255,255,255,.06)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.4rem .7rem',color:'var(--color-text)',cursor:'pointer',fontSize:'1rem'}}>←</button>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase'}}>Nova Ficha para {studentName}</div>
-          <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{totalExs} exercício(s) adicionado(s)</div>
-        </div>
-        <button onClick={save} disabled={saving} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem .9rem',color:'#fff',fontWeight:800,fontSize:'.82rem',cursor:saving?'wait':'pointer',opacity:saving?.6:1}}>
-          {saving?'Salvando…':'Enviar'}
-        </button>
-      </div>
-
-      <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto',width:'100%'}}>
-        <input value={planName} onChange={e=>setPlanName(e.target.value)} placeholder="Nome da ficha (ex: Treino A — Peito/Tríceps)"
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .9rem',color:'#fff',fontSize:'.88rem',marginBottom:'1rem'}}/>
-
-        {/* Day selector */}
-        <div style={{display:'flex',gap:'.3rem',marginBottom:'1rem',overflowX:'auto',paddingBottom:'.3rem'}}>
-          {DAYS.map(d => (
-            <button key={d} onClick={()=>setActiveDay(d)}
-              style={{flexShrink:0,background:activeDay===d?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===d?'var(--color-accent)':'#1e1e1e'),borderRadius:'8px',padding:'.35rem .6rem',color:activeDay===d?'#fff':'#888',fontWeight:700,fontSize:'.72rem',cursor:'pointer',position:'relative'}}>
-              {d.slice(0,3)}
-              {byDay[d].length>0 && <span style={{position:'absolute',top:'-4px',right:'-4px',background:'var(--color-accent)',color:'#fff',borderRadius:'50%',width:'14px',height:'14px',fontSize:'.55rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>{byDay[d].length}</span>}
-            </button>
-          ))}
-        </div>
-
-        {/* Exercise search */}
-        <div style={{position:'relative',marginBottom:'.75rem'}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar exercício para adicionar…"
-            style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem .9rem',color:'#fff',fontSize:'.85rem'}}/>
-          {suggestions.length>0 && (
-            <div style={{position:'absolute',top:'100%',left:0,right:0,background:'#141414',border:'1px solid #2a2a2a',borderRadius:'10px',zIndex:20,maxHeight:'200px',overflowY:'auto',marginTop:'2px'}}>
-              {suggestions.map((ex,i)=>(
-                <button key={i} onClick={()=>addExercise(ex.name)}
-                  style={{display:'block',width:'100%',background:'none',border:'none',textAlign:'left',padding:'.55rem .9rem',color:'#f0f0f0',fontSize:'.82rem',cursor:'pointer',borderBottom:'1px solid #1a1a1a'}}>
-                  {ex.name}
-                  {ex.muscle && <span style={{color:'#555',fontSize:'.7rem',marginLeft:'.4rem'}}>· {ex.muscle}</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Current day exercises */}
-        {byDay[activeDay].length === 0 ? (
-          <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.82rem'}}>Nenhum exercício em {activeDay}. Busque acima para adicionar.</div>
-        ) : byDay[activeDay].map((ex,i)=>(
-          <div key={i} style={{background:'rgba(255,255,255,.03)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.65rem .85rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-            <div style={{flex:1,fontSize:'.85rem',fontWeight:600}}>{ex.name}</div>
-            <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
-              <span style={{fontSize:'.72rem',color:'#555'}}>Séries:</span>
-              <input type="number" value={ex.setsPlanned} min="1" max="10" onChange={e=>updateSets(activeDay,i,e.target.value)}
-                style={{width:'44px',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'6px',padding:'.2rem .3rem',color:'#fff',fontSize:'.82rem',textAlign:'center'}}/>
-            </div>
-            <button onClick={()=>removeExercise(activeDay,i)} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:'.9rem',padding:'.2rem'}}>✕</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // ── StudentView ──
 const StudentView = ({student, setToast, prefs, onBack}) => {
   const [tab, setTab] = React.useState('history');
   const [history, setHistory] = React.useState({});
   const [fichas, setFichas] = React.useState([]);
-  const [personalPlans, setPersonalPlans] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [showBuilder, setShowBuilder] = React.useState(false);
-  const [deletingId, setDeletingId] = React.useState(null);
 
-  const loadData = React.useCallback(async () => {
+  React.useEffect(() => {
     if(!window._db || !student.studentUid) return;
-    setLoading(true);
-    try {
-      const histDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('history').get();
-      if(histDoc.exists){ const p = histDoc.data().payload ? JSON.parse(histDoc.data().payload) : {}; setHistory(p); }
-      const plansDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('plans').get();
-      if(plansDoc.exists){ const p = plansDoc.data().payload ? JSON.parse(plansDoc.data().payload) : {}; setFichas(p.list || []); }
-      // Fichas do personal
-      const ptSnap = await window._db.collection('personal_plans').doc(student.studentUid).collection('plans').get();
-      setPersonalPlans(ptSnap.docs.map(d=>d.data()));
-    } catch(_){ setToast('Erro ao carregar dados'); }
-    setLoading(false);
+    (async () => {
+      setLoading(true);
+      try {
+        const histDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('history').get();
+        if(histDoc.exists){ const p = histDoc.data().payload ? JSON.parse(histDoc.data().payload) : {}; setHistory(p); }
+        const plansDoc = await window._db.collection('users').doc(student.studentUid).collection('data').doc('plans').get();
+        if(plansDoc.exists){ const p = plansDoc.data().payload ? JSON.parse(plansDoc.data().payload) : {}; setFichas(p.list || []); }
+      } catch(_){ setToast('Erro ao carregar dados'); }
+      setLoading(false);
+    })();
   }, [student.studentUid]);
 
-  React.useEffect(() => { loadData(); }, [loadData]);
-
-  const deletePlan = async (planId) => {
-    if(!window._db || !confirm('Remover esta ficha do aluno?')) return;
-    setDeletingId(planId);
-    try {
-      await window._db.collection('personal_plans').doc(student.studentUid).collection('plans').doc(planId).delete();
-      setPersonalPlans(prev => prev.filter(p=>p.id!==planId));
-      setToast('Ficha removida');
-    } catch(_){ setToast('Erro ao remover ficha'); }
-    setDeletingId(null);
-  };
-
   const histEntries = Object.entries(history).sort((a,b)=>b[0]>a[0]?1:-1).slice(0,20);
-  const calcVolume = (entries) => {
-    let vol = 0;
-    (entries||[]).forEach(ex => (ex.sets||[]).forEach(s => {
-      const w = parseFloat(s.w)||0, r = parseInt(s.r)||0;
-      vol += w * r;
-    }));
-    return vol;
-  };
   const TABS = [{id:'history',label:'📊 Histórico'},{id:'fichas',label:'📋 Fichas'},{id:'diet',label:'🥗 Dieta'}];
-
-  if(showBuilder) return (
-    <PlanBuilderModal
-      studentUid={student.studentUid}
-      studentName={student.name}
-      personalName={prefs.name}
-      onClose={()=>{ setShowBuilder(false); loadData(); }}
-      setToast={setToast}
-    />
-  );
 
   return (
     <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
@@ -6803,72 +6649,24 @@ const StudentView = ({student, setToast, prefs, onBack}) => {
 
       {loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
       : tab === 'history' ? (
-        histEntries.length === 0
-          ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino ainda.</div>
-          : histEntries.map(([date, entry], i) => {
-              const vol = calcVolume(entry.entries);
-              return (
-                <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <div>
-                      <div style={{fontWeight:700,fontSize:'.85rem'}}>{entry.planName || 'Treino livre'}</div>
-                      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{(entry.entries||[]).length} exercícios · {date}</div>
-                    </div>
-                    <div style={{textAlign:'right'}}>
-                      <div style={{fontSize:'1.2rem'}}>💪</div>
-                      {vol>0 && <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{vol.toLocaleString('pt-BR')}kg vol</div>}
-                    </div>
-                  </div>
-                  {(entry.entries||[]).length>0 && (
-                    <div style={{marginTop:'.5rem',display:'flex',flexWrap:'wrap',gap:'.25rem'}}>
-                      {(entry.entries||[]).slice(0,6).map((ex,j)=>(
-                        <span key={j} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'6px',padding:'.15rem .45rem',fontSize:'.65rem',color:'#888'}}>{ex.name}</span>
-                      ))}
-                      {(entry.entries||[]).length>6 && <span style={{fontSize:'.65rem',color:'#444'}}>+{(entry.entries||[]).length-6}</span>}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-      ) : tab === 'fichas' ? (
-        <div>
-          <button onClick={()=>setShowBuilder(true)}
-            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontWeight:800,fontSize:'.9rem',cursor:'pointer',marginBottom:'1rem'}}>
-            + Criar Ficha para {student.name}
-          </button>
-          {personalPlans.length === 0 && fichas.length === 0
-            ? <div style={{textAlign:'center',padding:'1.5rem',color:'#444',fontSize:'.85rem'}}>Nenhuma ficha ainda. Crie uma acima.</div>
-            : null
-          }
-          {personalPlans.length > 0 && (
+        histEntries.length === 0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino ainda.</div>
+        : histEntries.map(([date, entry], i) => (
+          <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div>
-              <div style={{fontSize:'.72rem',fontWeight:700,color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>📋 Fichas do Personal</div>
-              {personalPlans.map((f,i)=>(
-                <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name}</div>
-                    <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{Object.values(f.byDay||{}).reduce((a,b)=>a+b.length,0)} exercícios · por você</div>
-                  </div>
-                  <button onClick={()=>deletePlan(f.id)} disabled={deletingId===f.id}
-                    style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>
-                    {deletingId===f.id?'…':'✕'}
-                  </button>
-                </div>
-              ))}
+              <div style={{fontWeight:700,fontSize:'.85rem'}}>{entry.planName || 'Treino livre'}</div>
+              <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{(entry.entries||[]).length} exercícios · {date}</div>
             </div>
-          )}
-          {fichas.length > 0 && (
-            <div style={{marginTop: personalPlans.length>0?'1rem':0}}>
-              <div style={{fontSize:'.72rem',fontWeight:700,color:'#555',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Fichas do aluno</div>
-              {fichas.map((f,i) => (
-                <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem'}}>
-                  <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name || 'Ficha '+(i+1)}</div>
-                  <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{Object.values(f.byDay||{}).reduce((a,b)=>a+b.length,0)} exercícios totais</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            <div style={{fontSize:'1.3rem'}}>💪</div>
+          </div>
+        ))
+      ) : tab === 'fichas' ? (
+        fichas.length === 0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhuma ficha.</div>
+        : fichas.map((f,i) => (
+          <div key={i} className="ds-card" style={{padding:'.75rem 1rem',marginBottom:'.4rem'}}>
+            <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name || 'Ficha '+(i+1)}</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{Object.values(f.byDay||{}).reduce((a,b)=>a+b.length,0)} exercícios totais</div>
+          </div>
+        ))
       ) : (
         <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>
           <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🥗</div>
@@ -7081,7 +6879,7 @@ function App(){
       {authed && screen==="diet"   && <Diet setToast={setToast}/>}
       {authed && screen==="measures" && <Measures setToast={setToast}/>}
       {authed && screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
-      {authed && screen==="profile" && <Profile prefs={prefs} setPrefs={setPrefs} history={history} setToast={setToast}/>}
+      {authed && screen==="profile" && <ScreenErrorBoundary><Profile prefs={prefs} setPrefs={setPrefs} history={history} setToast={setToast}/></ScreenErrorBoundary>}
       {authed && isPersonal && screen==="personal" && <PersonalPanel setToast={setToast} prefs={prefs}/>}
 
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
@@ -7788,22 +7586,10 @@ root.render(<App/>);
     }catch(e){ console.warn('Firebase init failed', e); return; }
 
     // ---- DSAuth API ----
-    // NOTE: Firestore rules needed for squads + personal trainer features.
+    // NOTE: Firestore rules needed for squads (shared collection):
     // Add to Firebase Console > Firestore > Rules:
     //   match /squads/{squadCode}/{document=**} {
     //     allow read: if request.auth != null;
-    //     allow write: if request.auth != null;
-    //   }
-    //   match /personal_invites/{code} {
-    //     allow read: if request.auth != null;
-    //     allow write: if request.auth != null;
-    //   }
-    //   match /personal_links/{linkId} {
-    //     allow read: if request.auth != null;
-    //     allow write: if request.auth != null;
-    //   }
-    //   match /personal_plans/{studentUid}/plans/{planId} {
-    //     allow read: if request.auth != null && request.auth.uid == studentUid;
     //     allow write: if request.auth != null;
     //   }
     try{
@@ -7861,19 +7647,18 @@ root.render(<App/>);
               var clearKeys = [
                 'darkset.v3.plans','darkset.v3.history','darkset.v3.prefs',
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
-                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
+                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData'
               ];
               clearKeys.forEach(function(k){ localStorage.removeItem(k); });
               if(window._DS_SETTERS){
                 if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
                 if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
-                if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
               }
               // Retry até os setters do React estarem registrados (max 3s)
               var attempts=0;
               var tryPull=function(){
                 attempts++;
-                if(window._DS_SETTERS && window._DS_SETTERS.plans && window._DS_SETTERS.isPersonal){
+                if(window._DS_SETTERS && window._DS_SETTERS.plans){
                   window.DSSync.pull(user.uid);
                 } else if(attempts<30){
                   setTimeout(tryPull,100);
@@ -7892,7 +7677,7 @@ root.render(<App/>);
               'darkset.v3.plans', 'darkset.v3.history', 'darkset.v3.prefs',
               'darkset.v1.diet', 'darkset.measures', 'darkset.cardio.history',
               'ds.squad', 'darkset.squad.v1', 'darkset.squad.checkins', 'darkset.squad.chat',
-              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData', 'ds.isPersonal'
+              'ds_diet_plans', 'ds_diet_goals', 'darkset.progress', 'ds.planData'
             ];
             keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
             // Reset React state to empty
@@ -7901,7 +7686,6 @@ root.render(<App/>);
               if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
               if(window._DS_SETTERS.prefs)   window._DS_SETTERS.prefs({name:'',avatar:'💀',unit:'kg',vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false});
               if(window._DS_SETTERS.authed)  window._DS_SETTERS.authed(false);
-              if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
             }
           }
         }catch(_){}
