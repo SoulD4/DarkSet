@@ -6401,80 +6401,192 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 // PersonalPanel — Painel do Personal Trainer
 // ═══════════════════════════════════════════════════════
 
-// ── Tela de senha ──
-const PersonalLogin = ({onUnlock}) => {
+// ── Tela de entrada / cadastro ──
+const PersonalLogin = ({onUnlock, setToast}) => {
+  const [step, setStep] = React.useState('init'); // init | senha | cref | pin
   const [pwd, setPwd] = React.useState('');
+  const [cref, setCref] = React.useState('');
   const [error, setError] = React.useState('');
+  const [pinMode, setPinMode] = React.useState(false);
 
-  const enter = () => {
-    if(!pwd){ setError('Digite sua senha ou PIN'); return; }
-    const pin = localStorage.getItem('ds.pt_pin');
-    if(pin){
-      if(pwd === pin){ onUnlock(); }
-      else { setError('PIN incorreto'); }
-      return;
-    }
-    // sem PIN ainda — tenta reauth Firebase, se falhar cria PIN
+  // Checar estado inicial
+  React.useEffect(function(){
+    var hasPin = !!localStorage.getItem('ds.pt_pin');
+    var savedCref = localStorage.getItem('ds.pt_cref') || '';
+    setCref(savedCref);
+    if(hasPin){ setStep('pin'); }
+    else { setStep('senha'); }
+  }, []);
+
+  var validarCref = function(v){
+    return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase());
+  };
+
+  // Passo 1: senha do app (email/pass) ou ir pra PIN
+  var tentarEntrar = function(){
+    var p = pwd.trim();
+    if(!p){ setError('Digite sua senha'); return; }
     var auth = window._auth;
     var cu = auth ? auth.currentUser : null;
     var user = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user')||'null'); }catch(_){ return null; } })();
     if(cu && user && user.email && window.firebase && window.firebase.auth && window.firebase.auth.EmailAuthProvider){
-      var cred = window.firebase.auth.EmailAuthProvider.credential(user.email, pwd);
+      var cred = window.firebase.auth.EmailAuthProvider.credential(user.email, p);
       cu.reauthenticateWithCredential(cred)
-        .then(function(){ onUnlock(); })
+        .then(function(){
+          var savedCref = localStorage.getItem('ds.pt_cref');
+          if(savedCref){ onUnlock(); }
+          else { setPwd(''); setError(''); setStep('cref'); }
+        })
         .catch(function(e){
           if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential'){ setError('Senha incorreta'); }
           else if(e.code==='auth/too-many-requests'){ setError('Muitas tentativas. Aguarde.'); }
-          else { setError('Use o botão abaixo para criar um PIN.'); }
+          else { setPinMode(true); setError('Conta Google? Use o botão "Criar PIN" abaixo.'); }
         });
     } else {
-      setError('Use o botão abaixo para criar um PIN.');
+      setPinMode(true);
+      setError('Conta Google? Use o botão "Criar PIN" abaixo.');
     }
   };
 
-  const createPin = () => {
-    if(pwd.length < 4){ setError('Use ao menos 4 caracteres'); return; }
-    localStorage.setItem('ds.pt_pin', pwd);
+  // Criar PIN (conta Google)
+  var criarPin = function(){
+    var p = pwd.trim();
+    if(p.length < 4){ setError('PIN deve ter ao menos 4 caracteres'); return; }
+    localStorage.setItem('ds.pt_pin', p);
+    var savedCref = localStorage.getItem('ds.pt_cref');
+    setPwd(''); setError('');
+    if(savedCref){ onUnlock(); }
+    else { setStep('cref'); }
+  };
+
+  // Entrar com PIN salvo
+  var entrarPin = function(){
+    var p = pwd.trim();
+    if(!p){ setError('Digite seu PIN'); return; }
+    var pin = localStorage.getItem('ds.pt_pin');
+    if(p === pin){
+      onUnlock();
+    } else {
+      setError('PIN incorreto');
+    }
+  };
+
+  // Salvar CREF
+  var salvarCref = function(){
+    var v = cref.trim().toUpperCase();
+    if(!validarCref(v)){
+      setError('Formato inválido. Exemplo: 123456-G/SP');
+      return;
+    }
+    localStorage.setItem('ds.pt_cref', v);
     onUnlock();
   };
 
-  const hasPin = !!localStorage.getItem('ds.pt_pin');
+  if(step === 'init') return (
+    <div style={{minHeight:'70vh',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{color:'#444',fontSize:'.85rem'}}>Carregando…</div>
+    </div>
+  );
 
+  // ── Tela PIN ──
+  if(step === 'pin') return (
+    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
+        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+      </div>
+      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Modo Personal Trainer</div>
+      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',textAlign:'center'}}>Digite seu PIN para entrar</div>
+        <input type="password" value={pwd}
+          onChange={function(e){ setPwd(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') entrarPin(); }}
+          placeholder="PIN"
+          autoFocus
+          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.15em'}}
+        />
+        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center'}}>{error}</div>}
+        <button onClick={entrarPin}
+          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
+          Entrar
+        </button>
+        <button onClick={function(){
+          if(confirm('Redefinir PIN? Você precisará da senha do app.')){ localStorage.removeItem('ds.pt_pin'); setStep('senha'); setPwd(''); setError(''); }
+        }} style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>
+          Esqueci o PIN
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Tela Senha ──
+  if(step === 'senha') return (
+    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
+        DARK<span style={{color:'var(--color-accent)'}}>SET</span>
+      </div>
+      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Modo Personal Trainer</div>
+      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',textAlign:'center',lineHeight:1.5}}>
+          Digite a senha da sua conta para ativar o modo Personal
+        </div>
+        <input type="password" value={pwd}
+          onChange={function(e){ setPwd(e.target.value); setError(''); setPinMode(false); }}
+          onKeyDown={function(e){ if(e.key==='Enter') tentarEntrar(); }}
+          placeholder="Senha do app"
+          autoFocus
+          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.08em'}}
+        />
+        {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center',lineHeight:1.4}}>{error}</div>}
+        <button onClick={tentarEntrar}
+          style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
+          Continuar
+        </button>
+        {pinMode && (
+          <button onClick={criarPin}
+            style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem',color:'#aaa',fontSize:'.85rem',cursor:'pointer'}}>
+            Criar PIN com este valor
+          </button>
+        )}
+        <div style={{fontSize:'.68rem',color:'#333',textAlign:'center'}}>Conta Google → clique em "Continuar" e depois crie um PIN</div>
+      </div>
+    </div>
+  );
+
+  // ── Tela CREF ──
   return (
     <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.4rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.2rem'}}>
         DARK<span style={{color:'var(--color-accent)'}}>SET</span>
       </div>
-      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>
-        Modo Personal Trainer
-      </div>
-      <div style={{width:'100%',maxWidth:'300px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.7rem'}}>
-        <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',textAlign:'center'}}>
-          {hasPin ? 'Digite seu PIN para entrar' : 'Digite a senha do app para entrar'}
+      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2.5rem'}}>Cadastro de Personal</div>
+      <div style={{width:'100%',maxWidth:'320px',background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.5rem',display:'grid',gap:'.75rem'}}>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:'1.5rem',marginBottom:'.4rem'}}>🪪</div>
+          <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.3rem'}}>Registro CREF</div>
+          <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',lineHeight:1.5}}>
+            Digite seu número de registro no Conselho Regional de Educação Física
+          </div>
         </div>
-        <input type="password" value={pwd}
-          onChange={function(e){ setPwd(e.target.value); setError(''); }}
-          onKeyDown={function(e){ if(e.key==='Enter') enter(); }}
-          placeholder={hasPin ? 'PIN' : 'Senha'}
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.1em'}}
+        <div style={{background:'rgba(0,0,0,.2)',borderRadius:'8px',padding:'.6rem .8rem'}}>
+          <div style={{fontSize:'.65rem',color:'#555',marginBottom:'.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>Formato</div>
+          <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#888'}}>123456-G/SP</div>
+          <div style={{fontSize:'.65rem',color:'#444',marginTop:'.3rem'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
+        </div>
+        <input value={cref}
+          onChange={function(e){ setCref(e.target.value.toUpperCase()); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') salvarCref(); }}
+          placeholder="000000-G/UF"
+          maxLength={11}
+          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid '+(error?'#e31b23':'#2a2a2a'),borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1.1rem',textAlign:'center',letterSpacing:'.12em',fontFamily:'monospace'}}
         />
         {!!error && <div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center'}}>{error}</div>}
-        <button onClick={enter}
+        <button onClick={salvarCref}
           style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',cursor:'pointer'}}>
-          Entrar
+          Ativar Modo Personal
         </button>
-        {!hasPin && (
-          <button onClick={createPin}
-            style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem',color:'#777',fontSize:'.82rem',cursor:'pointer'}}>
-            Criar PIN (conta Google)
-          </button>
-        )}
-        {hasPin && (
-          <button onClick={function(){ if(confirm('Redefinir PIN do modo Personal?')){ localStorage.removeItem('ds.pt_pin'); setPwd(''); setError(''); } }}
-            style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>
-            Esqueci o PIN
-          </button>
-        )}
+        <div style={{fontSize:'.68rem',color:'#333',textAlign:'center'}}>
+          Este registro é salvo localmente no dispositivo
+        </div>
       </div>
     </div>
   );
@@ -6497,7 +6609,7 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
   const [inviteCode, setInviteCode] = React.useState(null);
   const [inviteLoading, setInviteLoading] = React.useState(false);
 
-  const generateInvite = function() {
+  var generateInvite = function(){
     if(!uid||!window._db) return;
     setInviteLoading(true);
     if(students.length>=10){ setToast('Limite de 10 alunos'); setInviteLoading(false); return; }
@@ -6509,20 +6621,34 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
       .catch(function(){ setToast('Erro ao gerar convite.'); setInviteLoading(false); });
   };
 
-  const copyInvite = function() {
+  var copyInvite = function(){
     if(navigator.clipboard) navigator.clipboard.writeText('Código DarkSet Personal: '+inviteCode+'\n\nAbra o app → Perfil → Meu Personal → cole o código.');
     setToast('Código copiado!');
   };
 
-  const removeStudent = function(link) {
+  var removeStudent = function(link){
     if(!window._db||!confirm('Remover '+link.name+'?')) return;
     window._db.collection('personal_links').doc(link.id).update({active:false})
       .then(function(){ setToast('Aluno removido'); })
       .catch(function(){ setToast('Erro ao remover'); });
   };
 
+  var cref = localStorage.getItem('ds.pt_cref') || '';
+
   return (
     <div style={{padding:'1rem',maxWidth:'480px',margin:'0 auto'}}>
+      {cref && (
+        <div style={{background:'rgba(74,222,128,.05)',border:'1px solid rgba(74,222,128,.15)',borderRadius:'10px',padding:'.6rem .9rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.5rem'}}>
+          <span style={{fontSize:'.8rem'}}>🪪</span>
+          <div>
+            <div style={{fontSize:'.72rem',color:'#4ade80',fontWeight:700}}>CREF {cref}</div>
+            <div style={{fontSize:'.65rem',color:'#444'}}>Registro validado</div>
+          </div>
+          <button onClick={function(){
+            if(confirm('Alterar CREF?')){ localStorage.removeItem('ds.pt_cref'); window.location.reload(); }
+          }} style={{marginLeft:'auto',background:'none',border:'none',color:'#333',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Alterar</button>
+        </div>
+      )}
       <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
         <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:'.4rem'}}>📨 Convidar Aluno</div>
         <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',marginBottom:'.75rem'}}>{students.length}/10 alunos · Código válido 7 dias</div>
@@ -6550,7 +6676,7 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
           <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
           <div style={{fontSize:'.75rem',marginTop:'.3rem',color:'#555'}}>Gere um código e compartilhe.</div>
         </div>
-      ) : students.map(function(s,i) { return (
+      ) : students.map(function(s,i){ return (
         <div key={i} className="ds-card" style={{padding:'.85rem 1rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
           <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'#1a1a1a',border:'2px solid #222',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>
             {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'👤'}
@@ -6568,15 +6694,17 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
 
 // ── Aba Fichas ──
 const PersonalBuilderTab = ({students, personalName, setToast}) => {
+  const EMPTY = {'Segunda':[],'Terça':[],'Quarta':[],'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]};
   const [selUid, setSelUid] = React.useState('');
   const [planName, setPlanName] = React.useState('');
-  const EMPTY_DAYS = {'Segunda':[],'Terça':[],'Quarta':[],'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]};
-  const [byDay, setByDay] = React.useState(EMPTY_DAYS);
+  const [byDay, setByDay] = React.useState(JSON.parse(JSON.stringify(EMPTY)));
   const [activeDay, setActiveDay] = React.useState('Segunda');
   const [search, setSearch] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [sentPlans, setSentPlans] = React.useState([]);
-  const selStudent = students.find(function(s){ return s.studentUid===selUid; });
+  var selStudent = students.find(function(s){ return s.studentUid===selUid; });
+  var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; }, 0);
+  var suggestions = search.length>=1 ? EXS.filter(function(e){ return e.name.toLowerCase().includes(search.toLowerCase()); }).slice(0,8) : [];
 
   React.useEffect(function(){
     if(!selUid||!window._db){ setSentPlans([]); return; }
@@ -6585,21 +6713,16 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
       .catch(function(){});
   }, [selUid]);
 
-  var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; }, 0);
-  var suggestions = search.length>=1 ? EXS.filter(function(e){ return e.name.toLowerCase().includes(search.toLowerCase()); }).slice(0,8) : [];
-
-  var addEx = function(name){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[activeDay].push({name:name,setsPlanned:3}); return n; }); setSearch(''); };
-  var removeEx = function(day,idx){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[day].splice(idx,1); return n; }); };
-  var setSets = function(day,idx,val){ setByDay(function(prev){ var n=JSON.parse(JSON.stringify(prev)); n[day][idx].setsPlanned=Math.max(1,parseInt(val)||1); return n; }); };
-  var resetForm = function(){ setPlanName(''); setSearch(''); setByDay(JSON.parse(JSON.stringify(EMPTY_DAYS))); setActiveDay('Segunda'); };
-
+  var resetForm = function(){ setPlanName(''); setSearch(''); setByDay(JSON.parse(JSON.stringify(EMPTY))); setActiveDay('Segunda'); };
+  var addEx = function(name){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay].push({name:name,setsPlanned:3}); return n; }); setSearch(''); };
+  var removeEx = function(day,idx){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day].splice(idx,1); return n; }); };
+  var setSets = function(day,idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day][idx].setsPlanned=Math.max(1,parseInt(val)||1); return n; }); };
   var deletePlan = function(planId){
     if(!confirm('Remover esta ficha?')) return;
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(planId).delete()
       .then(function(){ setSentPlans(function(p){ return p.filter(function(x){ return x.id!==planId; }); }); setToast('Ficha removida'); })
       .catch(function(){ setToast('Erro ao remover'); });
   };
-
   var save = function(){
     if(!selUid){ setToast('Selecione um aluno'); return; }
     if(!planName.trim()){ setToast('Dê um nome à ficha'); return; }
@@ -6608,13 +6731,14 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
     var p = {id:'pt_'+Date.now(), name:planName.trim(), byDay:byDay, fromPersonal:true, personalName:personalName||'Personal', createdAt:Date.now()};
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(p.id).set(p)
       .then(function(){ setSentPlans(function(prev){ return prev.concat([p]); }); setToast('✅ Ficha enviada para '+(selStudent?selStudent.name:'aluno')+'!'); resetForm(); setSaving(false); })
-      .catch(function(){ setToast('Erro. Verifique regras do Firestore.'); setSaving(false); });
+      .catch(function(){ setToast('Erro. Verifique as regras do Firestore.'); setSaving(false); });
   };
 
   if(students.length===0) return (
     <div style={{textAlign:'center',padding:'3rem 1rem',color:'#444'}}>
       <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>👥</div>
       <div style={{fontSize:'.85rem'}}>Nenhum aluno vinculado ainda.</div>
+      <div style={{fontSize:'.72rem',color:'#333',marginTop:'.3rem'}}>Vincule alunos na aba Alunos.</div>
     </div>
   );
 
@@ -6639,7 +6763,7 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
           )}
           <div style={{background:'rgba(227,27,35,.04)',border:'1px solid rgba(227,27,35,.12)',borderRadius:'12px',padding:'1rem'}}>
             <div style={{fontWeight:700,fontSize:'.88rem',marginBottom:'.75rem',color:'#e31b23'}}>+ Nova Ficha</div>
-            <input value={planName} onChange={function(e){ setPlanName(e.target.value); }} placeholder="Nome da ficha"
+            <input value={planName} onChange={function(e){ setPlanName(e.target.value); }} placeholder="Nome da ficha (ex: Treino A — Peito)"
               style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.6rem .85rem',color:'#fff',fontSize:'.88rem',marginBottom:'.75rem'}}/>
             <div style={{display:'flex',gap:'.3rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.2rem'}}>
               {DAYS.map(function(d){ return (
@@ -6711,18 +6835,16 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
 
   var entries = Object.entries(hist).sort(function(a,b){ return a[0].localeCompare(b[0]); });
   var totalWorkouts = entries.length;
-  var totalVol = entries.reduce(function(a,b){ return a+(b[1].entries||[]).reduce(function(c,en){ return c+(en.sets||[]).reduce(function(d,s){ return d+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0); },0);
+  var totalVol = entries.reduce(function(a,e){ return a+(e[1].entries||[]).reduce(function(b,en){ return b+(en.sets||[]).reduce(function(c,s){ return c+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0); },0);
   var lastDate = entries.length ? entries[entries.length-1][0] : '—';
 
-  // weekly vol for chart
   var weeklyLabels=[], weeklyVals=[];
   (function(){
     var wk={};
     entries.forEach(function(e){
-      var iso=e[0],obj=e[1];
-      var d=new Date(iso+'T00:00'); var s=new Date(d); s.setDate(d.getDate()-((d.getDay()+6)%7));
+      var d=new Date(e[0]+'T00:00'); var s=new Date(d); s.setDate(d.getDate()-((d.getDay()+6)%7));
       var w=s.toISOString().slice(0,10);
-      var vol=(obj.entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,sv){ return b+(parseFloat(sv.w)||0)*(parseInt(sv.r)||0); },0); },0);
+      var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,sv){ return b+(parseFloat(sv.w)||0)*(parseInt(sv.r)||0); },0); },0);
       wk[w]=(wk[w]||0)+vol;
     });
     var sorted=Object.entries(wk).sort(function(a,b){ return a[0].localeCompare(b[0]); }).slice(-12);
@@ -6755,7 +6877,7 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
     if(!selStudent){ setToast('Selecione um aluno'); return; }
     setSharing(true);
     try {
-      var W=720,H=880, sc=document.createElement('canvas'); sc.width=W; sc.height=H;
+      var W=720,H=880,sc=document.createElement('canvas'); sc.width=W; sc.height=H;
       var ctx=sc.getContext('2d');
       ctx.fillStyle='#080808'; ctx.fillRect(0,0,W,H);
       ctx.fillStyle='#e31b23'; ctx.fillRect(0,0,W,6);
@@ -6765,24 +6887,24 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
       ctx.fillStyle='#555'; ctx.font='13px sans-serif'; ctx.fillText('Personal: '+(personalName||'Personal'),40,90);
       ctx.fillStyle='#f0f0f0'; ctx.font='bold 42px sans-serif'; ctx.fillText((selStudent.name||'Aluno').toUpperCase(),40,145);
       var stats=[{l:'Treinos',v:String(totalWorkouts)},{l:'Volume',v:(totalVol/1000).toFixed(1)+'t'},{l:'Último',v:lastDate.slice(5).split('-').reverse().join('/')}];
-      stats.forEach(function(s,i){
-        var sx=40+i*(W-80)/3, sy=165, sbw=(W-80)/3-12;
+      for(var si2=0;si2<stats.length;si2++){
+        var sx=40+si2*(W-80)/3, sy=165, sbw=(W-80)/3-12;
         ctx.fillStyle='#111'; ctx.fillRect(sx,sy,sbw,72);
-        ctx.fillStyle='#e31b23'; ctx.font='bold 30px sans-serif'; ctx.textAlign='left'; ctx.fillText(s.v,sx+12,sy+36);
-        ctx.fillStyle='#555'; ctx.font='12px sans-serif'; ctx.fillText(s.l,sx+12,sy+58);
-      });
+        ctx.fillStyle='#e31b23'; ctx.font='bold 30px sans-serif'; ctx.textAlign='left'; ctx.fillText(stats[si2].v,sx+12,sy+36);
+        ctx.fillStyle='#555'; ctx.font='12px sans-serif'; ctx.fillText(stats[si2].l,sx+12,sy+58);
+      }
       ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.textAlign='left'; ctx.fillText('VOLUME SEMANAL — ÚLTIMAS 12 SEMANAS',40,272);
       if(canvasRef.current && weeklyLabels.length){ ctx.drawImage(canvasRef.current,40,285,W-80,200); }
       else { ctx.fillStyle='#111'; ctx.fillRect(40,285,W-80,200); }
       ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.fillText('ÚLTIMOS TREINOS',40,515);
       var last5=entries.slice(-5).reverse();
-      last5.forEach(function(e,i){
-        var ey=530+i*58;
+      for(var li=0;li<last5.length;li++){
+        var ey=530+li*58;
         ctx.fillStyle='#111'; ctx.fillRect(40,ey,W-80,50);
-        var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
-        ctx.fillStyle='#f0f0f0'; ctx.font='bold 15px sans-serif'; ctx.fillText(e[1].planName||'Treino Livre',56,ey+18);
-        ctx.fillStyle='#555'; ctx.font='11px sans-serif'; ctx.fillText(e[0]+' · '+(e[1].entries||[]).length+' ex · '+Math.round(vol)+'kg',56,ey+38);
-      });
+        var evol=(last5[li][1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
+        ctx.fillStyle='#f0f0f0'; ctx.font='bold 15px sans-serif'; ctx.fillText(last5[li][1].planName||'Treino Livre',56,ey+18);
+        ctx.fillStyle='#555'; ctx.font='11px sans-serif'; ctx.fillText(last5[li][0]+' · '+(last5[li][1].entries||[]).length+' ex · '+Math.round(evol)+'kg',56,ey+38);
+      }
       ctx.fillStyle='#222'; ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.fillText('darksetapp.com · DarkSet Personal',W/2,H-16);
       sc.toBlob(function(blob){
         var file=new File([blob],'progresso-'+selStudent.name+'.png',{type:'image/png'});
@@ -6791,7 +6913,7 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
             .then(function(){ setToast('Compartilhado!'); setSharing(false); })
             .catch(function(){ setSharing(false); });
         } else {
-          var url=URL.createObjectURL(blob), a=document.createElement('a');
+          var url=URL.createObjectURL(blob),a=document.createElement('a');
           a.href=url; a.download='progresso-'+selStudent.name+'.png';
           document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
           setToast('Imagem salva!'); setSharing(false);
@@ -6809,7 +6931,7 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
           <div>Selecione um aluno</div>
         </div>
       ) : loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div>
-      : entries.length===0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino ainda.</div>
+      : entries.length===0 ? <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum treino registrado ainda.</div>
       : (
         <div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
@@ -6822,7 +6944,9 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
           </div>
           <div className="ds-card" style={{padding:'1rem',marginBottom:'1rem'}}>
             <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Volume semanal (kg)</div>
-            {weeklyLabels.length ? <canvas ref={canvasRef} width={600} height={180} style={{width:'100%',height:'180px',borderRadius:'6px'}}/> : <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.82rem'}}>Dados insuficientes</div>}
+            {weeklyLabels.length
+              ? <canvas ref={canvasRef} width={600} height={180} style={{width:'100%',height:'180px',borderRadius:'6px'}}/>
+              : <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.82rem'}}>Dados insuficientes</div>}
           </div>
           <div style={{marginBottom:'1rem'}}>
             <div style={{fontSize:'.68rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.4rem'}}>Últimos treinos</div>
@@ -6857,6 +6981,7 @@ const PersonalPanel = ({setToast, prefs}) => {
   const [ptTab, setPtTab] = React.useState('alunos');
   const [students, setStudents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  var cref = localStorage.getItem('ds.pt_cref') || '';
 
   React.useEffect(function(){
     if(!unlocked||!uid||!window._db){ setLoading(false); return; }
@@ -6868,21 +6993,21 @@ const PersonalPanel = ({setToast, prefs}) => {
           return window._db.collection('users').doc(link.studentUid).get()
             .then(function(uDoc){
               var uData = uDoc.exists ? uDoc.data() : {};
-              var name = uData.name||uData.displayName||'';
+              var name = uData.name||uData.displayName||'Aluno';
               var photo = uData.photoURL||null;
               return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
                 .then(function(hDoc){
-                  var lastWorkout = null;
-                  if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{}; lastWorkout=Object.keys(p).sort().reverse()[0]||null; }
-                  return Object.assign({},link,{name:name||'Aluno',photoURL:photo,lastWorkout:lastWorkout});
-                }).catch(function(){ return Object.assign({},link,{name:name||'Aluno',photoURL:photo,lastWorkout:null}); });
+                  var lw = null;
+                  if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{};lw=Object.keys(p).sort().reverse()[0]||null; }
+                  return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:lw});
+                }).catch(function(){ return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null}); });
             }).catch(function(){ return Object.assign({},link,{name:'Aluno',photoURL:null,lastWorkout:null}); });
         })).then(function(enriched){ setStudents(enriched); setLoading(false); });
       }, function(){ setLoading(false); });
     return function(){ unsub(); };
   }, [unlocked, uid]);
 
-  if(!unlocked) return React.createElement(PersonalLogin, {onUnlock: function(){ setUnlocked(true); }, setToast: setToast});
+  if(!unlocked) return React.createElement(PersonalLogin, {onUnlock:function(){ setUnlocked(true); }, setToast:setToast});
 
   var PT_TABS = [{id:'alunos',label:'👥 Alunos'},{id:'fichas',label:'📋 Fichas'},{id:'graficos',label:'📊 Gráficos'}];
 
@@ -6893,7 +7018,7 @@ const PersonalPanel = ({setToast, prefs}) => {
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1}}>
             DARK<span style={{color:'#e31b23'}}>SET</span> <span style={{color:'var(--color-text-sub)',fontWeight:400,fontSize:'1rem'}}>Personal</span>
           </div>
-          <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>{prefs.name||'Personal'} · {students.length} aluno(s)</div>
+          <div style={{fontSize:'.68rem',color:'#444',marginTop:'1px'}}>{prefs.name||'Personal'}{cref?' · CREF '+cref:''} · {students.length} aluno(s)</div>
         </div>
         <button onClick={function(){ setUnlocked(false); }}
           style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.35rem .65rem',color:'#555',fontSize:'.75rem',cursor:'pointer'}}>
