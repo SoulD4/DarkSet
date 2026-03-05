@@ -6403,7 +6403,7 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 
 // ── Tela de entrada / cadastro ──
 const PersonalLogin = ({onUnlock, setToast}) => {
-  const [step, setStep] = React.useState('init'); // init | senha | pin_criar | pin_entrar | cref
+  const [step, setStep] = React.useState('init');
   const [pwd, setPwd] = React.useState('');
   const [pinA, setPinA] = React.useState('');
   const [pinB, setPinB] = React.useState('');
@@ -6419,9 +6419,7 @@ const PersonalLogin = ({onUnlock, setToast}) => {
     else { setStep('senha'); }
   }, []);
 
-  var validarCref = function(v){
-    return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase());
-  };
+  var validarCref = function(v){ return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase()); };
 
   var tentarSenha = function(){
     var p = pwd.trim();
@@ -6435,19 +6433,16 @@ const PersonalLogin = ({onUnlock, setToast}) => {
       cu.reauthenticateWithCredential(cred)
         .then(function(){
           setChecking(false); setPwd(''); setError('');
-          var hasCref = !!localStorage.getItem('ds.pt_cref');
-          if(hasCref){ onUnlock(); } else { setStep('cref'); }
+          if(localStorage.getItem('ds.pt_cref')){ onUnlock(); } else { setStep('cref'); }
         })
         .catch(function(e){
           setChecking(false);
           if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential'){ setError('Senha incorreta'); }
           else if(e.code==='auth/too-many-requests'){ setError('Muitas tentativas. Aguarde.'); }
-          else { setError('Conta Google detectada. Crie um PIN abaixo.'); setStep('pin_criar'); setPwd(''); }
+          else { setStep('pin_criar'); setPwd(''); setError(''); }
         });
     } else {
-      setChecking(false);
-      setError('Conta Google detectada. Crie um PIN abaixo.');
-      setStep('pin_criar'); setPwd('');
+      setChecking(false); setStep('pin_criar'); setPwd(''); setError('');
     }
   };
 
@@ -6456,178 +6451,144 @@ const PersonalLogin = ({onUnlock, setToast}) => {
     if(pinA !== pinB){ setError('Os PINs não coincidem'); return; }
     localStorage.setItem('ds.pt_pin', pinA);
     setPinA(''); setPinB(''); setError('');
-    var hasCref = !!localStorage.getItem('ds.pt_cref');
-    if(hasCref){ onUnlock(); } else { setStep('cref'); }
+    if(localStorage.getItem('ds.pt_cref')){ onUnlock(); } else { setStep('cref'); }
   };
 
   var entrarPin = function(){
     var p = pwd.trim();
     if(!p){ setError('Digite seu PIN'); return; }
-    var pin = localStorage.getItem('ds.pt_pin');
-    if(p === pin){
+    if(p === localStorage.getItem('ds.pt_pin')){
       setPwd(''); setError('');
-      var hasCref = !!localStorage.getItem('ds.pt_cref');
-      if(hasCref){ onUnlock(); } else { setStep('cref'); }
-    } else {
-      setError('PIN incorreto');
-    }
+      if(localStorage.getItem('ds.pt_cref')){ onUnlock(); } else { setStep('cref'); }
+    } else { setError('PIN incorreto'); }
   };
 
   var salvarCref = function(){
     var v = crefVal.trim().toUpperCase();
     if(!validarCref(v)){ setError('Formato inválido. Exemplo: 123456-G/SP'); return; }
     setChecking(true); setError('');
-    // Checar duplicata no Firestore
-    if(window._db){
-      window._db.collection('personals').where('cref','==',v).get()
-        .then(function(snap){
-          if(!snap.empty){
-            setChecking(false);
-            setError('Este CREF já está cadastrado em outra conta.');
-            return;
-          }
-          var uid = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.uid?u.uid:''; }catch(_){ return ''; } })();
-          var saveData = {cref:v, uid:uid, createdAt:Date.now()};
-          window._db.collection('personals').doc(uid||v).set(saveData, {merge:true})
-            .then(function(){
-              localStorage.setItem('ds.pt_cref', v);
-              setChecking(false);
-              onUnlock();
-            }).catch(function(){
-              // Firestore write failed but save locally anyway
-              localStorage.setItem('ds.pt_cref', v);
-              setChecking(false);
-              onUnlock();
-            });
-        }).catch(function(){
-          // No DB access — save locally
-          localStorage.setItem('ds.pt_cref', v);
-          setChecking(false);
-          onUnlock();
-        });
-    } else {
+    var uid = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.uid?u.uid:''; }catch(_){ return ''; } })();
+    var doSave = function(){
       localStorage.setItem('ds.pt_cref', v);
       setChecking(false);
       onUnlock();
-    }
+    };
+    if(window._db){
+      window._db.collection('personals').where('cref','==',v).get()
+        .then(function(snap){
+          if(!snap.empty && snap.docs[0].id !== uid){ setChecking(false); setError('Este CREF já está cadastrado em outra conta.'); return; }
+          window._db.collection('personals').doc(uid||v).set({cref:v,uid:uid,createdAt:Date.now()},{merge:true})
+            .then(doSave).catch(doSave);
+        }).catch(doSave);
+    } else { doSave(); }
   };
 
-  // ── Helpers de layout ──
-  var Header = function(){
-    return (
-      <div style={{textAlign:'center',marginBottom:'2rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.6rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>
-          DARK<span style={{color:'var(--color-accent)'}}>SET</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.18em',textTransform:'uppercase',marginTop:'.2rem'}}>
-          Modo Personal Trainer
-        </div>
-      </div>
-    );
+  // Shared inline styles
+  var S = {
+    wrap: {minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'},
+    logo: {fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.6rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1},
+    sub:  {fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.18em',textTransform:'uppercase',marginTop:'.2rem',marginBottom:'2rem'},
+    card: {width:'100%',maxWidth:'320px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.75rem'},
+    inp:  {width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none',display:'block',marginBottom:'.7rem'},
+    inpE: {width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid var(--color-accent)',borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none',display:'block',marginBottom:'.7rem'},
+    btn:  {width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',display:'block',marginBottom:'.5rem'},
+    btn2: {width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.75rem',color:'#aaa',fontWeight:700,fontSize:'.88rem',cursor:'pointer',display:'block',marginBottom:'.5rem'},
+    ghost:{background:'none',border:'none',color:'rgba(255,255,255,.25)',fontSize:'.72rem',cursor:'pointer',width:'100%',padding:'.35rem'},
+    err:  {fontSize:'.75rem',color:'var(--color-accent)',textAlign:'center',lineHeight:1.4,padding:'.4rem .6rem',background:'rgba(227,27,35,.08)',borderRadius:'8px',marginBottom:'.7rem'},
+    lbl:  {fontSize:'.72rem',color:'var(--color-text-sub)',textAlign:'center',lineHeight:1.5,marginBottom:'.7rem'},
   };
 
-  var Card = function(props){ return (
-    <div style={{width:'100%',maxWidth:'320px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.75rem',display:'grid',gap:'.85rem'}}>
-      {props.children}
-    </div>
-  ); };
-
-  var Label = function(props){ return <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',textAlign:'center',lineHeight:1.5}}>{props.children}</div>; };
-
-  var Input = function(props){ return (
-    <input {...props} style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid '+(error&&props.showErr?'var(--color-accent)':'rgba(255,255,255,.08)'),borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',letterSpacing:props.mono?'.12em':'normal',fontFamily:props.mono?'monospace':'inherit',outline:'none'}}/>
-  ); };
-
-  var Btn = function(props){ return (
-    <button onClick={props.onClick} disabled={props.disabled}
-      style={{background:props.ghost?'none':props.secondary?'rgba(255,255,255,.05)':'var(--color-accent)',border:props.ghost?'none':props.secondary?'1px solid rgba(255,255,255,.08)':'none',borderRadius:'10px',padding:props.ghost?'.4rem':'.8rem',color:props.ghost?'rgba(255,255,255,.3)':props.secondary?'#aaa':'#fff',fontWeight:props.ghost?400:800,fontSize:props.ghost?'.72rem':'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:props.ghost?'none':'uppercase',letterSpacing:props.ghost?'normal':'.06em',cursor:props.disabled?'default':'pointer',opacity:props.disabled?.5:1}}>
-      {props.children}
-    </button>
-  ); };
-
-  var Err = function(){ return error ? <div style={{fontSize:'.75rem',color:'var(--color-accent)',textAlign:'center',lineHeight:1.4,padding:'.4rem .6rem',background:'rgba(227,27,35,.08)',borderRadius:'8px'}}>{error}</div> : null; };
-
-  if(step==='init') return (
-    <div style={{minHeight:'70vh',display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{color:'#444',fontSize:'.85rem'}}>Carregando…</div>
+  var Logo = (
+    <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
+      <div style={S.logo}>DARK<span style={{color:'var(--color-accent)'}}>SET</span></div>
+      <div style={S.sub}>Modo Personal Trainer</div>
     </div>
   );
 
-  var body = null;
+  if(step==='init') return <div style={{minHeight:'70vh',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{color:'#444',fontSize:'.85rem'}}>Carregando…</div></div>;
 
-  if(step==='senha') body = (
-    <Card>
-      <Label>Digite a senha da sua conta para ativar o modo Personal</Label>
-      <Input type="password" value={pwd} showErr placeholder="Senha do app" autoFocus
-        onChange={function(e){ setPwd(e.target.value); setError(''); }}
-        onKeyDown={function(e){ if(e.key==='Enter') tentarSenha(); }}/>
-      <Err/>
-      <Btn onClick={tentarSenha} disabled={checking}>{checking?'Verificando…':'Continuar'}</Btn>
-      <Btn secondary onClick={function(){ setStep('pin_criar'); setError(''); setPwd(''); }}>Conta Google — Criar PIN</Btn>
-    </Card>
-  );
-
-  if(step==='pin_criar') body = (
-    <Card>
-      <div style={{textAlign:'center'}}>
-        <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🔐</div>
-        <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.2rem'}}>Criar PIN</div>
-        <Label>Escolha um PIN de ao menos 4 caracteres para acessar o modo Personal</Label>
+  if(step==='senha') return (
+    <div style={S.wrap}>
+      {Logo}
+      <div style={S.card}>
+        <div style={S.lbl}>Digite a senha da sua conta para ativar o modo Personal</div>
+        <input type="password" value={pwd} placeholder="Senha do app" autoFocus
+          style={error ? S.inpE : S.inp}
+          onChange={function(e){ setPwd(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') tentarSenha(); }}/>
+        {error && <div style={S.err}>{error}</div>}
+        <button style={S.btn} onClick={tentarSenha} disabled={checking}>{checking?'Verificando…':'Continuar'}</button>
+        <button style={S.btn2} onClick={function(){ setStep('pin_criar'); setError(''); setPwd(''); }}>Conta Google — Criar PIN</button>
       </div>
-      <input type="password" value={pinA} placeholder="Novo PIN" autoFocus
-        onChange={function(e){ setPinA(e.target.value); setError(''); }}
-        onKeyDown={function(e){ if(e.key==='Enter'){ var el=document.getElementById('pt-pin-b'); if(el) el.focus(); } }}
-        style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none'}}/>
-      <input id="pt-pin-b" type="password" value={pinB} placeholder="Confirmar PIN"
-        onChange={function(e){ setPinB(e.target.value); setError(''); }}
-        onKeyDown={function(e){ if(e.key==='Enter') criarPin(); }}
-        style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none'}}/>
-      <Err/>
-      <Btn onClick={criarPin}>Salvar PIN</Btn>
-      <Btn ghost onClick={function(){ setStep('senha'); setPinA(''); setPinB(''); setError(''); }}>← Voltar</Btn>
-    </Card>
+    </div>
   );
 
-  if(step==='pin_entrar') body = (
-    <Card>
-      <Label>Digite seu PIN para entrar no modo Personal</Label>
-      <Input type="password" value={pwd} showErr placeholder="PIN" autoFocus
-        onChange={function(e){ setPwd(e.target.value); setError(''); }}
-        onKeyDown={function(e){ if(e.key==='Enter') entrarPin(); }}/>
-      <Err/>
-      <Btn onClick={entrarPin}>Entrar</Btn>
-      <Btn ghost onClick={function(){
-        if(confirm('Redefinir PIN? Você voltará para a tela de senha.')){
-          localStorage.removeItem('ds.pt_pin'); setStep('senha'); setPwd(''); setError('');
-        }
-      }}>Esqueci o PIN</Btn>
-    </Card>
-  );
-
-  if(step==='cref') body = (
-    <Card>
-      <div style={{textAlign:'center'}}>
-        <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🪪</div>
-        <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.2rem'}}>Registro CREF</div>
-        <Label>Digite seu número de registro no Conselho Regional de Educação Física</Label>
+  if(step==='pin_criar') return (
+    <div style={S.wrap}>
+      {Logo}
+      <div style={S.card}>
+        <div style={{textAlign:'center',marginBottom:'.75rem'}}>
+          <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🔐</div>
+          <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.3rem'}}>Criar PIN</div>
+          <div style={S.lbl}>Escolha um PIN de ao menos 4 caracteres</div>
+        </div>
+        <input type="password" value={pinA} placeholder="Novo PIN"
+          style={S.inp}
+          onChange={function(e){ setPinA(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter'){ var el=document.getElementById('pt-pin-b'); if(el){el.focus();} } }}/>
+        <input id="pt-pin-b" type="password" value={pinB} placeholder="Confirmar PIN"
+          style={S.inp}
+          onChange={function(e){ setPinB(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') criarPin(); }}/>
+        {error && <div style={S.err}>{error}</div>}
+        <button style={S.btn} onClick={criarPin}>Salvar PIN</button>
+        <button style={S.ghost} onClick={function(){ setStep('senha'); setPinA(''); setPinB(''); setError(''); }}>← Voltar</button>
       </div>
-      <div style={{background:'rgba(0,0,0,.25)',borderRadius:'8px',padding:'.6rem .85rem',textAlign:'center'}}>
-        <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#666',marginBottom:'.15rem'}}>123456-G/SP</div>
-        <div style={{fontSize:'.62rem',color:'#444'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
-      </div>
-      <Input type="text" value={crefVal} showErr placeholder="000000-G/UF" mono autoFocus maxLength={11}
-        onChange={function(e){ setCrefVal(e.target.value.toUpperCase()); setError(''); }}
-        onKeyDown={function(e){ if(e.key==='Enter') salvarCref(); }}/>
-      <Err/>
-      <Btn onClick={salvarCref} disabled={checking}>{checking?'Verificando…':'Ativar Modo Personal'}</Btn>
-      <div style={{fontSize:'.62rem',color:'#333',textAlign:'center'}}>O CREF é verificado para evitar cadastros duplicados</div>
-    </Card>
+    </div>
   );
 
+  if(step==='pin_entrar') return (
+    <div style={S.wrap}>
+      {Logo}
+      <div style={S.card}>
+        <div style={S.lbl}>Digite seu PIN para entrar no modo Personal</div>
+        <input type="password" value={pwd} placeholder="PIN" autoFocus
+          style={error ? S.inpE : S.inp}
+          onChange={function(e){ setPwd(e.target.value); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') entrarPin(); }}/>
+        {error && <div style={S.err}>{error}</div>}
+        <button style={S.btn} onClick={entrarPin}>Entrar</button>
+        <button style={S.ghost} onClick={function(){
+          if(confirm('Redefinir PIN? Você voltará para a tela de senha.')){
+            localStorage.removeItem('ds.pt_pin'); setStep('senha'); setPwd(''); setError('');
+          }
+        }}>Esqueci o PIN</button>
+      </div>
+    </div>
+  );
+
+  // step === 'cref'
   return (
-    <div style={{minHeight:'70vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem 1.5rem'}}>
-      <Header/>
-      {body}
+    <div style={S.wrap}>
+      {Logo}
+      <div style={S.card}>
+        <div style={{textAlign:'center',marginBottom:'.75rem'}}>
+          <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🪪</div>
+          <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f0',marginBottom:'.3rem'}}>Registro CREF</div>
+          <div style={S.lbl}>Digite seu número de registro no Conselho Regional de Educação Física</div>
+        </div>
+        <div style={{background:'rgba(0,0,0,.25)',borderRadius:'8px',padding:'.5rem .85rem',textAlign:'center',marginBottom:'.7rem'}}>
+          <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#555',marginBottom:'.1rem'}}>123456-G/SP</div>
+          <div style={{fontSize:'.62rem',color:'#333'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
+        </div>
+        <input type="text" value={crefVal} placeholder="000000-G/UF" autoFocus maxLength={11}
+          style={Object.assign({},error?S.inpE:S.inp,{letterSpacing:'.12em',fontFamily:'monospace'})}
+          onChange={function(e){ setCrefVal(e.target.value.toUpperCase()); setError(''); }}
+          onKeyDown={function(e){ if(e.key==='Enter') salvarCref(); }}/>
+        {error && <div style={S.err}>{error}</div>}
+        <button style={S.btn} onClick={salvarCref} disabled={checking}>{checking?'Verificando…':'Ativar Modo Personal'}</button>
+        <div style={{fontSize:'.62rem',color:'#333',textAlign:'center'}}>O CREF é verificado para evitar cadastros duplicados</div>
+      </div>
     </div>
   );
 };
@@ -7136,6 +7097,7 @@ const PersonalPanel = ({setToast, prefs}) => {
   const [ptTab, setPtTab] = React.useState('alunos');
   const [students, setStudents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [ptDrawerOpen, setPtDrawerOpen] = React.useState(false);
 
   React.useEffect(function(){
     if(!unlocked||!uid||!window._db){ setLoading(false); return; }
@@ -7179,7 +7141,6 @@ const PersonalPanel = ({setToast, prefs}) => {
   if(!unlocked) return React.createElement(PersonalLogin, {onUnlock:function(){ setUnlocked(true); }, setToast:setToast});
 
   var cref = localStorage.getItem('ds.pt_cref') || '';
-  var [ptDrawerOpen, setPtDrawerOpen] = React.useState(false);
 
   var PT_NAV = [
     {id:'alunos',  icon:'👥', label:'Alunos',   section:'PERSONAL'},
