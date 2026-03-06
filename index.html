@@ -1021,6 +1021,7 @@ const DIFFS=[...new Set(EXS.map(e=>e.difficulty))];
 // ── Helper to build byDay from named days ─────────────────────────────────
 function exId(name){ return EXS.find(e=>e.name===name)?.id||null; }
 function ex(name,sets=4){ const id=exId(name); return id?{exId:id,name,setsPlanned:sets}:null; }
+function exList(...args){ return args.map(a=>Array.isArray(a)?ex(...a):ex(a)).filter(Boolean); }
 function day(...exs){ return exs.filter(Boolean); }
 
 // ── PRESET PLANS ──────────────────────────────────────────────────────────
@@ -1887,10 +1888,10 @@ const Plans=({plans,setPlans,goto,setToast})=>{
               {/* Expandable preview */}
               {previewPlan?.id===preset.id&&(
                 <div style={{marginTop:'.75rem',borderTop:'1px solid var(--color-border)',paddingTop:'.75rem',display:'grid',gap:'.5rem'}}>
-                  {DAYS.filter(d=>preset.byDay[d]&&preset.byDay[d].length>0).map(d=>(
+                  {DAYS.filter(d=>preset.byDay[d]&&preset.byDay[d].filter(Boolean).length>0).map(d=>(
                     <div key={d}>
                       <div style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.25rem'}}>{d}</div>
-                      {preset.byDay[d].map((e,i)=>(
+                      {preset.byDay[d].filter(Boolean).map((e,i)=>(
                         <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'.2rem 0',borderBottom:'1px solid rgba(255,255,255,.03)'}}>
                           <span style={{fontSize:'.78rem',color:'var(--color-text)'}}>{e.name}</span>
                           <span style={{fontSize:'.72rem',color:'var(--color-text-sub)',fontWeight:600}}>{e.setsPlanned}x</span>
@@ -1929,7 +1930,7 @@ const Plans=({plans,setPlans,goto,setToast})=>{
             <button onClick={()=>{setPreviewPlan(null);goto('builder',previewPlan.id);}} style={{background:'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.3rem .75rem',color:'#fff',fontSize:'.72rem',fontWeight:800,cursor:'pointer',textTransform:'uppercase'}}>Editar</button>
           </div>
           <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
-            {DAYS.map(d=>{const n=previewPlan.byDay?.[d]?.length||0;return(
+            {DAYS.map(d=>{const n=(previewPlan.byDay?.[d]||[]).filter(Boolean).length;return(
               <span key={d} style={{padding:'.2rem .55rem',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,
                 background:n>0?'rgba(227,27,35,.1)':'rgba(0,0,0,.2)',
                 border:n>0?'1px solid rgba(227,27,35,.2)':'1px solid #1a1a1a',
@@ -1939,10 +1940,10 @@ const Plans=({plans,setPlans,goto,setToast})=>{
             );})}
           </div>
           <div style={{maxHeight:'60vh',overflowY:'auto',display:'grid',gap:'.75rem'}}>
-            {DAYS.filter(d=>(previewPlan.byDay?.[d]?.length||0)>0).map(d=>(
+            {DAYS.filter(d=>(previewPlan.byDay?.[d]?.filter(Boolean).length||0)>0).map(d=>(
               <div key={d}>
                 <div style={{fontSize:'.6rem',color:'var(--color-accent)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700,marginBottom:'.4rem',borderBottom:'1px solid rgba(227,27,35,.15)',paddingBottom:'.3rem'}}>{d}</div>
-                {(previewPlan.byDay[d]||[]).map((ex,i)=>{
+                {(previewPlan.byDay[d]||[]).filter(Boolean).map((ex,i)=>{
                   const meta=EXS.find(e=>e.id===ex.exId||e.name===ex.name);
                   return(
                     <div key={i} style={{display:'flex',alignItems:'center',gap:'.55rem',padding:'.4rem 0',borderBottom:'1px solid rgba(255,255,255,.03)'}}>
