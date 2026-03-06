@@ -6453,6 +6453,149 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 // ════════════════════════════════════════════════════
 const ADMIN_UID = '3bZqslCsHxQIugjq9Tfd758hpu12';
 
+const AdminPlanosPanel = ({users, setToast}) => {
+  const [planSearch, setPlanSearch] = React.useState('');
+  const [planTarget, setPlanTarget] = React.useState(null);
+  const [planTier, setPlanTier] = React.useState('elite');
+  const [planDuration, setPlanDuration] = React.useState('lifetime');
+  const [saving, setSaving] = React.useState(false);
+
+  var filtered = React.useMemo(function(){
+    if(!planSearch.trim()) return [];
+    var q = planSearch.toLowerCase();
+    return users.filter(function(u){
+      return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q);
+    }).slice(0,8);
+  }, [planSearch, users]);
+
+  var applyPlan = function(){
+    if(!planTarget){ setToast('Selecione um usuário'); return; }
+    setSaving(true);
+    var planData = {};
+    if(planDuration==='lifetime'){
+      planData = {tier: planTier, purchasedAt: Date.now()};
+    } else if(planDuration==='monthly'){
+      planData = {tier: planTier, purchasedAt: Date.now(), expiresAt: Date.now()+30*24*60*60*1000};
+    } else if(planDuration==='trial7'){
+      planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+7*24*60*60*1000, trialUsed: true};
+    } else if(planDuration==='trial30'){
+      planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+30*24*60*60*1000, trialUsed: true};
+    } else {
+      planData = {tier: 'free', trialEnd: null};
+    }
+    window._db.collection('users').doc(planTarget.id).set({planData: planData},{merge:true})
+      .then(function(){
+        setToast('✅ Plano '+planTier+' aplicado para '+(planTarget.name||planTarget.email)+'!');
+        setSaving(false); setPlanTarget(null); setPlanSearch('');
+      })
+      .catch(function(e){ setToast('Erro: '+(e.message||'')); setSaving(false); });
+  };
+
+  var planWithAccess = users.filter(function(u){ return u.planData&&u.planData.tier&&u.planData.tier!=='free'; });
+
+  return (
+    <div>
+      <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.75rem',lineHeight:1.5}}>
+        Defina o plano de um usuário. Ele verá o novo plano ao sincronizar.
+      </div>
+
+      {/* Busca */}
+      <div style={{marginBottom:'1rem'}}>
+        <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem',fontWeight:700}}>Buscar Usuário</div>
+        <input value={planSearch} onChange={function(e){ setPlanSearch(e.target.value); setPlanTarget(null); }}
+          placeholder="Nome ou email…"
+          style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'.9rem',outline:'none'}}/>
+        {filtered.length>0 && !planTarget && (
+          <div style={{border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',marginTop:'.3rem',overflow:'hidden'}}>
+            {filtered.map(function(u,i){ return (
+              <div key={i} onClick={function(){ setPlanTarget(u); setPlanSearch(u.name||u.email||u.id); }}
+                style={{padding:'.55rem .85rem',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,.04)',background:'rgba(255,255,255,.01)',display:'flex',alignItems:'center',gap:'.6rem'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:'.88rem'}}>{u.name||'(sem nome)'}</div>
+                  <div style={{fontSize:'.7rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email||u.id}</div>
+                </div>
+                {u.planData&&u.planData.tier&&u.planData.tier!=='free'&&<span style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700,textTransform:'uppercase',flexShrink:0}}>{u.planData.tier}</span>}
+              </div>
+            ); })}
+          </div>
+        )}
+      </div>
+
+      {/* Usuário selecionado */}
+      {planTarget && (
+        <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
+          <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.1rem'}}>{planTarget.name||'(sem nome)'}</div>
+          <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.1rem'}}>{planTarget.email}</div>
+          <div style={{fontSize:'.72rem',color:planTarget.planData&&planTarget.planData.tier&&planTarget.planData.tier!=='free'?'var(--color-accent)':'#444',marginTop:'.2rem'}}>
+            Plano atual: {(planTarget.planData&&planTarget.planData.tier)||'free'}
+          </div>
+        </div>
+      )}
+
+      {/* Plano */}
+      <div style={{marginBottom:'.75rem'}}>
+        <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Plano</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.4rem'}}>
+          {[
+            {id:'elite',   label:'⚡ Elite',    desc:'Todos os recursos'},
+            {id:'darkgod', label:'👑 DarkGod',  desc:'Sem limites'},
+            {id:'free',    label:'🆓 Gratuito', desc:'Remover acesso'},
+          ].map(function(p){ return (
+            <button key={p.id} onClick={function(){ setPlanTier(p.id); }}
+              style={{background:planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'10px',padding:'.6rem .4rem',textAlign:'center',cursor:'pointer'}}>
+              <div style={{fontSize:'.82rem',fontWeight:700,color:planTier===p.id?'#fff':'#aaa'}}>{p.label}</div>
+              <div style={{fontSize:'.6rem',color:planTier===p.id?'rgba(255,255,255,.7)':'#444',marginTop:'.15rem'}}>{p.desc}</div>
+            </button>
+          ); })}
+        </div>
+      </div>
+
+      {/* Duração */}
+      {planTier!=='free' && (
+        <div style={{marginBottom:'.75rem'}}>
+          <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Duração</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem'}}>
+            {[
+              {id:'lifetime', label:'Vitalício ♾️'},
+              {id:'monthly',  label:'Mensal (30d)'},
+              {id:'trial7',   label:'Trial 7 dias'},
+              {id:'trial30',  label:'Trial 30 dias'},
+            ].map(function(d){ return (
+              <button key={d.id} onClick={function(){ setPlanDuration(d.id); }}
+                style={{background:planDuration===d.id?'rgba(227,27,35,.15)':'rgba(255,255,255,.03)',border:'1px solid '+(planDuration===d.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.5rem .6rem',color:planDuration===d.id?'#fff':'#666',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>
+                {d.label}
+              </button>
+            ); })}
+          </div>
+        </div>
+      )}
+
+      <button onClick={applyPlan} disabled={saving||!planTarget}
+        style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:(saving||!planTarget)?'default':'pointer',opacity:(saving||!planTarget)?.35:1,boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
+        {saving?'Aplicando…':'Aplicar Plano'}
+      </button>
+
+      {/* Lista com plano */}
+      {planWithAccess.length>0 && (
+        <div style={{marginTop:'1.25rem'}}>
+          <div style={{fontSize:'.65rem',color:'#333',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',fontWeight:700}}>Usuários com Plano Ativo</div>
+          {planWithAccess.map(function(u,i){ return (
+            <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.5rem .75rem',background:'rgba(255,255,255,.02)',borderRadius:'9px',marginBottom:'.3rem',border:'1px solid rgba(255,255,255,.05)'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:'.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.name||'(sem nome)'}</div>
+                <div style={{fontSize:'.68rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
+              </div>
+              <span style={{fontSize:'.68rem',color:u.planData.tier==='darkgod'?'#facc15':'var(--color-accent)',fontWeight:700,textTransform:'uppercase',flexShrink:0}}>
+                {u.planData.tier==='darkgod'?'👑':'⚡'} {u.planData.tier}
+              </span>
+            </div>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminPanel = ({setToast}) => {
   const [tab, setTab] = React.useState('requests');
   const [requests, setRequests] = React.useState([]);
@@ -6679,145 +6822,7 @@ const AdminPanel = ({setToast}) => {
 
       {/* ── PLANOS ── */}
       {!loading && tab==='planos' && (
-        <div>
-          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.75rem',lineHeight:1.5}}>
-            Defina o plano de um usuário diretamente. O usuário verá o novo plano assim que sincronizar.
-          </div>
-
-          {/* Search user for plan */}
-          {(function(){
-            var [planSearch, setPlanSearch] = React.useState('');
-            var [planTarget, setPlanTarget] = React.useState(null);
-            var [planTier, setPlanTier] = React.useState('elite');
-            var [planDuration, setPlanDuration] = React.useState('monthly'); // monthly | lifetime | trial7 | trial30
-            var [saving, setSaving] = React.useState(false);
-
-            var filtered = users.filter(function(u){
-              if(!planSearch.trim()) return false;
-              var q = planSearch.toLowerCase();
-              return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q);
-            }).slice(0,8);
-
-            var applyPlan = function(){
-              if(!planTarget){ setToast('Selecione um usuário'); return; }
-              setSaving(true);
-              var planData = {};
-              if(planDuration==='lifetime'){
-                planData = {tier: planTier, purchasedAt: Date.now()};
-              } else if(planDuration==='monthly'){
-                planData = {tier: planTier, purchasedAt: Date.now(), expiresAt: Date.now()+30*24*60*60*1000};
-              } else if(planDuration==='trial7'){
-                planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+7*24*60*60*1000, trialUsed: true};
-              } else if(planDuration==='trial30'){
-                planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+30*24*60*60*1000, trialUsed: true};
-              } else if(planDuration==='free'){
-                planData = {tier: 'free', trialEnd: null};
-              }
-              window._db.collection('users').doc(planTarget.id).set({planData: planData},{merge:true})
-                .then(function(){
-                  setToast('✅ Plano '+planTier+' aplicado para '+( planTarget.name||planTarget.email)+'!');
-                  setSaving(false);
-                  setPlanTarget(null);
-                  setPlanSearch('');
-                })
-                .catch(function(e){ setToast('Erro: '+(e.message||'')); setSaving(false); });
-            };
-
-            return (
-              <div>
-                {/* User search */}
-                <div style={{marginBottom:'1rem'}}>
-                  <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem',fontWeight:700}}>Buscar Usuário</div>
-                  <input value={planSearch} onChange={function(e){ setPlanSearch(e.target.value); setPlanTarget(null); }}
-                    placeholder="Nome ou email do usuário…"
-                    style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'.9rem',outline:'none'}}/>
-                  {filtered.length>0 && !planTarget && (
-                    <div style={{border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',marginTop:'.3rem',overflow:'hidden'}}>
-                      {filtered.map(function(u,i){ return (
-                        <div key={i} onClick={function(){ setPlanTarget(u); setPlanSearch(u.name||u.email||u.id); }}
-                          style={{padding:'.55rem .85rem',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,.04)',background:'rgba(255,255,255,.01)',display:'flex',alignItems:'center',gap:'.6rem'}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:700,fontSize:'.88rem'}}>{u.name||'(sem nome)'}</div>
-                            <div style={{fontSize:'.7rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email||u.id}</div>
-                          </div>
-                          {u.planData&&u.planData.tier&&u.planData.tier!=='free'&&<span style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700,textTransform:'uppercase'}}>{u.planData.tier}</span>}
-                        </div>
-                      ); })}
-                    </div>
-                  )}
-                </div>
-
-                {planTarget && (
-                  <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
-                    <div style={{fontSize:'.68rem',color:'#555',marginBottom:'.5rem',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Usuário selecionado</div>
-                    <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.1rem'}}>{planTarget.name||'(sem nome)'}</div>
-                    <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.1rem'}}>{planTarget.email}</div>
-                    <div style={{fontSize:'.72rem',color:planTarget.planData&&planTarget.planData.tier&&planTarget.planData.tier!=='free'?'var(--color-accent)':'#444',marginTop:'.25rem'}}>
-                      Plano atual: {(planTarget.planData&&planTarget.planData.tier)||'free'}
-                    </div>
-                  </div>
-                )}
-
-                {/* Tier selector */}
-                <div style={{marginBottom:'.75rem'}}>
-                  <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Plano</div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.4rem'}}>
-                    {[
-                      {id:'elite',   label:'⚡ Elite',   desc:'Todos os recursos'},
-                      {id:'darkgod', label:'👑 DarkGod', desc:'Sem limites'},
-                      {id:'free',    label:'🆓 Gratuito', desc:'Reverter para free'},
-                    ].map(function(p){ return (
-                      <button key={p.id} onClick={function(){ setPlanTier(p.id); }}
-                        style={{background:planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'10px',padding:'.6rem .4rem',textAlign:'center',cursor:'pointer'}}>
-                        <div style={{fontSize:'.82rem',fontWeight:700,color:planTier===p.id?'#fff':'#aaa'}}>{p.label}</div>
-                        <div style={{fontSize:'.6rem',color:planTier===p.id?'rgba(255,255,255,.7)':'#444',marginTop:'.15rem'}}>{p.desc}</div>
-                      </button>
-                    ); })}
-                  </div>
-                </div>
-
-                {/* Duration selector */}
-                {planTier!=='free' && (
-                  <div style={{marginBottom:'.75rem'}}>
-                    <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Duração</div>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem'}}>
-                      {[
-                        {id:'lifetime', label:'Vitalício ♾️'},
-                        {id:'monthly',  label:'Mensal (30d)'},
-                        {id:'trial7',   label:'Trial 7 dias'},
-                        {id:'trial30',  label:'Trial 30 dias'},
-                      ].map(function(d){ return (
-                        <button key={d.id} onClick={function(){ setPlanDuration(d.id); }}
-                          style={{background:planDuration===d.id?'rgba(227,27,35,.15)':'rgba(255,255,255,.03)',border:'1px solid '+(planDuration===d.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.5rem .6rem',color:planDuration===d.id?'#fff':'#666',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>
-                          {d.label}
-                        </button>
-                      ); })}
-                    </div>
-                  </div>
-                )}
-
-                <button onClick={applyPlan} disabled={saving||!planTarget}
-                  style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:(saving||!planTarget)?'default':'pointer',opacity:(saving||!planTarget)?.35:1,boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
-                  {saving?'Aplicando…':'Aplicar Plano'}
-                </button>
-
-                {/* Recent personals with plan */}
-                <div style={{marginTop:'1.25rem'}}>
-                  <div style={{fontSize:'.65rem',color:'#333',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',fontWeight:700}}>Usuários com Plano Ativo</div>
-                  {users.filter(function(u){ return u.planData&&u.planData.tier&&u.planData.tier!=='free'; }).slice(0,20).map(function(u,i){ return (
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.5rem .75rem',background:'rgba(255,255,255,.02)',borderRadius:'9px',marginBottom:'.3rem',border:'1px solid rgba(255,255,255,.05)'}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:'.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.name||'(sem nome)'}</div>
-                        <div style={{fontSize:'.68rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
-                      </div>
-                      <span style={{fontSize:'.68rem',color:u.planData.tier==='darkgod'?'#facc15':'var(--color-accent)',fontWeight:700,textTransform:'uppercase',flexShrink:0}}>{u.planData.tier==='darkgod'?'👑':'⚡'} {u.planData.tier}</span>
-                    </div>
-                  ); })}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
+        <AdminPlanosPanel users={users} setToast={setToast}/>
       )}
 
       {/* ── STATS ── */}
