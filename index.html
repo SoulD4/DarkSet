@@ -1630,6 +1630,7 @@ const Plans=({plans,setPlans,goto,setToast})=>{
   const [filterDays,setFilterDays]=useState('todos');
   const [previewPlan,setPreviewPlan]=useState(null);
   const [showQR,setShowQR]=useState(false);
+  const [ptPlans,setPtPlans]=useState([]); // fichas do personal
   const handleQRResult=(url)=>{
     setShowQR(false);
     try{
@@ -1693,6 +1694,16 @@ const Plans=({plans,setPlans,goto,setToast})=>{
       if(el){el.innerHTML="";new QRCode(el,{text:makeImportLink(sharePlan),width:180,height:180});}
     },10);
   },[sharePlan]);
+
+  // Carregar fichas do personal
+  useEffect(()=>{
+    const uid=getUID();
+    if(!uid||!window._db) return;
+    window._db.collection('personal_plans').doc(uid).collection('plans').get()
+      .then(snap=>{ if(!snap.empty) setPtPlans(snap.docs.map(d=>d.data())); })
+      .catch(()=>{});
+  },[]);
+
   const totalExsByDay=(pl)=>DAYS.reduce((a,d)=>a+(pl.byDay?.[d]?.length||0),0);
 
   return (
@@ -1781,6 +1792,40 @@ const Plans=({plans,setPlans,goto,setToast})=>{
         </div>
       )}
       </>)}
+
+      {/* ── FICHAS DO PERSONAL ── visíveis em Minhas Fichas, só selecionáveis */}
+      {tab==='minhas' && ptPlans.length>0 && (
+        <div>
+          <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.5rem'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Do Seu Personal</div>
+            <div style={{flex:1,height:'1px',background:'rgba(227,27,35,.2)'}}/>
+          </div>
+          {ptPlans.map(function(pl,i){
+            var isActive = plans.activeId === pl.id;
+            var exTotal = totalExsByDay(pl);
+            return (
+              <div key={i} className="ds-card" style={{padding:'1rem 1.1rem',marginBottom:'.5rem',borderLeft:isActive?'2px solid var(--color-accent)':'2px solid rgba(227,27,35,.2)',background:isActive?'rgba(227,27,35,.04)':'rgba(255,255,255,.02)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+                  <button onClick={()=>{ setPlans(p=>({...p,activeId:isActive?null:pl.id})); }}
+                    style={{width:'20px',height:'20px',borderRadius:'50%',flexShrink:0,cursor:'pointer',background:isActive?'var(--color-accent)':'transparent',border:isActive?'2px solid var(--color-accent)':'2px solid #333',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isActive?'0 0 8px rgba(227,27,35,.4)':''}}>
+                    {isActive&&<div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#fff'}}/>}
+                  </button>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.03em',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                      {pl.name}
+                      {isActive&&<span style={{marginLeft:'.5rem',fontSize:'.6rem',color:'var(--color-accent)',fontFamily:"'Inter',sans-serif",fontWeight:700,letterSpacing:'.06em',verticalAlign:'middle'}}>ATIVA</span>}
+                    </div>
+                    <div style={{fontSize:'.7rem',color:'#555',marginTop:'1px'}}>
+                      {exTotal} exercício(s) · <span style={{color:'rgba(227,27,35,.6)'}}>👨‍💼 {pl.personalName||'Personal'}</span>
+                    </div>
+                  </div>
+                  <div style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.25rem .5rem',fontSize:'.6rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',flexShrink:0}}>PT</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── FICHAS PRONTAS ── */}
       {tab==='prontas'&&(
@@ -6747,7 +6792,7 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
       return n;
     });
     setToast('+ '+ex.name);
-    setTab('ficha');
+    // Permanece na aba de busca — não muda para ficha
   };
   var removeEx = function(idx){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay].splice(idx,1); return n; }); };
   var updateSets = function(idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay][idx].setsPlanned=Math.max(1,Math.min(10,parseInt(val)||1)); return n; }); };
@@ -6759,6 +6804,13 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
       .then(function(){ setSentPlans(function(p){ return p.filter(function(x){ return x.id!==planId; }); }); setToast('Ficha removida'); })
       .catch(function(){ setToast('Erro ao remover'); });
   };
+  var reloadPlans = function(){
+    if(!selUid||!window._db) return;
+    window._db.collection('personal_plans').doc(selUid).collection('plans').get()
+      .then(function(snap){ setSentPlans(snap.docs.map(function(d){ return d.data(); })); })
+      .catch(function(){});
+  };
+
   var save = function(){
     if(!selUid){ setToast('Selecione um aluno'); return; }
     if(!planName.trim()){ setToast('Dê um nome à ficha'); return; }
@@ -6766,8 +6818,13 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
     setSaving(true);
     var p={id:'pt_'+Date.now(),name:planName.trim(),byDay:byDay,fromPersonal:true,personalName:personalName||'Personal',createdAt:Date.now()};
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(p.id).set(p)
-      .then(function(){ setSentPlans(function(prev){ return prev.concat([p]); }); setToast('✅ Ficha enviada para '+(selStudent?selStudent.name:'aluno')+'!'); resetForm(); setSaving(false); })
-      .catch(function(){ setToast('Erro. Verifique regras do Firestore.'); setSaving(false); });
+      .then(function(){
+        setToast('✅ Ficha enviada para '+(selStudent?selStudent.name:'aluno')+'!');
+        resetForm();
+        setSaving(false);
+        reloadPlans(); // recarrega lista de fichas
+      })
+      .catch(function(e){ setToast('Erro: '+(e.code||e.message||'Verifique regras do Firestore')); setSaving(false); });
   };
 
   if(students.length===0) return (
@@ -7112,33 +7169,15 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
       .onSnapshot(function(snap){
         var links = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
         Promise.all(links.map(function(link){
-          return window._db.collection('users').doc(link.studentUid).get()
-            .then(function(uDoc){
-              var uData = uDoc.exists ? uDoc.data() : {};
-              var name = uData.name||uData.displayName||'';
-              var photo = uData.photoURL||null;
-              // Always fetch data/prefs subcollection to get the real name
-              return window._db.collection('users').doc(link.studentUid).collection('data').doc('prefs').get()
-                .then(function(prefsDoc){
-                  if(!name && prefsDoc.exists){
-                    try{
-                      var payload = JSON.parse(prefsDoc.data().payload||'{}');
-                      name = payload.name||payload.displayName||'';
-                      if(!photo && payload.avatarUrl) photo = payload.avatarUrl;
-                    }catch(_){}
-                  }
-                  if(!name) name = link.studentEmail||'Aluno';
-                  return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
-                    .then(function(hDoc){
-                      var lw=null;
-                      if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{};lw=Object.keys(p).sort().reverse()[0]||null; }
-                      return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:lw});
-                    }).catch(function(){ return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null}); });
-                }).catch(function(){
-                  if(!name) name = link.studentEmail||'Aluno';
-                  return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null});
-                });
-            }).catch(function(){ return Object.assign({},link,{name:'Aluno',photoURL:null,lastWorkout:null}); });
+          // Nome já salvo no link doc — sem necessidade de ler users/{uid}
+          var name = link.studentName || link.studentEmail || 'Aluno';
+          var photo = link.photoURL || null;
+          return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
+            .then(function(hDoc){
+              var lw=null;
+              if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{};lw=Object.keys(p).sort().reverse()[0]||null; }
+              return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:lw});
+            }).catch(function(){ return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null}); });
         })).then(function(enriched){ setStudents(enriched); setLoading(false); });
       }, function(){ setLoading(false); });
     return function(){ unsub(); };
@@ -7268,9 +7307,12 @@ const MeuPersonalSection = ({setToast}) => {
       if(invite.used){ setToast('Código já utilizado'); setLinking(false); return; }
       if(invite.expiresAt < Date.now()){ setToast('Código expirado'); setLinking(false); return; }
       if(invite.personalUid === uid){ setToast('Você não pode se vincular a si mesmo'); setLinking(false); return; }
-      // Create link
+      // Create link — salva nome do aluno para o personal poder ler sem regra especial
+      var _studentName = (function(){ try{ return JSON.parse(localStorage.getItem('ds.prefs')||'{}').name||''; }catch(_){ return ''; } })();
+      var _studentEmail = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.email?u.email:''; }catch(_){ return ''; } })();
       await window._db.collection('personal_links').add({
         personalUid: invite.personalUid, studentUid: uid,
+        studentName: _studentName, studentEmail: _studentEmail,
         active: true, linkedAt: Date.now(),
       });
       // Mark invite as used
