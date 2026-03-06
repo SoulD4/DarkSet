@@ -1363,9 +1363,10 @@ const NAV_ITEMS = [
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
   {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
   {section: 'PERSONAL', icon:'👨‍💼', label:'Personal',    screen:'personal'},
+  {section: 'ADMIN',    icon:'🔐', label:'Admin',       screen:'admin', adminOnly:true},
 ];
 
-const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
+const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false, isAdmin=false}) => {
   const nav = (s) => { goto(s); onClose(); };
   return (
     <>
@@ -1380,7 +1381,7 @@ const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
         </div>
         {/* Items */}
         <div style={{flex:1,paddingBottom:'1rem'}}>
-          {NAV_ITEMS.filter(item => !item.personalOnly || isPersonal).map((item,i) => (
+          {NAV_ITEMS.filter(item => (!item.personalOnly || isPersonal) && (!item.adminOnly || isAdmin)).map((item,i) => (
             <div key={i}>
               {item.section && <div className="ds-drawer-section">{item.section}</div>}
               <button
@@ -6447,6 +6448,258 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 // ═══════════════════════════════════════════════════════
 
 // ── Tela de solicitação de acesso Personal ──
+// ════════════════════════════════════════════════════
+// ADMIN PANEL — acesso restrito ao UID do dono do app
+// ════════════════════════════════════════════════════
+const ADMIN_UID = '3bZqslCsHxQIugjq9Tfd758hpu12';
+
+const AdminPanel = ({setToast}) => {
+  const [tab, setTab] = React.useState('requests');
+  const [requests, setRequests] = React.useState([]);
+  const [users, setUsers] = React.useState([]);
+  const [stats, setStats] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [searchQ, setSearchQ] = React.useState('');
+
+  var loadAll = function(){
+    if(!window._db){ setLoading(false); return; }
+    setLoading(true);
+    var promises = [
+      window._db.collection('personal_requests').orderBy('createdAt','desc').get().catch(function(){ return {docs:[]}; }),
+      window._db.collection('users').limit(200).get().catch(function(){ return {docs:[]}; }),
+      window._db.collection('personal_links').where('active','==',true).get().catch(function(){ return {docs:[]}; }),
+    ];
+    Promise.all(promises).then(function(results){
+      var reqDocs = results[0].docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+      var userDocs = results[1].docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+      var linkDocs = results[2].docs.map(function(d){ return d.data(); });
+      setRequests(reqDocs);
+      setUsers(userDocs);
+      // Stats
+      var personals = userDocs.filter(function(u){ return u.role==='personal'; });
+      setStats({
+        totalUsers: userDocs.length,
+        totalPersonals: personals.length,
+        totalLinks: linkDocs.length,
+        pendingRequests: reqDocs.filter(function(r){ return r.status==='pending'; }).length,
+      });
+      setLoading(false);
+    });
+  };
+
+  React.useEffect(function(){ loadAll(); }, []);
+
+  var approvePersonal = function(req){
+    if(!window._db) return;
+    window._db.collection('users').doc(req.uid).set({role:'personal'},{merge:true})
+      .then(function(){
+        return window._db.collection('personal_requests').doc(req.id).update({status:'approved',approvedAt:Date.now()});
+      })
+      .then(function(){
+        setRequests(function(prev){ return prev.map(function(r){ return r.id===req.id?Object.assign({},r,{status:'approved'}):r; }); });
+        setToast('✅ '+req.nome+' aprovado como Personal!');
+        loadAll();
+      })
+      .catch(function(e){ setToast('Erro: '+(e.message||'')); });
+  };
+
+  var revokePersonal = function(uid, nome){
+    if(!confirm('Revogar acesso Personal de '+nome+'?')) return;
+    window._db.collection('users').doc(uid).update({role:''})
+      .then(function(){
+        setToast('Acesso revogado de '+nome);
+        loadAll();
+      })
+      .catch(function(e){ setToast('Erro: '+(e.message||'')); });
+  };
+
+  var rejectRequest = function(req){
+    if(!confirm('Rejeitar solicitação de '+req.nome+'?')) return;
+    window._db.collection('personal_requests').doc(req.id).update({status:'rejected',rejectedAt:Date.now()})
+      .then(function(){
+        setRequests(function(prev){ return prev.map(function(r){ return r.id===req.id?Object.assign({},r,{status:'rejected'}):r; }); });
+        setToast('Solicitação rejeitada');
+      })
+      .catch(function(e){ setToast('Erro: '+(e.message||'')); });
+  };
+
+  var TABS = [
+    {id:'requests', label:'📬 Solicitações', badge: stats?stats.pendingRequests:0},
+    {id:'users',    label:'👥 Usuários'},
+    {id:'stats',    label:'📊 Stats'},
+  ];
+
+  var S = {
+    card: {background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'12px',padding:'1rem',marginBottom:'.6rem'},
+    badge: function(color){ return {display:'inline-flex',alignItems:'center',justifyContent:'center',background:color||'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'20px',padding:'.15rem .55rem',fontSize:'.62rem',fontWeight:700,color:'#e31b23',letterSpacing:'.04em'}; },
+    greenBadge: {display:'inline-flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.3)',borderRadius:'20px',padding:'.15rem .55rem',fontSize:'.62rem',fontWeight:700,color:'#4ade80',letterSpacing:'.04em'},
+    grayBadge: {display:'inline-flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'20px',padding:'.15rem .55rem',fontSize:'.62rem',fontWeight:700,color:'#666',letterSpacing:'.04em'},
+    btn: function(col){ return {background:col||'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.38rem .8rem',color:'#fff',fontWeight:700,fontSize:'.78rem',cursor:'pointer',flexShrink:0}; },
+  };
+
+  return (
+    <div style={{padding:'.5rem',maxWidth:'600px',margin:'0 auto'}}>
+      {/* Header */}
+      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.1),rgba(139,0,0,.05))',border:'1px solid rgba(227,27,35,.2)',borderRadius:'14px',padding:'1rem 1.25rem',marginBottom:'1.25rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+        <div style={{fontSize:'1.8rem'}}>🔐</div>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>Painel Administrativo</div>
+          <div style={{fontSize:'.7rem',color:'#555',marginTop:'.1rem'}}>DarkSet · Acesso Restrito</div>
+        </div>
+        <button onClick={loadAll} style={{marginLeft:'auto',background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'8px',padding:'.38rem .7rem',color:'#666',fontSize:'.78rem',cursor:'pointer'}}>
+          🔄 Atualizar
+        </button>
+      </div>
+
+      {/* Stats rápidas */}
+      {stats && (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'1.25rem'}}>
+          {[
+            {l:'Usuários', v:stats.totalUsers, c:'#fff'},
+            {l:'Personals', v:stats.totalPersonals, c:'var(--color-accent)'},
+            {l:'Vínculos', v:stats.totalLinks, c:'#4ade80'},
+            {l:'Pendentes', v:stats.pendingRequests, c:stats.pendingRequests>0?'#facc15':'#444'},
+          ].map(function(s,i){ return (
+            <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.65rem .5rem',textAlign:'center'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:s.c,lineHeight:1}}>{s.v}</div>
+              <div style={{fontSize:'.6rem',color:'#444',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'.2rem'}}>{s.l}</div>
+            </div>
+          ); })}
+        </div>
+      )}
+
+      {/* Tab bar */}
+      <div style={{display:'flex',gap:'.35rem',marginBottom:'1rem'}}>
+        {TABS.map(function(t){ return (
+          <button key={t.id} onClick={function(){ setTab(t.id); }}
+            style={{flex:1,background:tab===t.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(tab===t.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.55rem .4rem',color:tab===t.id?'#fff':'#666',fontWeight:700,fontSize:'.75rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}>
+            {t.label}
+            {t.badge>0&&<span style={{background:'#facc15',color:'#000',borderRadius:'50%',width:'16px',height:'16px',fontSize:'.6rem',display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>{t.badge}</span>}
+          </button>
+        ); })}
+      </div>
+
+      {loading && <div style={{textAlign:'center',padding:'3rem',color:'#444'}}>Carregando…</div>}
+
+      {/* ── SOLICITAÇÕES ── */}
+      {!loading && tab==='requests' && (
+        <div>
+          {requests.length===0 && <div style={{textAlign:'center',padding:'2.5rem',color:'#444',border:'1px dashed #1a1a1a',borderRadius:'12px'}}>Nenhuma solicitação ainda</div>}
+          {requests.map(function(r,i){
+            var statusEl = r.status==='approved'
+              ? <span style={S.greenBadge}>✅ Aprovado</span>
+              : r.status==='rejected'
+              ? <span style={S.grayBadge}>✕ Rejeitado</span>
+              : <span style={S.badge()}>⏳ Pendente</span>;
+            return (
+              <div key={i} style={S.card}>
+                <div style={{display:'flex',alignItems:'flex-start',gap:'.75rem'}}>
+                  <div style={{fontSize:'1.5rem',flexShrink:0}}>👨‍💼</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'.5rem',flexWrap:'wrap',marginBottom:'.3rem'}}>
+                      <span style={{fontWeight:700,fontSize:'.95rem'}}>{r.nome||'(sem nome)'}</span>
+                      {statusEl}
+                    </div>
+                    <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.1rem'}}>📧 {r.email||'—'}</div>
+                    <div style={{fontSize:'.75rem',color:'var(--color-accent)',fontWeight:700,fontFamily:'monospace',marginBottom:'.1rem'}}>CREF {r.cref||'—'}</div>
+                    {r.msg && <div style={{fontSize:'.75rem',color:'#555',fontStyle:'italic',marginTop:'.3rem',borderLeft:'2px solid #222',paddingLeft:'.5rem'}}>"{r.msg}"</div>}
+                    <div style={{fontSize:'.65rem',color:'#333',marginTop:'.4rem'}}>{r.createdAt?new Date(r.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div>
+                  </div>
+                  {r.status==='pending' && r.uid && (
+                    <div style={{display:'flex',flexDirection:'column',gap:'.4rem',flexShrink:0}}>
+                      <button onClick={function(){ approvePersonal(r); }} style={S.btn()}>✅ Aprovar</button>
+                      <button onClick={function(){ rejectRequest(r); }} style={S.btn('rgba(255,255,255,.06)')}>✕ Rejeitar</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── USUÁRIOS ── */}
+      {!loading && tab==='users' && (
+        <div>
+          <input value={searchQ} onChange={function(e){ setSearchQ(e.target.value); }}
+            placeholder="🔍 Buscar por nome ou email…"
+            style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.55rem .85rem',color:'#fff',fontSize:'.88rem',outline:'none',marginBottom:'.75rem'}}/>
+          {users
+            .filter(function(u){
+              if(!searchQ) return true;
+              var q = searchQ.toLowerCase();
+              return (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q);
+            })
+            .sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); })
+            .slice(0,100)
+            .map(function(u,i){
+              var isPersonalUser = u.role==='personal';
+              var isAdminUser = u.id===ADMIN_UID;
+              return (
+                <div key={i} style={S.card}>
+                  <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+                    <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid rgba(255,255,255,.06)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.9rem'}}>
+                      {u.photoURL?<img src={u.photoURL} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} alt=""/>:'👤'}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
+                        <span style={{fontWeight:700,fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.name||'(sem nome)'}</span>
+                        {isAdminUser && <span style={{background:'rgba(250,204,21,.1)',border:'1px solid rgba(250,204,21,.3)',borderRadius:'20px',padding:'.1rem .45rem',fontSize:'.58rem',fontWeight:700,color:'#facc15'}}>👑 ADMIN</span>}
+                        {isPersonalUser && !isAdminUser && <span style={S.greenBadge}>👨‍💼 Personal</span>}
+                      </div>
+                      <div style={{fontSize:'.7rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email||u.id}</div>
+                    </div>
+                    {isPersonalUser && !isAdminUser && (
+                      <button onClick={function(){ revokePersonal(u.id, u.name||u.email||u.id); }}
+                        style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.35rem .6rem',color:'#e31b23',fontSize:'.72rem',cursor:'pointer',flexShrink:0,fontWeight:700}}>
+                        Revogar
+                      </button>
+                    )}
+                    {!isPersonalUser && !isAdminUser && (
+                      <button onClick={function(){
+                        if(!confirm('Aprovar '+( u.name||u.email||u.id)+' como Personal?')) return;
+                        window._db.collection('users').doc(u.id).set({role:'personal'},{merge:true})
+                          .then(function(){ setToast('✅ Personal aprovado!'); loadAll(); })
+                          .catch(function(e){ setToast('Erro: '+(e.message||'')); });
+                      }} style={S.btn()}>
+                        + Personal
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* ── STATS ── */}
+      {!loading && tab==='stats' && stats && (
+        <div style={{display:'grid',gap:'.75rem'}}>
+          {[
+            {icon:'👥', label:'Total de Usuários Cadastrados', value:stats.totalUsers, desc:'Contas ativas no Firebase'},
+            {icon:'👨‍💼', label:'Personais Ativos', value:stats.totalPersonals, desc:'Usuários com role=personal'},
+            {icon:'🔗', label:'Vínculos Personal↔Aluno', value:stats.totalLinks, desc:'Conexões ativas'},
+            {icon:'📬', label:'Solicitações Pendentes', value:stats.pendingRequests, desc:'Aguardando sua aprovação'},
+          ].map(function(s,i){ return (
+            <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'14px',padding:'1.1rem 1.25rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+              <div style={{fontSize:'1.8rem',flexShrink:0}}>{s.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:'.78rem',color:'#666',marginBottom:'.2rem'}}>{s.label}</div>
+                <div style={{fontSize:'.65rem',color:'#333'}}>{s.desc}</div>
+              </div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:'var(--color-accent)',lineHeight:1,flexShrink:0}}>{s.value}</div>
+            </div>
+          ); })}
+          <div style={{fontSize:'.65rem',color:'#333',textAlign:'center',marginTop:'.5rem'}}>
+            Última atualização: {new Date().toLocaleTimeString('pt-BR')} · Clique em "Atualizar" para recarregar
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PersonalRequestScreen = ({prefs, setToast}) => {
   const [cref, setCref] = React.useState('');
   const [msg, setMsg] = React.useState('');
@@ -8012,6 +8265,8 @@ function App(){
   const [prefs,setPrefs]=usePrefs();
   const [planState, setPlanState] = useState(getDSPlan);
   const [isPersonal, setIsPersonal] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('ds.isPersonal')||'false'); }catch(_){ return false; } });
+  const ADMIN_UID = '3bZqslCsHxQIugjq9Tfd758hpu12';
+  const isAdmin = getUID() === ADMIN_UID;
   window._DS_SETTERS = window._DS_SETTERS || {};
   const [paywallFeature, setPaywallFeature] = useState(null);
   const showPaywall = function(feat){ setPaywallFeature(feat); };
@@ -8099,7 +8354,7 @@ function App(){
   if(authed && !isPersonal && screen==='personal'){
     return (
       <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
-        <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={false}/>
+        <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={false} isAdmin={isAdmin}/>
         <header className="ds-hdr" style={{justifyContent:'space-between'}}>
           <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
             <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu"><span/><span/><span/></button>
@@ -8107,6 +8362,23 @@ function App(){
           </div>
         </header>
         <PersonalRequestScreen prefs={prefs} setToast={setToast}/>
+        {toast && <Toast text={toast}/>}
+      </div>
+    );
+  }
+
+  if(authed && isAdmin && screen==='admin'){
+    return (
+      <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
+        <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={isPersonal} isAdmin={isAdmin}/>
+        <header className="ds-hdr" style={{justifyContent:'space-between'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu"><span/><span/><span/></button>
+            <LogoRow/>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-accent)',fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase'}}>🔐 ADMIN</div>
+        </header>
+        <AdminPanel setToast={setToast}/>
         {toast && <Toast text={toast}/>}
       </div>
     );
@@ -8156,7 +8428,7 @@ function App(){
           })()}
         </div>
       )}
-      <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={isPersonal}/>
+      <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={isPersonal} isAdmin={isAdmin}/>
       <header className="ds-hdr" style={{justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
           <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu">
