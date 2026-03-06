@@ -6526,6 +6526,7 @@ const AdminPanel = ({setToast}) => {
   var TABS = [
     {id:'requests', label:'📬 Solicitações', badge: stats?stats.pendingRequests:0},
     {id:'users',    label:'👥 Usuários'},
+    {id:'planos',   label:'💳 Planos'},
     {id:'stats',    label:'📊 Stats'},
   ];
 
@@ -6600,9 +6601,12 @@ const AdminPanel = ({setToast}) => {
                       <span style={{fontWeight:700,fontSize:'.95rem'}}>{r.nome||'(sem nome)'}</span>
                       {statusEl}
                     </div>
-                    <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.1rem'}}>📧 {r.email||'—'}</div>
-                    <div style={{fontSize:'.75rem',color:'var(--color-accent)',fontWeight:700,fontFamily:'monospace',marginBottom:'.1rem'}}>CREF {r.cref||'—'}</div>
-                    {r.msg && <div style={{fontSize:'.75rem',color:'#555',fontStyle:'italic',marginTop:'.3rem',borderLeft:'2px solid #222',paddingLeft:'.5rem'}}>"{r.msg}"</div>}
+                    <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.15rem'}}>📧 {r.email||'—'}</div>
+                    <div style={{fontSize:'.78rem',color:'var(--color-accent)',fontWeight:700,fontFamily:'monospace',marginBottom:'.15rem'}}>CREF {r.cref||'—'}</div>
+                    {r.cidade && <div style={{fontSize:'.74rem',color:'#666',marginBottom:'.1rem'}}>📍 {r.cidade}</div>}
+                    {r.whatsapp && <div style={{fontSize:'.74rem',color:'#666',marginBottom:'.1rem'}}>📱 {r.whatsapp}</div>}
+                    {r.especialidade && <div style={{fontSize:'.74rem',color:'#888',marginBottom:'.1rem'}}>🏋️ {r.especialidade}</div>}
+                    {r.msg && <div style={{fontSize:'.74rem',color:'#555',fontStyle:'italic',marginTop:'.35rem',borderLeft:'2px solid #222',paddingLeft:'.5rem',lineHeight:1.4}}>"{r.msg}"</div>}
                     <div style={{fontSize:'.65rem',color:'#333',marginTop:'.4rem'}}>{r.createdAt?new Date(r.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div>
                   </div>
                   {r.status==='pending' && r.uid && (
@@ -6673,6 +6677,149 @@ const AdminPanel = ({setToast}) => {
         </div>
       )}
 
+      {/* ── PLANOS ── */}
+      {!loading && tab==='planos' && (
+        <div>
+          <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.75rem',lineHeight:1.5}}>
+            Defina o plano de um usuário diretamente. O usuário verá o novo plano assim que sincronizar.
+          </div>
+
+          {/* Search user for plan */}
+          {(function(){
+            var [planSearch, setPlanSearch] = React.useState('');
+            var [planTarget, setPlanTarget] = React.useState(null);
+            var [planTier, setPlanTier] = React.useState('elite');
+            var [planDuration, setPlanDuration] = React.useState('monthly'); // monthly | lifetime | trial7 | trial30
+            var [saving, setSaving] = React.useState(false);
+
+            var filtered = users.filter(function(u){
+              if(!planSearch.trim()) return false;
+              var q = planSearch.toLowerCase();
+              return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q);
+            }).slice(0,8);
+
+            var applyPlan = function(){
+              if(!planTarget){ setToast('Selecione um usuário'); return; }
+              setSaving(true);
+              var planData = {};
+              if(planDuration==='lifetime'){
+                planData = {tier: planTier, purchasedAt: Date.now()};
+              } else if(planDuration==='monthly'){
+                planData = {tier: planTier, purchasedAt: Date.now(), expiresAt: Date.now()+30*24*60*60*1000};
+              } else if(planDuration==='trial7'){
+                planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+7*24*60*60*1000, trialUsed: true};
+              } else if(planDuration==='trial30'){
+                planData = {tier: 'free', trialTier: planTier, trialEnd: Date.now()+30*24*60*60*1000, trialUsed: true};
+              } else if(planDuration==='free'){
+                planData = {tier: 'free', trialEnd: null};
+              }
+              window._db.collection('users').doc(planTarget.id).set({planData: planData},{merge:true})
+                .then(function(){
+                  setToast('✅ Plano '+planTier+' aplicado para '+( planTarget.name||planTarget.email)+'!');
+                  setSaving(false);
+                  setPlanTarget(null);
+                  setPlanSearch('');
+                })
+                .catch(function(e){ setToast('Erro: '+(e.message||'')); setSaving(false); });
+            };
+
+            return (
+              <div>
+                {/* User search */}
+                <div style={{marginBottom:'1rem'}}>
+                  <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.35rem',fontWeight:700}}>Buscar Usuário</div>
+                  <input value={planSearch} onChange={function(e){ setPlanSearch(e.target.value); setPlanTarget(null); }}
+                    placeholder="Nome ou email do usuário…"
+                    style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'.9rem',outline:'none'}}/>
+                  {filtered.length>0 && !planTarget && (
+                    <div style={{border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',marginTop:'.3rem',overflow:'hidden'}}>
+                      {filtered.map(function(u,i){ return (
+                        <div key={i} onClick={function(){ setPlanTarget(u); setPlanSearch(u.name||u.email||u.id); }}
+                          style={{padding:'.55rem .85rem',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,.04)',background:'rgba(255,255,255,.01)',display:'flex',alignItems:'center',gap:'.6rem'}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:700,fontSize:'.88rem'}}>{u.name||'(sem nome)'}</div>
+                            <div style={{fontSize:'.7rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email||u.id}</div>
+                          </div>
+                          {u.planData&&u.planData.tier&&u.planData.tier!=='free'&&<span style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700,textTransform:'uppercase'}}>{u.planData.tier}</span>}
+                        </div>
+                      ); })}
+                    </div>
+                  )}
+                </div>
+
+                {planTarget && (
+                  <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
+                    <div style={{fontSize:'.68rem',color:'#555',marginBottom:'.5rem',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:700}}>Usuário selecionado</div>
+                    <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.1rem'}}>{planTarget.name||'(sem nome)'}</div>
+                    <div style={{fontSize:'.75rem',color:'#666',marginBottom:'.1rem'}}>{planTarget.email}</div>
+                    <div style={{fontSize:'.72rem',color:planTarget.planData&&planTarget.planData.tier&&planTarget.planData.tier!=='free'?'var(--color-accent)':'#444',marginTop:'.25rem'}}>
+                      Plano atual: {(planTarget.planData&&planTarget.planData.tier)||'free'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tier selector */}
+                <div style={{marginBottom:'.75rem'}}>
+                  <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Plano</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.4rem'}}>
+                    {[
+                      {id:'elite',   label:'⚡ Elite',   desc:'Todos os recursos'},
+                      {id:'darkgod', label:'👑 DarkGod', desc:'Sem limites'},
+                      {id:'free',    label:'🆓 Gratuito', desc:'Reverter para free'},
+                    ].map(function(p){ return (
+                      <button key={p.id} onClick={function(){ setPlanTier(p.id); }}
+                        style={{background:planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(planTier===p.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'10px',padding:'.6rem .4rem',textAlign:'center',cursor:'pointer'}}>
+                        <div style={{fontSize:'.82rem',fontWeight:700,color:planTier===p.id?'#fff':'#aaa'}}>{p.label}</div>
+                        <div style={{fontSize:'.6rem',color:planTier===p.id?'rgba(255,255,255,.7)':'#444',marginTop:'.15rem'}}>{p.desc}</div>
+                      </button>
+                    ); })}
+                  </div>
+                </div>
+
+                {/* Duration selector */}
+                {planTier!=='free' && (
+                  <div style={{marginBottom:'.75rem'}}>
+                    <div style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem',fontWeight:700}}>Duração</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem'}}>
+                      {[
+                        {id:'lifetime', label:'Vitalício ♾️'},
+                        {id:'monthly',  label:'Mensal (30d)'},
+                        {id:'trial7',   label:'Trial 7 dias'},
+                        {id:'trial30',  label:'Trial 30 dias'},
+                      ].map(function(d){ return (
+                        <button key={d.id} onClick={function(){ setPlanDuration(d.id); }}
+                          style={{background:planDuration===d.id?'rgba(227,27,35,.15)':'rgba(255,255,255,.03)',border:'1px solid '+(planDuration===d.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.5rem .6rem',color:planDuration===d.id?'#fff':'#666',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>
+                          {d.label}
+                        </button>
+                      ); })}
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={applyPlan} disabled={saving||!planTarget}
+                  style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:(saving||!planTarget)?'default':'pointer',opacity:(saving||!planTarget)?.35:1,boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
+                  {saving?'Aplicando…':'Aplicar Plano'}
+                </button>
+
+                {/* Recent personals with plan */}
+                <div style={{marginTop:'1.25rem'}}>
+                  <div style={{fontSize:'.65rem',color:'#333',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',fontWeight:700}}>Usuários com Plano Ativo</div>
+                  {users.filter(function(u){ return u.planData&&u.planData.tier&&u.planData.tier!=='free'; }).slice(0,20).map(function(u,i){ return (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.5rem .75rem',background:'rgba(255,255,255,.02)',borderRadius:'9px',marginBottom:'.3rem',border:'1px solid rgba(255,255,255,.05)'}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:'.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.name||'(sem nome)'}</div>
+                        <div style={{fontSize:'.68rem',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
+                      </div>
+                      <span style={{fontSize:'.68rem',color:u.planData.tier==='darkgod'?'#facc15':'var(--color-accent)',fontWeight:700,textTransform:'uppercase',flexShrink:0}}>{u.planData.tier==='darkgod'?'👑':'⚡'} {u.planData.tier}</span>
+                    </div>
+                  ); })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ── STATS ── */}
       {!loading && tab==='stats' && stats && (
         <div style={{display:'grid',gap:'.75rem'}}>
@@ -6701,24 +6848,41 @@ const AdminPanel = ({setToast}) => {
 };
 
 const PersonalRequestScreen = ({prefs, setToast}) => {
-  const [cref, setCref] = React.useState('');
-  const [msg, setMsg] = React.useState('');
-  const [sent, setSent] = React.useState(false);
+  var [form, setForm] = React.useState({
+    nome: prefs.name||'',
+    cref: '',
+    cidade: '',
+    whatsapp: '',
+    especialidade: '',
+    msg: '',
+  });
+  var [sent, setSent] = React.useState(false);
+  var [sending, setSending] = React.useState(false);
 
   var validarCref = function(v){ return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase()); };
+  var setF = function(k,v){ setForm(function(f){ return Object.assign({},f,{[k]:v}); }); };
 
   var enviar = function(){
-    var v = cref.trim().toUpperCase();
-    if(!validarCref(v)){ setToast('CREF inválido. Formato: 123456-G/SP'); return; }
-    var nome = prefs.name||'';
+    if(!form.nome.trim()){ setToast('Preencha seu nome'); return; }
+    if(!validarCref(form.cref)){ setToast('CREF inválido. Ex: 123456-G/SP'); return; }
+    if(!form.cidade.trim()){ setToast('Informe sua cidade'); return; }
+    setSending(true);
     var uid = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.uid?u.uid:''; }catch(_){ return ''; } })();
     var email = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.email?u.email:''; }catch(_){ return ''; } })();
-    // Salva solicitação no Firestore
-    if(window._db){
-      window._db.collection('personal_requests').doc(uid||v).set({
-        nome:nome, email:email, cref:v, msg:msg.trim(), uid:uid, createdAt:Date.now(), status:'pending'
-      }).then(function(){ setSent(true); }).catch(function(){ setSent(true); }); // mostra sucesso mesmo se falhar o DB
-    } else { setSent(true); }
+    var data = Object.assign({},form,{cref:form.cref.trim().toUpperCase(), uid:uid, email:email, createdAt:Date.now(), status:'pending'});
+    var doSave = function(){
+      if(window._db){
+        window._db.collection('personal_requests').doc(uid||('req_'+Date.now())).set(data)
+          .then(function(){ setSent(true); setSending(false); })
+          .catch(function(){ setSent(true); setSending(false); });
+      } else { setSent(true); setSending(false); }
+    };
+    doSave();
+  };
+
+  var S = {
+    label: {fontSize:'.72rem',color:'#666',marginBottom:'.25rem',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600},
+    inp: {width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.7rem .85rem',color:'#fff',fontSize:'.92rem',outline:'none'},
   };
 
   if(sent) return (
@@ -6726,55 +6890,79 @@ const PersonalRequestScreen = ({prefs, setToast}) => {
       <div style={{fontSize:'3rem'}}>✅</div>
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.04em'}}>Solicitação enviada!</div>
       <div style={{fontSize:'.9rem',color:'#888',maxWidth:'280px',lineHeight:1.6}}>
-        Vamos analisar seus dados e em até <strong style={{color:'#fff'}}>3 dias úteis</strong> liberamos seu acesso ao modo Personal.
+        Seus dados foram enviados. Em até <strong style={{color:'#fff'}}>3 dias úteis</strong> você recebe a confirmação e seu acesso é liberado.
       </div>
-      <div style={{fontSize:'.78rem',color:'#555',marginTop:'.5rem'}}>Fique de olho no seu email 📧</div>
+      <div style={{fontSize:'.75rem',color:'#555',marginTop:'.25rem'}}>Fique de olho no app 👀</div>
     </div>
   );
 
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'2rem 1.5rem',maxWidth:'360px',margin:'0 auto'}}>
-      <div style={{textAlign:'center',marginBottom:'2rem'}}>
-        <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>👨‍💼</div>
+    <div style={{maxWidth:'400px',margin:'0 auto',padding:'1.5rem 1rem'}}>
+      <div style={{textAlign:'center',marginBottom:'1.75rem'}}>
+        <div style={{fontSize:'2.2rem',marginBottom:'.5rem'}}>👨‍💼</div>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.4rem'}}>
           DARK<span style={{color:'var(--color-accent)'}}>SET</span> Personal
         </div>
-        <div style={{fontSize:'.85rem',color:'#888',lineHeight:1.6}}>
-          Use o DarkSet como ferramenta profissional. Monte e envie fichas para seus alunos, acompanhe a evolução deles e compartilhe resultados.
+        <div style={{fontSize:'.84rem',color:'#666',lineHeight:1.6}}>
+          Monte fichas, envie para seus alunos e acompanhe a evolução deles.
         </div>
       </div>
 
-      <div style={{width:'100%',background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.5rem',display:'grid',gap:'.85rem'}}>
-        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,textAlign:'center'}}>Solicitar Acesso</div>
+      <div style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.5rem',display:'grid',gap:'1rem'}}>
+        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,textAlign:'center',marginBottom:'-.25rem'}}>Preencha seus dados</div>
 
         <div>
-          <div style={{fontSize:'.72rem',color:'#555',marginBottom:'.3rem'}}>Número CREF</div>
-          <input value={cref} onChange={function(e){ setCref(e.target.value.toUpperCase()); }} placeholder="123456-G/SP" maxLength={11}
-            style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1rem',textAlign:'center',letterSpacing:'.12em',fontFamily:'monospace',outline:'none'}}/>
-          <div style={{fontSize:'.62rem',color:'#444',marginTop:'.3rem'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
+          <div style={S.label}>Nome completo *</div>
+          <input value={form.nome} onChange={function(e){ setF('nome',e.target.value); }} placeholder="Seu nome" style={S.inp}/>
         </div>
 
         <div>
-          <div style={{fontSize:'.72rem',color:'#555',marginBottom:'.3rem'}}>Mensagem (opcional)</div>
-          <textarea value={msg} onChange={function(e){ setMsg(e.target.value); }} placeholder="Conte um pouco sobre você e como vai usar o DarkSet…" rows={3}
-            style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'.88rem',resize:'vertical',outline:'none'}}/>
+          <div style={S.label}>CREF *</div>
+          <input value={form.cref} onChange={function(e){ setF('cref',e.target.value.toUpperCase()); }} placeholder="123456-G/SP" maxLength={11}
+            style={Object.assign({},S.inp,{letterSpacing:'.12em',fontFamily:'monospace',textAlign:'center'})}/>
+          <div style={{fontSize:'.62rem',color:'#444',marginTop:'.25rem'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
         </div>
 
-        <button onClick={enviar}
-          style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
-          Enviar Solicitação
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
+          <div>
+            <div style={S.label}>Cidade/UF *</div>
+            <input value={form.cidade} onChange={function(e){ setF('cidade',e.target.value); }} placeholder="São Paulo/SP" style={S.inp}/>
+          </div>
+          <div>
+            <div style={S.label}>WhatsApp</div>
+            <input value={form.whatsapp} onChange={function(e){ setF('whatsapp',e.target.value); }} placeholder="(11) 99999-9999" style={S.inp} type="tel"/>
+          </div>
+        </div>
+
+        <div>
+          <div style={S.label}>Especialidade</div>
+          <select value={form.especialidade} onChange={function(e){ setF('especialidade',e.target.value); }}
+            style={Object.assign({},S.inp,{color:form.especialidade?'#fff':'#555'})}>
+            <option value="">Selecione…</option>
+            {['Musculação','Funcional','CrossFit','Corrida/Endurance','Pilates','Emagrecimento','Hipertrofia','Reabilitação','Personal Online','Outro'].map(function(o,i){ return <option key={i} value={o}>{o}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <div style={S.label}>Mensagem (opcional)</div>
+          <textarea value={form.msg} onChange={function(e){ setF('msg',e.target.value); }}
+            placeholder="Conte como vai usar o DarkSet no seu trabalho…" rows={3}
+            style={Object.assign({},S.inp,{resize:'vertical'})}/>
+        </div>
+
+        <button onClick={enviar} disabled={sending}
+          style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:sending?'default':'pointer',opacity:sending?.6:1,boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
+          {sending?'Enviando…':'Solicitar Acesso Personal'}
         </button>
 
-        <div style={{fontSize:'.68rem',color:'#444',textAlign:'center',lineHeight:1.5}}>
-          Após envio, resposta em até 3 dias úteis.<br/>
-          Dúvidas: <span style={{color:'#666'}}>suporte@darksetapp.com</span>
+        <div style={{fontSize:'.65rem',color:'#444',textAlign:'center',lineHeight:1.5}}>
+          Análise em até 3 dias úteis · Campos marcados com * são obrigatórios
         </div>
       </div>
     </div>
   );
 };
 
-// ── Tela de entrada / cadastro ──
 const PersonalLogin = ({onUnlock, setToast}) => {
   const [step, setStep] = React.useState('init');
   const [pwd, setPwd] = React.useState('');
@@ -7068,46 +7256,37 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast, onOpenStu
         </div>
       ) : students.map(function(s,i){ return (
         <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.85rem 1rem',marginBottom:'.5rem'}}>
-          {/* Modo edição — linha inteira */}
-          {editingName===s.id ? (
-            <div>
-              <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginBottom:'.5rem'}}>
-                <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid var(--color-accent)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.9rem'}}>👤</div>
-                <div style={{flex:1,fontSize:'.7rem',color:'var(--color-text-sub)'}}>Editando nome do aluno</div>
-              </div>
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <input value={editNameVal} autoFocus
-                  onChange={function(e){ setEditNameVal(e.target.value); }}
-                  onKeyDown={function(e){ if(e.key==='Enter') saveStudentName(s); if(e.key==='Escape') setEditingName(null); }}
-                  style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid var(--color-accent)',borderRadius:'9px',padding:'.55rem .75rem',color:'#fff',fontSize:'.95rem',fontWeight:700,outline:'none'}}/>
-                <button onClick={function(){ saveStudentName(s); }}
-                  style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem .9rem',color:'#fff',fontSize:'.9rem',cursor:'pointer',fontWeight:900,flexShrink:0}}>✓</button>
-                <button onClick={function(){ setEditingName(null); }}
-                  style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'9px',padding:'.55rem .75rem',color:'#555',fontSize:'.9rem',cursor:'pointer',flexShrink:0}}>✕</button>
-              </div>
+          {/* Linha principal: avatar + nome + botões */}
+          <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid '+(editingName===s.id?'var(--color-accent)':'rgba(255,255,255,.06)'),flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem',transition:'border-color .15s'}}>
+              {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}}/>:'👤'}
             </div>
-          ) : (
-            /* Modo normal */
-            <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
-              <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid rgba(255,255,255,.06)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem'}}>
-                {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}}/>:'👤'}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
-                  <div style={{fontWeight:700,fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
-                  <button onClick={function(){ setEditingName(s.id); setEditNameVal(s.name); }}
-                    style={{background:'none',border:'none',color:'#333',cursor:'pointer',fontSize:'.78rem',flexShrink:0,padding:'0',lineHeight:1}}>✏️</button>
-                </div>
-                <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{s.lastWorkout?'Último: '+s.lastWorkout:'Sem treinos'}</div>
-              </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
+              <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{s.lastWorkout?'Último: '+s.lastWorkout:'Sem treinos'}</div>
+            </div>
+            {editingName!==s.id && (
               <div style={{display:'flex',gap:'.4rem',flexShrink:0}}>
+                <button onClick={function(){ setEditingName(s.id); setEditNameVal(s.name); }}
+                  style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.38rem .55rem',color:'#555',fontSize:'.78rem',cursor:'pointer'}}>✏️</button>
                 <button onClick={function(){ onOpenStudent(s); }}
-                  style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.09)',borderRadius:'8px',padding:'.38rem .7rem',color:'#aaa',fontSize:'.78rem',cursor:'pointer',fontWeight:700}}>
-                  Ver
-                </button>
+                  style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.09)',borderRadius:'8px',padding:'.38rem .7rem',color:'#aaa',fontSize:'.78rem',cursor:'pointer',fontWeight:700}}>Ver</button>
                 <button onClick={function(){ removeStudent(s); }}
                   style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.38rem .6rem',color:'#e31b23',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
               </div>
+            )}
+          </div>
+          {/* Linha de edição — só aparece quando está editando */}
+          {editingName===s.id && (
+            <div style={{marginTop:'.65rem',display:'flex',gap:'.5rem'}}>
+              <input value={editNameVal} autoFocus
+                onChange={function(e){ setEditNameVal(e.target.value); }}
+                onKeyDown={function(e){ if(e.key==='Enter') saveStudentName(s); if(e.key==='Escape') setEditingName(null); }}
+                style={{flex:1,background:'rgba(0,0,0,.45)',border:'1px solid var(--color-accent)',borderRadius:'9px',padding:'.55rem .8rem',color:'#fff',fontSize:'.95rem',fontWeight:700,outline:'none',minWidth:0}}/>
+              <button onClick={function(){ saveStudentName(s); }}
+                style={{background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.55rem 1rem',color:'#fff',fontSize:'.95rem',cursor:'pointer',fontWeight:900,flexShrink:0}}>✓</button>
+              <button onClick={function(){ setEditingName(null); }}
+                style={{background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'9px',padding:'.55rem .85rem',color:'#666',fontSize:'.95rem',cursor:'pointer',flexShrink:0}}>✕</button>
             </div>
           )}
         </div>
