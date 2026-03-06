@@ -1026,126 +1026,189 @@ function day(...exs){ return exs.filter(Boolean); }
 
 // ── PRESET PLANS ──────────────────────────────────────────────────────────
 const PRESET_PLANS = [
+
   // ══════════ 3 DIAS ═══════════════════════════════════════════════════════
   {
     id:'preset_fb3_ini', name:'Full Body 3x — Iniciante', level:'iniciante', days:3,
-    description:'Treino completo do corpo 3x por semana. Ideal para quem está começando.',
+    description:'Treino completo do corpo 3x por semana. Cada sessão treina todos os grupos musculares. Ideal para quem está começando.',
     byDay:{
       'Segunda':[ex('Agachamento livre',3),ex('Supino reto barra',3),ex('Remada curvada barra',3),ex('Desenvolvimento máquina',3),ex('Rosca direta halteres',3),ex('Tríceps pulley corda',3),ex('Prancha isométrica',3)],
-      'Quarta':[ex('Leg press 45°',3),ex('Supino inclinado máquina',3),ex('Puxada alta aberta',3),ex('Desenvolvimento halteres',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3),ex('Abdômen supra',3)],
-      'Sexta':[ex('Agachamento sumô halteres',3),ex('Crucifixo Máquina',3),ex('Remada baixa polia',3),ex('Elevação lateral halteres',3),ex('Rosca Scott máquina',3),ex('Mergulho no banco',3),ex('Abdômen infra',3)],
+      'Quarta': [ex('Leg press 45°',3),ex('Supino inclinado halteres',3),ex('Puxada alta aberta',3),ex('Elevação lateral halteres',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3),ex('Abdômen supra',3)],
+      'Sexta':  [ex('Agachamento sumô halteres',3),ex('Crucifixo Máquina',3),ex('Remada baixa polia',3),ex('Face Pull (corda)',3),ex('Rosca Scott máquina',3),ex('Mergulho no banco',3),ex('Abdômen infra',3)],
       'Terça':[],'Quinta':[],'Sábado':[],'Domingo':[]
     }
   },
   {
-    id:'preset_abc_ini', name:'ABC Iniciante — 3 dias', level:'iniciante', days:3,
-    description:'A = Peito+Tríceps, B = Costas+Bíceps, C = Pernas+Ombro.',
+    id:'preset_abc_ini', name:'ABC — Iniciante 3 dias', level:'iniciante', days:3,
+    description:'A=Peito+Ombro+Tríceps · B=Costas+Bíceps · C=Pernas completo. Distribuição clássica e equilibrada.',
     byDay:{
-      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado máquina',3),ex('Crucifixo Máquina',3),ex('Tríceps pulley corda',4),ex('Tríceps pulley barra reta',3),ex('Mergulho no banco',3)],
-      'Quarta':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Pulldown',3),ex('Rosca direta halteres',4),ex('Rosca martelo halteres',3)],
-      'Sexta':[ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Mesa flexora',3),ex('Desenvolvimento máquina',3),ex('Elevação lateral halteres',4),ex('Panturrilha em pé máquina',3)],
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',3),ex('Crucifixo Máquina',3),ex('Desenvolvimento máquina',3),ex('Elevação lateral halteres',3),ex('Tríceps pulley corda',3)],
+      'Quarta': [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca martelo halteres',3)],
+      'Sexta':  [ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',3),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',3)],
       'Terça':[],'Quinta':[],'Sábado':[],'Domingo':[]
     }
   },
+  {
+    id:'preset_low_vol_int', name:'Low Volume — Intermediário 3 dias', level:'intermediário', days:3,
+    description:'Treino minimalista com compostos pesados. Menos exercícios, mais intensidade. Seg/Qua/Sex com descanso entre as sessões.',
+    byDay:{
+      'Segunda':[ex('Levantamento terra',4),ex('Supino reto barra',4),ex('Puxada alta aberta',4),ex('Desenvolvimento barra',3),ex('Rosca direta barra',3),ex('Tríceps pulley corda',3)],
+      'Quarta': [ex('Agachamento livre',4),ex('Supino inclinado barra',4),ex('Remada curvada barra',4),ex('Arnold press halteres',3),ex('Stiff',3)],
+      'Sexta':  [ex('Agachamento hack máquina',4),ex('Barra fixa',4),ex('Crucifixo reto halteres',3),ex('Face Pull (corda)',3),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',3)],
+      'Terça':[],'Quinta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+
   // ══════════ 4 DIAS ═══════════════════════════════════════════════════════
   {
     id:'preset_ul4_ini', name:'Upper/Lower — Iniciante 4 dias', level:'iniciante', days:4,
-    description:'A = Superior, B = Inferior. Alternado 2x por semana cada.',
+    description:'Superior e Inferior alternados 2x por semana. Equilíbrio perfeito entre todos os grupos musculares.',
     byDay:{
       'Segunda':[ex('Supino reto barra',4),ex('Remada curvada barra',4),ex('Desenvolvimento máquina',3),ex('Puxada alta aberta',3),ex('Rosca direta halteres',3),ex('Tríceps pulley corda',3)],
-      'Terça':[ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Mesa flexora',3),ex('Stiff',3),ex('Panturrilha em pé máquina',4)],
-      'Quinta':[ex('Supino inclinado halteres',4),ex('Remada unilateral halteres',4),ex('Desenvolvimento halteres',3),ex('Puxada triângulo',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3)],
-      'Sexta':[ex('Agachamento sumô halteres',4),ex('Hip thrust máquina',4),ex('Cadeira extensora',3),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',3),ex('Cadeira abdutora',4)],
+      'Terça':  [ex('Agachamento livre',4),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Mesa flexora',3),ex('Stiff',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta': [ex('Supino inclinado halteres',4),ex('Remada serrote halteres',4),ex('Desenvolvimento halteres',3),ex('Puxada triângulo',3),ex('Rosca martelo halteres',3),ex('Tríceps pulley barra reta',3)],
+      'Sexta':  [ex('Agachamento sumô halteres',4),ex('Elevação pélvica com barra',4),ex('Cadeira extensora',3),ex('Cadeira flexora',3),ex('Cadeira abdutora',4),ex('Panturrilha sentado máquina',3)],
       'Quarta':[],'Sábado':[],'Domingo':[]
     }
   },
   {
     id:'preset_ppl4_int', name:'PPL 4 dias — Intermediário', level:'intermediário', days:4,
-    description:'Push, Pull, Legs + Full. Bom volume com 4 sessões semanais.',
+    description:'Push/Pull/Legs + Full Body. Bom volume em 4 sessões. Descansa Quarta e Domingo.',
     byDay:{
       'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo reto halteres',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
-      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Pulldown',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Face Pull (corda)',3)],
-      'Quinta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',4)],
-      'Sábado':[ex('Supino reto barra',3),ex('Remada articulada',4),ex('Desenvolvimento máquina',3),ex('Puxada alta aberta',3),ex('Rosca direta halteres',3),ex('Tríceps pulley barra reta',3),ex('Elevação lateral halteres',3)],
+      'Terça':  [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Puxada triângulo',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Face Pull (corda)',3)],
+      'Quinta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',4)],
+      'Sábado': [ex('Supino reto halteres',4),ex('Remada articulada',4),ex('Desenvolvimento halteres',3),ex('Puxada alta aberta',3),ex('Rosca direta halteres',3),ex('Tríceps pulley barra reta',3),ex('Elevação lateral halteres',3)],
       'Quarta':[],'Sexta':[],'Domingo':[]
     }
   },
+  {
+    id:'preset_ppl_descanso_qfs', name:'PPL Descanso Qui/Sex/Sáb', level:'intermediário', days:3,
+    description:'Treina Seg/Ter/Qua e descansa Qui/Sex/Sáb. Ideal para quem tem o fim de semana livre e prefere treinar dias seguidos.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo reto halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':  [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Remada cavalinho',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',4)],
+      'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_gluteo_foco', name:'Foco Glúteo — 4 dias', level:'intermediário', days:4,
+    description:'Alto volume em glúteo e posterior. Inclui 1 dia de superior para equilibrar o corpo. Não negligencie o upper!',
+    byDay:{
+      'Segunda':[ex('Elevação pélvica com barra',5),ex('Agachamento sumô barra',4),ex('Stiff',4),ex('Cadeira abdutora',4),ex('Glúteo 4 apoios cabo',4),ex('Abdução em pé polia',3)],
+      'Terça':  [ex('Supino reto barra',4),ex('Puxada alta aberta',4),ex('Desenvolvimento halteres',3),ex('Remada curvada barra',3),ex('Rosca direta halteres',3),ex('Tríceps pulley corda',3)],
+      'Quinta': [ex('Agachamento hack máquina',4),ex('Leg press 45°',4),ex('Agachamento búlgaro halteres',4),ex('Cadeira extensora',3),ex('Cadeira abdutora',3),ex('Panturrilha em pé máquina',4)],
+      'Sexta':  [ex('Stiff com halteres',4),ex('Mesa flexora',4),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',4),ex('Glúteo 4 apoios cabo',3),ex('Panturrilha sentado máquina',3)],
+      'Quarta':[],'Sábado':[],'Domingo':[]
+    }
+  },
+
   // ══════════ 5 DIAS ═══════════════════════════════════════════════════════
   {
     id:'preset_ppl5_int', name:'PPL Clássico — Intermediário 5 dias', level:'intermediário', days:5,
-    description:'Push/Pull/Legs com 5 sessões. Volume ideal para ganho muscular.',
+    description:'Push/Pull/Legs × 5 sessões com Push e Pull repetidos. Volume ideal para ganho muscular.',
     byDay:{
       'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crossover polia alta',3),ex('Crucifixo reto halteres',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
-      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Pulldown',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Rosca concentrada halteres',3)],
-      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Agachamento búlgaro halteres',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',5)],
-      'Quinta':[ex('Supino inclinado máquina',4),ex('Peck deck',4),ex('Supino declinado halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Tríceps francês halteres',4),ex('Kick back tríceps halteres',3)],
-      'Sexta':[ex('Barra fixa',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Remada unilateral halteres',4),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca 21',3),ex('Rosca Scott máquina',3)],
+      'Terça':  [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Puxada triângulo',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3),ex('Rosca concentrada halteres',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Agachamento búlgaro halteres',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',5)],
+      'Quinta': [ex('Supino inclinado barra',4),ex('Supino declinado halteres',3),ex('Crucifixo Máquina',4),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Tríceps francês halteres',4),ex('Kick back tríceps halteres',3)],
+      'Sexta':  [ex('Barra fixa',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Remada serrote halteres',4),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca Scott máquina',3),ex('Rosca alternada halteres',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_ppl_ul_av', name:'PPL+UL — Avançado 5 dias', level:'avançado', days:5,
+    description:'Push·Pull·Legs + Upper·Lower numa semana. Alta frequência, cada músculo trabalhado 2x. Ideal para intermediários avançados.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Crossover polia alta',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':  [ex('Barra fixa',5),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Puxada triângulo',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Agachamento búlgaro halteres',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',5)],
+      'Quinta': [ex('Supino inclinado barra',4),ex('Puxada alta aberta',4),ex('Desenvolvimento halteres',3),ex('Remada articulada',3),ex('Crucifixo reto halteres',3),ex('Crucifixo inverso máquina',3),ex('Rosca direta halteres',3),ex('Tríceps francês halteres',3)],
+      'Sexta':  [ex('Agachamento hack máquina',4),ex('Leg press 45°',4),ex('Elevação pélvica com barra',4),ex('Stiff com halteres',4),ex('Cadeira flexora',3),ex('Cadeira abdutora',3),ex('Panturrilha sentado máquina',4)],
       'Sábado':[],'Domingo':[]
     }
   },
   {
     id:'preset_abcde_av', name:'ABCDE — Avançado 5 dias', level:'avançado', days:5,
-    description:'Um grupo muscular por dia. Alto volume e especialização.',
+    description:'Um grupo muscular por dia. Alto volume e especialização. Peito/Costas/Ombro/Pernas/Braços.',
     byDay:{
-      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Supino declinado barra',4),ex('Crucifixo reto halteres',4),ex('Crossover polia alta',3),ex('Peck deck',3),ex('Pullover halteres',3)],
-      'Terça':[ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Puxada triângulo',4),ex('Remada cavalinho',4),ex('Hiperextensão lombar',3),ex('Extensão lombar máquina',3)],
-      'Quarta':[ex('Desenvolvimento barra',5),ex('Desenvolvimento halteres',4),ex('Arnold press halteres',4),ex('Elevação lateral halteres',5),ex('Elevação frontal barra',4),ex('Crucifixo inverso máquina',4),ex('Face Pull (corda)',4),ex('Encolhimento barra',4)],
-      'Quinta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Agachamento hack máquina',4),ex('Cadeira extensora',4),ex('Stiff',5),ex('Mesa flexora',4),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',5),ex('Panturrilha sentado máquina',4)],
-      'Sexta':[ex('Rosca direta barra',5),ex('Rosca inclinada halteres',4),ex('Rosca Scott máquina',4),ex('Rosca martelo halteres',4),ex('Tríceps testa barra W',5),ex('Tríceps francês barra',4),ex('Tríceps pulley corda',4),ex('Tríceps pulley barra reta',3),ex('Mergulho no banco',3)],
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Supino declinado barra',4),ex('Crucifixo reto halteres',4),ex('Crossover polia alta',3),ex('Crucifixo Máquina',3),ex('Pullover halteres',3)],
+      'Terça':  [ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Puxada triângulo',4),ex('Remada cavalinho',4),ex('Extensão lombar máquina',3),ex('Encolhimento barra',3)],
+      'Quarta': [ex('Desenvolvimento barra',5),ex('Desenvolvimento halteres',4),ex('Arnold press halteres',4),ex('Elevação lateral halteres',5),ex('Elevação frontal barra',4),ex('Crucifixo inverso máquina',4),ex('Face Pull (corda)',4)],
+      'Quinta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Agachamento hack máquina',4),ex('Cadeira extensora',4),ex('Stiff',5),ex('Mesa flexora',4),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',5),ex('Panturrilha sentado máquina',4)],
+      'Sexta':  [ex('Rosca direta barra',5),ex('Rosca 45° halteres',4),ex('Rosca Scott máquina',4),ex('Rosca martelo halteres',4),ex('Tríceps testa barra W',5),ex('Tríceps francês barra',4),ex('Tríceps pulley corda',4),ex('Tríceps pulley barra reta',3),ex('Paralelas',3)],
       'Sábado':[],'Domingo':[]
     }
   },
+  {
+    id:'preset_peito_foco', name:'Foco Peito — Intermediário 5 dias', level:'intermediário', days:5,
+    description:'2 dias dedicados ao peito com alto volume. Costas, pernas e ombros mantidos para equilíbrio completo.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Supino declinado barra',4),ex('Crucifixo reto halteres',3),ex('Crossover polia alta',3),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
+      'Terça':  [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Barra fixa',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta': [ex('Supino inclinado barra',5),ex('Supino reto halteres',4),ex('Crucifixo Máquina',4),ex('Pullover halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3)],
+      'Sexta':  [ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Face Pull (corda)',3),ex('Rosca direta halteres',4),ex('Rosca concentrada halteres',3),ex('Tríceps francês halteres',4),ex('Kick back tríceps halteres',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_costas_foco', name:'Foco Costas — Intermediário 5 dias', level:'intermediário', days:5,
+    description:'2 dias de costas com alto volume em lats, romboides e trapézio. Peito, pernas e ombros equilibrados.',
+    byDay:{
+      'Segunda':[ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Barra fixa',4),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3)],
+      'Terça':  [ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo Máquina',3),ex('Desenvolvimento máquina',3),ex('Elevação lateral halteres',3),ex('Tríceps pulley corda',4),ex('Tríceps testa barra W',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta': [ex('Barra fixa',5),ex('Remada articulada',4),ex('Puxada triângulo',4),ex('Remada serrote halteres',4),ex('Remada cavalinho',3),ex('Encolhimento barra',3),ex('Rosca alternada halteres',3)],
+      'Sexta':  [ex('Desenvolvimento halteres',4),ex('Arnold press halteres',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Elevação frontal halteres',3),ex('Abdômen supra',3),ex('Prancha isométrica',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_perna_foco', name:'Foco Perna — Intermediário 5 dias', level:'intermediário', days:5,
+    description:'3 dias de pernas (quad, posterior e glúteo) com superior mantido. Para quem quer equilibrar pernas lagging.',
+    byDay:{
+      'Segunda':[ex('Agachamento livre',5),ex('Leg press 45°',5),ex('Cadeira extensora',4),ex('Agachamento hack máquina',4),ex('Agachamento búlgaro halteres',3),ex('Panturrilha em pé máquina',4)],
+      'Terça':  [ex('Supino reto barra',4),ex('Supino inclinado halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Puxada alta aberta',3),ex('Tríceps pulley corda',3)],
+      'Quarta': [ex('Levantamento terra',5),ex('Stiff',4),ex('Mesa flexora',4),ex('Elevação pélvica com barra',4),ex('Cadeira flexora',3),ex('Cadeira abdutora',3),ex('Panturrilha sentado máquina',4)],
+      'Quinta': [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',3)],
+      'Sexta':  [ex('Agachamento sumô barra',4),ex('Agachamento búlgaro halteres',4),ex('Cadeira extensora',3),ex('Stiff com halteres',4),ex('Cadeira flexora',3),ex('Cadeira abdutora',3),ex('Abdômen supra',3)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+  {
+    id:'preset_bracos_foco', name:'Foco Braços — Intermediário 5 dias', level:'intermediário', days:5,
+    description:'Volume extra em bíceps e tríceps (2 sessões cada). Peito, costas e pernas mantidos sem neglicenciar nenhum grupo.',
+    byDay:{
+      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo Máquina',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca 45° halteres',3),ex('Rosca concentrada halteres',3)],
+      'Terça':  [ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Tríceps testa barra W',4),ex('Tríceps francês halteres',4),ex('Tríceps pulley corda',3),ex('Tríceps pulley barra reta',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Stiff',4),ex('Mesa flexora',3),ex('Cadeira extensora',3),ex('Panturrilha em pé máquina',4)],
+      'Quinta': [ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Face Pull (corda)',3),ex('Rosca direta halteres',4),ex('Rosca Scott máquina',4),ex('Rosca alternada halteres',3)],
+      'Sexta':  [ex('Supino declinado barra',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Tríceps francês barra',4),ex('Kick back tríceps halteres',3),ex('Paralelas',4)],
+      'Sábado':[],'Domingo':[]
+    }
+  },
+
   // ══════════ 6 DIAS ═══════════════════════════════════════════════════════
   {
     id:'preset_ppl6_av', name:'PPL×2 — Avançado 6 dias', level:'avançado', days:6,
-    description:'Push/Pull/Legs duas vezes por semana. Máximo volume.',
+    description:'Push/Pull/Legs repetidos 2x por semana. Máximo volume e frequência. Apenas domingo de descanso.',
     byDay:{
       'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Crossover polia alta',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Crucifixo inverso máquina',3),ex('Tríceps testa barra W',4),ex('Tríceps pulley corda',3)],
-      'Terça':[ex('Puxada alta aberta',5),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca concentrada halteres',3)],
-      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Hip thrust barra',4),ex('Panturrilha em pé máquina',5)],
-      'Quinta':[ex('Supino inclinado barra',5),ex('Peck deck',4),ex('Supino declinado halteres',3),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Arnold press halteres',3),ex('Tríceps francês halteres',4),ex('Tríceps pulley barra reta',3)],
-      'Sexta':[ex('Barra fixa',5),ex('Remada articulada',4),ex('Puxada triângulo',4),ex('Remada unilateral halteres',3),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca 21',3)],
-      'Sábado':[ex('Agachamento sumô barra',5),ex('Agachamento hack máquina',4),ex('Cadeira extensora',3),ex('Stiff com halteres',4),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',4),ex('Cadeira abdutora',4),ex('Panturrilha sentado máquina',5)],
+      'Terça':  [ex('Puxada alta aberta',5),ex('Remada curvada barra',4),ex('Remada baixa polia',4),ex('Face Pull (corda)',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca concentrada halteres',3)],
+      'Quarta': [ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Cadeira extensora',3),ex('Stiff',4),ex('Mesa flexora',3),ex('Elevação pélvica com barra',4),ex('Panturrilha em pé máquina',5)],
+      'Quinta': [ex('Supino inclinado barra',5),ex('Supino declinado halteres',3),ex('Crucifixo Máquina',4),ex('Desenvolvimento halteres',4),ex('Elevação lateral halteres',4),ex('Arnold press halteres',3),ex('Tríceps francês halteres',4),ex('Tríceps pulley barra reta',3)],
+      'Sexta':  [ex('Barra fixa',5),ex('Remada articulada',4),ex('Puxada triângulo',4),ex('Remada serrote halteres',3),ex('Encolhimento halteres',3),ex('Rosca direta halteres',4),ex('Rosca alternada halteres',3)],
+      'Sábado': [ex('Agachamento sumô barra',5),ex('Agachamento hack máquina',4),ex('Cadeira extensora',3),ex('Stiff com halteres',4),ex('Cadeira flexora',3),ex('Elevação pélvica com barra',4),ex('Cadeira abdutora',4),ex('Panturrilha sentado máquina',5)],
       'Domingo':[]
     }
   },
-  // ══════════ FOCO ══════════════════════════════════════════════════════════
-  {
-    id:'preset_gluteo_foco', name:'Foco Glúteo — 4 dias', level:'intermediário', days:4,
-    description:'Programa especializado em glúteo com treinos de pernas e posterior.',
-    byDay:{
-      'Segunda':[ex('Hip thrust barra',5),ex('Elevação pélvica com barra',4),ex('Agachamento sumô barra',4),ex('Cadeira abdutora',4),ex('Glúteo 4 apoios cabo',4),ex('Stiff',4),ex('Abdução em pé polia',3)],
-      'Terça':[ex('Leg press 45°',5),ex('Cadeira extensora',4),ex('Agachamento hack máquina',4),ex('Mesa flexora',4),ex('Cadeira flexora',3),ex('Panturrilha em pé máquina',4)],
-      'Quinta':[ex('Hip thrust máquina',5),ex('Agachamento búlgaro halteres',4),ex('Afundo com halteres',4),ex('Cadeira abdutora',4),ex('Stiff unilateral halteres',4),ex('Elevação pélvica com barra',3),ex('Abdução em pé polia',3)],
-      'Sexta':[ex('Agachamento sumô halteres',4),ex('Leg press 45°',4),ex('Passada avançada halteres',4),ex('Mesa flexora deitada',4),ex('Extensão lombar máquina',3),ex('Panturrilha sentado máquina',4)],
-      'Quarta':[],'Sábado':[],'Domingo':[]
-    }
-  },
-  {
-    id:'preset_upper_foco', name:'Foco Superior — 4 dias', level:'intermediário', days:4,
-    description:'Foco em peito, costas e ombros com volume elevado.',
-    byDay:{
-      'Segunda':[ex('Supino reto barra',5),ex('Supino inclinado halteres',4),ex('Crossover polia alta',4),ex('Peck deck',3),ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',5),ex('Crucifixo inverso máquina',3)],
-      'Quarta':[ex('Puxada alta aberta',5),ex('Remada curvada barra',5),ex('Remada baixa polia',4),ex('Puxada triângulo',3),ex('Face Pull (corda)',4),ex('Encolhimento halteres',3),ex('Hiperextensão lombar',3)],
-      'Quinta':[ex('Supino declinado barra',4),ex('Crucifixo reto halteres',4),ex('Pullover halteres',3),ex('Arnold press halteres',4),ex('Elevação frontal halteres',3),ex('Elevação lateral unilateral polia',4)],
-      'Sexta':[ex('Barra fixa',4),ex('Remada articulada',4),ex('Remada unilateral halteres',4),ex('Desenvolvimento halteres',4),ex('Crucifixo inverso halteres',3),ex('Rosca direta barra',4),ex('Tríceps testa barra W',4)],
-      'Terça':[],'Sábado':[],'Domingo':[]
-    }
-  },
-  {
-    id:'preset_bracos_foco', name:'Foco Braços — 5 dias', level:'intermediário', days:5,
-    description:'Volume extra para bíceps e tríceps, com base de peito/costas/pernas.',
-    byDay:{
-      'Segunda':[ex('Supino reto barra',4),ex('Supino inclinado halteres',4),ex('Crucifixo Máquina',3),ex('Rosca direta barra',4),ex('Rosca martelo halteres',4),ex('Rosca 21',3),ex('Rosca concentrada halteres',3)],
-      'Terça':[ex('Puxada alta aberta',4),ex('Remada curvada barra',4),ex('Remada baixa polia',3),ex('Tríceps testa barra W',4),ex('Tríceps francês halteres',4),ex('Tríceps pulley corda',3),ex('Tríceps pulley barra reta',3)],
-      'Quarta':[ex('Agachamento livre',5),ex('Leg press 45°',4),ex('Stiff',4),ex('Mesa flexora',3),ex('Panturrilha em pé máquina',4)],
-      'Quinta':[ex('Desenvolvimento barra',4),ex('Elevação lateral halteres',4),ex('Face Pull (corda)',3),ex('Rosca direta halteres',4),ex('Rosca Scott máquina',4),ex('Rosca inversa barra',3)],
-      'Sexta':[ex('Supino declinado barra',4),ex('Remada articulada',4),ex('Puxada triângulo',3),ex('Tríceps francês barra',4),ex('Kick back tríceps halteres',3),ex('Mergulho no banco',4)],
-      'Sábado':[],'Domingo':[]
-    }
-  },
+
 ];
 
+
+// ── Firestore sync
 
 // ── Firestore sync ────────────────────────────────────────────────────────
 const SYNC_STATUS = { listeners: [] };
