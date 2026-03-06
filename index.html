@@ -4188,7 +4188,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
 
   // ── FREE MODE helpers ──
   const freeAddExercise = (name) => {
-    setFreeExercises(prev => [...prev, {name, sets: [{w: '', r: ''}], rir: [rirDefault]}]);
+    setFreeExercises(prev => [{name, sets: [{w: '', r: ''}], rir: [rirDefault]}, ...prev]);
     setFreeSearch(''); setShowFreeSearch(false);
   };
   const freeRemoveExercise = (i) => setFreeExercises(prev => prev.filter((_, ix) => ix !== i));
@@ -4223,6 +4223,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     setFreeExercises([]);
     if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100, 50, 200]);
     setToast('Treino salvo!');
+    setTimeout(function(){ setShowSharePopup(true); }, 500);
   };
 
   const freeSuggestions = freeSearch.length >= 1
