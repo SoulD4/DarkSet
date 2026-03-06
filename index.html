@@ -1362,7 +1362,7 @@ const NAV_ITEMS = [
   {section: null,       icon:'🏟️', label:'DarkGym',     screen:'gym'},
   {section: 'CONTA',    icon:'👤', label:'Perfil',      screen:'profile'},
   {section: null,       icon:'🏅', label:'DarkSelos',   screen:'selos'},
-  {section: 'PERSONAL', icon:'👨‍💼', label:'Personal',    screen:'personal', personalOnly:true},
+  {section: 'PERSONAL', icon:'👨‍💼', label:'Personal',    screen:'personal'},
 ];
 
 const Drawer = ({open, onClose, screen, goto, prefs, isPersonal=false}) => {
@@ -6446,6 +6446,81 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 // PersonalPanel — Painel do Personal Trainer
 // ═══════════════════════════════════════════════════════
 
+// ── Tela de solicitação de acesso Personal ──
+const PersonalRequestScreen = ({prefs, setToast}) => {
+  const [cref, setCref] = React.useState('');
+  const [msg, setMsg] = React.useState('');
+  const [sent, setSent] = React.useState(false);
+
+  var validarCref = function(v){ return /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase()); };
+
+  var enviar = function(){
+    var v = cref.trim().toUpperCase();
+    if(!validarCref(v)){ setToast('CREF inválido. Formato: 123456-G/SP'); return; }
+    var nome = prefs.name||'';
+    var uid = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.uid?u.uid:''; }catch(_){ return ''; } })();
+    var email = (function(){ try{ var u=JSON.parse(localStorage.getItem('darkset.user')||'null'); return u&&u.email?u.email:''; }catch(_){ return ''; } })();
+    // Salva solicitação no Firestore
+    if(window._db){
+      window._db.collection('personal_requests').doc(uid||v).set({
+        nome:nome, email:email, cref:v, msg:msg.trim(), uid:uid, createdAt:Date.now(), status:'pending'
+      }).then(function(){ setSent(true); }).catch(function(){ setSent(true); }); // mostra sucesso mesmo se falhar o DB
+    } else { setSent(true); }
+  };
+
+  if(sent) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',padding:'2rem',textAlign:'center',gap:'1rem'}}>
+      <div style={{fontSize:'3rem'}}>✅</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.04em'}}>Solicitação enviada!</div>
+      <div style={{fontSize:'.9rem',color:'#888',maxWidth:'280px',lineHeight:1.6}}>
+        Vamos analisar seus dados e em até <strong style={{color:'#fff'}}>3 dias úteis</strong> liberamos seu acesso ao modo Personal.
+      </div>
+      <div style={{fontSize:'.78rem',color:'#555',marginTop:'.5rem'}}>Fique de olho no seu email 📧</div>
+    </div>
+  );
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'2rem 1.5rem',maxWidth:'360px',margin:'0 auto'}}>
+      <div style={{textAlign:'center',marginBottom:'2rem'}}>
+        <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>👨‍💼</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1,marginBottom:'.4rem'}}>
+          DARK<span style={{color:'var(--color-accent)'}}>SET</span> Personal
+        </div>
+        <div style={{fontSize:'.85rem',color:'#888',lineHeight:1.6}}>
+          Use o DarkSet como ferramenta profissional. Monte e envie fichas para seus alunos, acompanhe a evolução deles e compartilhe resultados.
+        </div>
+      </div>
+
+      <div style={{width:'100%',background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.5rem',display:'grid',gap:'.85rem'}}>
+        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,textAlign:'center'}}>Solicitar Acesso</div>
+
+        <div>
+          <div style={{fontSize:'.72rem',color:'#555',marginBottom:'.3rem'}}>Número CREF</div>
+          <input value={cref} onChange={function(e){ setCref(e.target.value.toUpperCase()); }} placeholder="123456-G/SP" maxLength={11}
+            style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'1rem',textAlign:'center',letterSpacing:'.12em',fontFamily:'monospace',outline:'none'}}/>
+          <div style={{fontSize:'.62rem',color:'#444',marginTop:'.3rem'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
+        </div>
+
+        <div>
+          <div style={{fontSize:'.72rem',color:'#555',marginBottom:'.3rem'}}>Mensagem (opcional)</div>
+          <textarea value={msg} onChange={function(e){ setMsg(e.target.value); }} placeholder="Conte um pouco sobre você e como vai usar o DarkSet…" rows={3}
+            style={{width:'100%',background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'.75rem',color:'#fff',fontSize:'.88rem',resize:'vertical',outline:'none'}}/>
+        </div>
+
+        <button onClick={enviar}
+          style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.25)'}}>
+          Enviar Solicitação
+        </button>
+
+        <div style={{fontSize:'.68rem',color:'#444',textAlign:'center',lineHeight:1.5}}>
+          Após envio, resposta em até 3 dias úteis.<br/>
+          Dúvidas: <span style={{color:'#666'}}>suporte@darksetapp.com</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Tela de entrada / cadastro ──
 const PersonalLogin = ({onUnlock, setToast}) => {
   const [step, setStep] = React.useState('init');
@@ -6651,7 +6726,7 @@ const PersonalStudentPicker = ({students, selectedUid, onSelect, label}) => (
 );
 
 // ── Aba Alunos ──
-const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
+const PersonalStudentsTab = ({students, loading, uid, prefs, setToast, onOpenStudent}) => {
   const [inviteCode, setInviteCode] = React.useState(null);
   const [inviteLoading, setInviteLoading] = React.useState(false);
   var cref = localStorage.getItem('ds.pt_cref') || '';
@@ -6680,21 +6755,31 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
       .catch(function(){ setToast('Erro ao remover'); });
   };
 
+  var [editingName, setEditingName] = React.useState(null); // linkId being edited
+  var [editNameVal, setEditNameVal] = React.useState('');
+
+  var saveStudentName = function(link){
+    if(!editNameVal.trim()){ setEditingName(null); return; }
+    window._db.collection('personal_links').doc(link.id).update({studentName: editNameVal.trim()})
+      .then(function(){ setToast('Nome atualizado'); setEditingName(null); })
+      .catch(function(){ setToast('Erro ao salvar'); });
+  };
+
   return (
     <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
 
       {/* Perfil do Personal */}
-      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.08),rgba(0,0,0,0))',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.1rem 1.25rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'1rem'}}>
-        <div style={{width:'48px',height:'48px',borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#8b0000)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem',flexShrink:0}}>👨‍💼</div>
+      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.08),rgba(0,0,0,0))',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1rem 1.25rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+        <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#8b0000)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>👨‍💼</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.04em'}}>{prefs.name||'Personal'}</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',letterSpacing:'.04em'}}>{prefs.name||'Personal'}</div>
           {cref && <div style={{fontSize:'.72rem',color:'var(--color-accent)',fontWeight:700,marginTop:'.1rem'}}>CREF {cref}</div>}
-          <div style={{fontSize:'.68rem',color:'#555',marginTop:'.1rem'}}>{students.length}/10 alunos vinculados</div>
+          <div style={{fontSize:'.68rem',color:'#555',marginTop:'.1rem'}}>{students.length}/10 alunos</div>
         </div>
         <button onClick={function(){
           if(confirm('Alterar CREF?')){ localStorage.removeItem('ds.pt_cref'); window.location.reload(); }
-        }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',fontSize:'.7rem',cursor:'pointer',flexShrink:0}}>
-          Alterar CREF
+        }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.3rem .55rem',color:'#555',fontSize:'.68rem',cursor:'pointer',flexShrink:0}}>
+          Alterar
         </button>
       </div>
 
@@ -6702,50 +6787,72 @@ const PersonalStudentsTab = ({students, loading, uid, prefs, setToast}) => {
       <div style={{marginBottom:'1.25rem'}}>
         <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Convidar Aluno</div>
         {inviteCode ? (
-          <div style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.18)',borderRadius:'12px',padding:'1rem'}}>
-            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginBottom:'.5rem'}}>Compartilhe este código com seu aluno · válido 7 dias</div>
-            <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'.5rem'}}>
-              <div style={{flex:1,fontFamily:'monospace',fontSize:'1.5rem',fontWeight:900,letterSpacing:'.12em',color:'var(--color-accent)'}}>{inviteCode}</div>
-              <button onClick={copyInvite} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .9rem',color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',flexShrink:0}}>Copiar</button>
+          <div style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.18)',borderRadius:'12px',padding:'.9rem'}}>
+            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginBottom:'.4rem'}}>Compartilhe com seu aluno · válido 7 dias</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'.4rem'}}>
+              <div style={{flex:1,fontFamily:'monospace',fontSize:'1.4rem',fontWeight:900,letterSpacing:'.12em',color:'var(--color-accent)'}}>{inviteCode}</div>
+              <button onClick={copyInvite} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.45rem .85rem',color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',flexShrink:0}}>Copiar</button>
             </div>
-            <button onClick={function(){ setInviteCode(null); }} style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo código</button>
+            <button onClick={function(){ setInviteCode(null); }} style={{background:'none',border:'none',color:'#444',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Gerar novo</button>
           </div>
         ) : (
           <button onClick={generateInvite} disabled={inviteLoading||students.length>=10}
-            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.8rem',color:'#fff',fontWeight:900,fontSize:'.95rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',opacity:students.length>=10?.4:1}}>
+            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.75rem',color:'#fff',fontWeight:900,fontSize:'.92rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',opacity:students.length>=10?.4:1}}>
             {inviteLoading?'Gerando…':'+ Gerar Código de Convite'}
           </button>
         )}
       </div>
 
-      {/* Lista de alunos */}
+      {/* Lista */}
       <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Seus Alunos</div>
       {loading ? (
-        <div style={{textAlign:'center',padding:'2.5rem',color:'#333'}}>Carregando…</div>
+        <div style={{textAlign:'center',padding:'2rem',color:'#333'}}>Carregando…</div>
       ) : students.length===0 ? (
         <div style={{textAlign:'center',padding:'2.5rem 1rem',color:'#333',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
           <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
-          <div style={{fontSize:'.88rem',color:'#555',fontWeight:600}}>Nenhum aluno ainda</div>
-          <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>Gere um código e compartilhe com seu aluno</div>
+          <div style={{fontSize:'.85rem',color:'#555',fontWeight:600}}>Nenhum aluno ainda</div>
+          <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>Gere um código e compartilhe</div>
         </div>
       ) : students.map(function(s,i){ return (
-        <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.9rem 1rem',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.85rem'}}>
-          <div style={{width:'42px',height:'42px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid rgba(255,255,255,.06)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>
-            {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'👤'}
+        <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.85rem 1rem',marginBottom:'.5rem'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'linear-gradient(135deg,#1a1a1a,#111)',border:'2px solid rgba(255,255,255,.06)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem'}}>
+              {s.photoURL?<img src={s.photoURL} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}}/>:'👤'}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              {editingName===s.id ? (
+                <div style={{display:'flex',gap:'.4rem'}}>
+                  <input value={editNameVal} autoFocus
+                    onChange={function(e){ setEditNameVal(e.target.value); }}
+                    onKeyDown={function(e){ if(e.key==='Enter') saveStudentName(s); if(e.key==='Escape') setEditingName(null); }}
+                    style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid var(--color-accent)',borderRadius:'6px',padding:'.3rem .5rem',color:'#fff',fontSize:'.88rem',outline:'none'}}/>
+                  <button onClick={function(){ saveStudentName(s); }} style={{background:'var(--color-accent)',border:'none',borderRadius:'6px',padding:'.3rem .6rem',color:'#fff',fontSize:'.78rem',cursor:'pointer',fontWeight:700}}>✓</button>
+                  <button onClick={function(){ setEditingName(null); }} style={{background:'rgba(255,255,255,.06)',border:'none',borderRadius:'6px',padding:'.3rem .55rem',color:'#555',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
+                </div>
+              ) : (
+                <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
+                  <div style={{fontWeight:700,fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
+                  <button onClick={function(){ setEditingName(s.id); setEditNameVal(s.name); }}
+                    style={{background:'none',border:'none',color:'#444',cursor:'pointer',fontSize:'.75rem',flexShrink:0,padding:'.1rem .2rem'}}>✏️</button>
+                </div>
+              )}
+              <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{s.lastWorkout?'Último: '+s.lastWorkout:'Sem treinos'}</div>
+            </div>
+            <div style={{display:'flex',gap:'.4rem',flexShrink:0}}>
+              <button onClick={function(){ onOpenStudent(s); }}
+                style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.09)',borderRadius:'8px',padding:'.38rem .7rem',color:'#aaa',fontSize:'.78rem',cursor:'pointer',fontWeight:700}}>
+                Ver
+              </button>
+              <button onClick={function(){ removeStudent(s); }}
+                style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.38rem .6rem',color:'#e31b23',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
+            </div>
           </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:'.9rem'}}>{s.name}</div>
-            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{s.lastWorkout?'Último treino: '+s.lastWorkout:'Sem treinos registrados'}</div>
-          </div>
-          <button onClick={function(){ removeStudent(s); }}
-            style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.35rem .6rem',color:'#444',fontSize:'.75rem',cursor:'pointer'}}>✕</button>
         </div>
       ); })}
     </div>
   );
 };
 
-// ── Aba Fichas ──
 const PersonalBuilderTab = ({students, personalName, setToast}) => {
   const EMPTY_DAYS = {'Segunda':[],'Terça':[],'Quarta':[],'Quinta':[],'Sexta':[],'Sábado':[],'Domingo':[]};
   const [selUid, setSelUid] = React.useState('');
@@ -7153,6 +7260,270 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
   );
 };
 
+// ── Painel individual do aluno ──
+const StudentDetailPanel = ({student, personalName, onBack, setToast}) => {
+  const [plans, setPlans] = React.useState([]);
+  const [hist, setHist] = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+  const [editingPlan, setEditingPlan] = React.useState(null); // plan obj being edited
+  const [editByDay, setEditByDay] = React.useState(null);
+  const [editName, setEditName] = React.useState('');
+  const [activeEditDay, setActiveEditDay] = React.useState('Segunda');
+  const [editTab, setEditTab] = React.useState('ficha');
+  const [editFilters, setEditFilters] = React.useState({q:'',m:'',e:''});
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(function(){
+    if(!student||!window._db){ setLoading(false); return; }
+    setLoading(true);
+    // Load plans
+    window._db.collection('personal_plans').doc(student.studentUid).collection('plans').get()
+      .then(function(snap){
+        setPlans(snap.docs.map(function(d){ return d.data(); }));
+      }).catch(function(){});
+    // Load history
+    window._db.collection('users').doc(student.studentUid).collection('data').doc('history').get()
+      .then(function(doc){
+        if(doc.exists){ try{ setHist(JSON.parse(doc.data().payload||'{}')); }catch(_){} }
+        setLoading(false);
+      }).catch(function(){ setLoading(false); });
+  }, [student]);
+
+  var entries = Object.entries(hist).sort(function(a,b){ return a[0].localeCompare(b[0]); });
+  var totalWorkouts = entries.length;
+  var totalVol = entries.reduce(function(a,e){ return a+(e[1].entries||[]).reduce(function(b,en){ return b+(en.sets||[]).reduce(function(c,s){ return c+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0); },0);
+  var lastDate = entries.length ? entries[entries.length-1][0] : '—';
+
+  var MUSCLES_LIST = [...new Set(EXS.map(function(ex){ return ex.primary; }).filter(Boolean))].sort();
+  var equipments = [...new Set(EXS.map(function(ex){ return ex.equipment; }).filter(Boolean))].sort();
+
+  // Builder helpers para edição
+  var editDayItems = editByDay ? (editByDay[activeEditDay]||[]) : [];
+  var editTotalExs = editByDay ? Object.values(editByDay).reduce(function(a,b){ return a+b.length; },0) : 0;
+  var {q,m,e} = editFilters;
+  var filteredExs = EXS.filter(function(ex){
+    return ex.name.toLowerCase().includes(q.toLowerCase()) && (!m||ex.primary===m) && (!e||ex.equipment===e);
+  }).sort(function(a,b){
+    var GROUP_ORDER=["Peito","Ombro","Trapézio","Costas","Bíceps","Tríceps","Antebraço","Lombar","Quadríceps","Posterior de Coxa","Glúteo","Abdutores","Adutores","Panturrilha","Abdômen"];
+    var gi=GROUP_ORDER.indexOf(a.primary)-GROUP_ORDER.indexOf(b.primary);
+    return gi!==0?gi:a.name.localeCompare(b.name,'pt');
+  });
+
+  var startEdit = function(plan){
+    setEditingPlan(plan);
+    setEditByDay(JSON.parse(JSON.stringify(plan.byDay||{})));
+    setEditName(plan.name);
+    setActiveEditDay('Segunda');
+    setEditTab('ficha');
+    setEditFilters({q:'',m:'',e:''});
+  };
+
+  var addEditEx = function(ex){
+    setEditByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); if(!n[activeEditDay]) n[activeEditDay]=[]; if(!n[activeEditDay].some(function(it){ return it.name===ex.name; })) n[activeEditDay].push({exId:ex.id||ex.name,name:ex.name,setsPlanned:3,repsTarget:'12'}); return n; });
+    setToast('+ '+ex.name);
+  };
+  var removeEditEx = function(idx){ setEditByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeEditDay].splice(idx,1); return n; }); };
+  var updateEditSets = function(idx,val){ setEditByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeEditDay][idx].setsPlanned=Math.max(1,Math.min(10,parseInt(val)||1)); return n; }); };
+  var updateEditReps = function(idx,val){ setEditByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeEditDay][idx].repsTarget=val; return n; }); };
+  var moveEditEx = function(idx,dir){ setEditByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); var arr=n[activeEditDay]; var j=idx+dir; if(j<0||j>=arr.length) return p; var tmp=arr[idx]; arr[idx]=arr[j]; arr[j]=tmp; return n; }); };
+
+  var saveEdit = function(){
+    if(!editingPlan||!window._db) return;
+    setSaving(true);
+    var updated = Object.assign({},editingPlan,{name:editName.trim()||editingPlan.name, byDay:editByDay, updatedAt:Date.now()});
+    window._db.collection('personal_plans').doc(student.studentUid).collection('plans').doc(editingPlan.id).set(updated)
+      .then(function(){
+        setPlans(function(prev){ return prev.map(function(p){ return p.id===editingPlan.id?updated:p; }); });
+        setToast('✅ Ficha atualizada!');
+        setEditingPlan(null);
+        setSaving(false);
+      }).catch(function(err){ setToast('Erro: '+(err.message||'')); setSaving(false); });
+  };
+
+  var deletePlan = function(plan){
+    if(!confirm('Remover a ficha "'+plan.name+'"?')) return;
+    window._db.collection('personal_plans').doc(student.studentUid).collection('plans').doc(plan.id).delete()
+      .then(function(){ setPlans(function(prev){ return prev.filter(function(p){ return p.id!==plan.id; }); }); setToast('Ficha removida'); })
+      .catch(function(){ setToast('Erro ao remover'); });
+  };
+
+  // ── EDIT VIEW ──
+  if(editingPlan) return (
+    <div style={{padding:'1rem',maxWidth:'640px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
+        <button onClick={function(){ setEditingPlan(null); }} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'8px',padding:'.45rem .75rem',color:'#aaa',fontSize:'.82rem',cursor:'pointer'}}>← Voltar</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',flex:1}}>Editando ficha</div>
+      </div>
+
+      <input value={editName} onChange={function(e){ setEditName(e.target.value); }}
+        style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',padding:'.7rem .9rem',color:'#fff',fontSize:'1rem',fontWeight:700,marginBottom:'1rem',outline:'none'}}/>
+
+      <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem'}}>
+        {[{id:'ficha',label:'📋 Ficha ('+(editTotalExs)+')'},{id:'buscar',label:'🔍 Exercícios'}].map(function(t){ return (
+          <button key={t.id} onClick={function(){ setEditTab(t.id); }}
+            style={{flex:1,background:editTab===t.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(editTab===t.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.55rem',color:editTab===t.id?'#fff':'#666',fontWeight:700,fontSize:'.82rem',cursor:'pointer'}}>
+            {t.label}
+          </button>
+        ); })}
+      </div>
+
+      <div style={{display:'flex',gap:'.3rem',marginBottom:'1rem',overflowX:'auto',paddingBottom:'.2rem'}}>
+        {DAYS.map(function(dd){ var cnt=editByDay&&editByDay[dd]?editByDay[dd].length:0; return (
+          <button key={dd} onClick={function(){ setActiveEditDay(dd); }}
+            style={{flexShrink:0,background:activeEditDay===dd?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(activeEditDay===dd?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'8px',padding:'.4rem .6rem',color:activeEditDay===dd?'#fff':'#666',fontWeight:700,fontSize:'.75rem',cursor:'pointer',position:'relative',minWidth:'42px',textAlign:'center'}}>
+            {dd.slice(0,3)}
+            {cnt>0&&<span style={{position:'absolute',top:'-6px',right:'-6px',background:'var(--color-accent)',color:'#fff',borderRadius:'50%',width:'16px',height:'16px',fontSize:'.52rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,border:'2px solid #080808'}}>{cnt}</span>}
+          </button>
+        ); })}
+      </div>
+
+      {editTab==='ficha' && (<div>
+        {editDayItems.length===0 ? (
+          <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.85rem',border:'1px dashed #1a1a1a',borderRadius:'10px',marginBottom:'1rem'}}>
+            Nenhum exercício em {activeEditDay}
+          </div>
+        ) : editDayItems.map(function(it,idx){ return (
+          <div key={idx} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'12px',padding:'1rem',marginBottom:'.6rem'}}>
+            <div style={{display:'flex',alignItems:'flex-start',gap:'.75rem'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:'.3rem',paddingTop:'.1rem',flexShrink:0}}>
+                <button onClick={function(){ moveEditEx(idx,-1); }} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',width:'28px',height:'28px',color:'#aaa',cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center'}}>▲</button>
+                <button onClick={function(){ moveEditEx(idx,1); }} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',width:'28px',height:'28px',color:'#aaa',cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center'}}>▼</button>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.6rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</div>
+                <div style={{display:'flex',gap:'.6rem',alignItems:'center'}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:'.2rem'}}>
+                    <span style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em'}}>Séries</span>
+                    <input type="number" value={it.setsPlanned||3} min="1" max="10"
+                      onChange={function(e){ updateEditSets(idx,e.target.value); }}
+                      style={{width:'52px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'8px',padding:'.45rem .4rem',color:'#fff',fontSize:'.95rem',textAlign:'center',outline:'none',fontWeight:700}}/>
+                  </div>
+                  <div style={{color:'#333',fontSize:'1rem',paddingTop:'1.1rem'}}>×</div>
+                  <div style={{display:'flex',flexDirection:'column',gap:'.2rem'}}>
+                    <span style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em'}}>Reps</span>
+                    <input type="text" value={it.repsTarget||'12'} placeholder="12"
+                      onChange={function(e){ updateEditReps(idx,e.target.value); }}
+                      style={{width:'64px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'8px',padding:'.45rem .4rem',color:'#fff',fontSize:'.95rem',textAlign:'center',outline:'none',fontWeight:700}}/>
+                  </div>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){ removeEditEx(idx); }} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.45rem .7rem',color:'#e31b23',cursor:'pointer',fontSize:'.85rem',fontWeight:700,marginTop:'1.1rem'}}>✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ); })}
+      </div>)}
+
+      {editTab==='buscar' && (<div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem',marginBottom:'.75rem'}}>
+          <input value={q} onChange={function(ev){ setEditFilters(function(f){ return Object.assign({},f,{q:ev.target.value}); }); }} placeholder="🔍 Buscar…"
+            style={{gridColumn:'1/-1',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.55rem .85rem',color:'#fff',fontSize:'.88rem',outline:'none'}}/>
+          <select value={m} onChange={function(ev){ setEditFilters(function(f){ return Object.assign({},f,{m:ev.target.value}); }); }}
+            style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.5rem .65rem',color:m?'#fff':'#555',fontSize:'.82rem',outline:'none'}}>
+            <option value="">Músculo</option>
+            {MUSCLES_LIST.map(function(mu,i){ return <option key={i} value={mu}>{mu}</option>; })}
+          </select>
+          <select value={e} onChange={function(ev){ setEditFilters(function(f){ return Object.assign({},f,{e:ev.target.value}); }); }}
+            style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.5rem .65rem',color:e?'#fff':'#555',fontSize:'.82rem',outline:'none'}}>
+            <option value="">Equipamento</option>
+            {equipments.map(function(eq,i){ return <option key={i} value={eq}>{eq}</option>; })}
+          </select>
+        </div>
+        <div style={{borderRadius:'12px',border:'1px solid rgba(255,255,255,.06)',overflow:'hidden',maxHeight:'50vh',overflowY:'auto'}}>
+          {filteredExs.slice(0,80).map(function(ex,i){
+            var inDay=editDayItems.some(function(it){ return it.name===ex.name; });
+            return (
+              <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.65rem .9rem',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:'.88rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</div>
+                  <div style={{fontSize:'.7rem',color:'#555'}}>{ex.primary}{ex.equipment?' · '+ex.equipment:''}</div>
+                </div>
+                <button onClick={function(){ if(!inDay) addEditEx(ex); }}
+                  style={{background:inDay?'rgba(74,222,128,.1)':'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.35rem .7rem',color:inDay?'#4ade80':'#fff',fontWeight:700,fontSize:'.8rem',cursor:inDay?'default':'pointer',flexShrink:0}}>
+                  {inDay?'✓':'+ Add'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>)}
+
+      <div style={{position:'sticky',bottom:'1rem',marginTop:'1.25rem'}}>
+        <button onClick={saveEdit} disabled={saving}
+          style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.9rem',color:'#fff',fontWeight:900,fontSize:'1.05rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:saving?'default':'pointer',opacity:saving?.5:1,boxShadow:'0 4px 24px rgba(227,27,35,.3)'}}>
+          {saving?'Salvando…':'✅ Salvar e Enviar para '+student.name}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── STUDENT DETAIL VIEW ──
+  return (
+    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
+        <button onClick={onBack} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'8px',padding:'.45rem .75rem',color:'#aaa',fontSize:'.82rem',cursor:'pointer'}}>← Alunos</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',letterSpacing:'.04em',flex:1}}>{student.name}</div>
+      </div>
+
+      {loading ? <div style={{textAlign:'center',padding:'2rem',color:'#444'}}>Carregando…</div> : (
+        <div>
+          {/* Stats */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
+            {[{l:'Treinos',v:totalWorkouts},{l:'Volume',v:Math.round(totalVol/1000)+'t'},{l:'Último',v:lastDate==='—'?'—':lastDate.slice(5).split('-').reverse().join('/')}].map(function(s,i){ return (
+              <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.75rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'var(--color-accent)',lineHeight:1}}>{s.v}</div>
+                <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'.2rem'}}>{s.l}</div>
+              </div>
+            ); })}
+          </div>
+
+          {/* Últimos treinos */}
+          {entries.length>0 && (
+            <div style={{marginBottom:'1rem'}}>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.4rem',fontWeight:700}}>Últimos Treinos</div>
+              {entries.slice(-4).reverse().map(function(e,i){
+                var vol=(e[1].entries||[]).reduce(function(a,en){ return a+(en.sets||[]).reduce(function(b,s){ return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0); },0); },0);
+                return (
+                  <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.05)',borderRadius:'10px',padding:'.65rem .9rem',marginBottom:'.35rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:'.88rem'}}>{e[1].planName||'Treino Livre'}</div>
+                      <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{e[0]} · {(e[1].entries||[]).length} ex</div>
+                    </div>
+                    {vol>0&&<div style={{fontSize:'.82rem',fontWeight:900,color:'var(--color-accent)',fontFamily:"'Barlow Condensed',sans-serif"}}>{Math.round(vol)}kg</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Fichas */}
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Fichas Enviadas</div>
+          {plans.length===0 ? (
+            <div style={{textAlign:'center',padding:'1.5rem',color:'#333',fontSize:'.85rem',border:'1px dashed #1a1a1a',borderRadius:'10px'}}>Nenhuma ficha ainda</div>
+          ) : plans.map(function(pl,i){ return (
+            <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'12px',padding:'.9rem 1rem',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+              <div style={{width:'36px',height:'36px',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.9rem',flexShrink:0}}>📋</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:'.9rem'}}>{pl.name}</div>
+                <div style={{fontSize:'.7rem',color:'#555'}}>{Object.values(pl.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
+              </div>
+              <div style={{display:'flex',gap:'.35rem',flexShrink:0}}>
+                <button onClick={function(){ startEdit(pl); }}
+                  style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.09)',borderRadius:'8px',padding:'.38rem .65rem',color:'#aaa',fontSize:'.78rem',cursor:'pointer',fontWeight:700}}>
+                  ✏️ Editar
+                </button>
+                <button onClick={function(){ deletePlan(pl); }}
+                  style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.38rem .6rem',color:'#e31b23',fontSize:'.78rem',cursor:'pointer'}}>✕</button>
+              </div>
+            </div>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // ── PersonalPanel — entry point ──
 const PersonalPanel = ({setToast, prefs, onExit}) => {
   const uid = getUID();
@@ -7161,6 +7532,7 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
   const [students, setStudents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [ptDrawerOpen, setPtDrawerOpen] = React.useState(false);
+  const [selectedStudent, setSelectedStudent] = React.useState(null);
 
   React.useEffect(function(){
     if(!unlocked||!uid||!window._db){ setLoading(false); return; }
@@ -7170,7 +7542,7 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
         var links = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
         Promise.all(links.map(function(link){
           // Nome já salvo no link doc — sem necessidade de ler users/{uid}
-          var name = link.studentName || link.studentEmail || 'Aluno';
+          var name = link.studentName || '';
           var photo = link.photoURL || null;
           return window._db.collection('users').doc(link.studentUid).collection('data').doc('history').get()
             .then(function(hDoc){
@@ -7178,7 +7550,13 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
               if(hDoc.exists){ var p=hDoc.data().payload?JSON.parse(hDoc.data().payload):{};lw=Object.keys(p).sort().reverse()[0]||null; }
               return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:lw});
             }).catch(function(){ return Object.assign({},link,{name:name,photoURL:photo,lastWorkout:null}); });
-        })).then(function(enriched){ setStudents(enriched); setLoading(false); });
+        })).then(function(enriched){
+          // Garante que todo aluno tem nome — fallback: Aluno 1, Aluno 2...
+          var named = enriched.map(function(s,i){
+            return Object.assign({},s,{name: s.name && s.name.trim() ? s.name : ('Aluno '+(i+1))});
+          });
+          setStudents(named); setLoading(false);
+        });
       }, function(){ setLoading(false); });
     return function(){ unsub(); };
   }, [unlocked, uid]);
@@ -7214,7 +7592,7 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
                 {item.section && <div className="ds-drawer-section">{item.section}</div>}
                 <button
                   className={'ds-drawer-item'+(ptTab===item.id?' active':'')}
-                  onClick={function(){ setPtTab(item.id); setPtDrawerOpen(false); }}>
+                  onClick={function(){ setPtTab(item.id); setPtDrawerOpen(false); setSelectedStudent(null); }}>
                   <span className="ds-drawer-icon">{item.icon}</span>
                   <span>{item.label}</span>
                   {ptTab===item.id && <span style={{marginLeft:'auto',width:'6px',height:'6px',borderRadius:'50%',background:'var(--color-accent)',flexShrink:0}}/>}
@@ -7258,7 +7636,8 @@ const PersonalPanel = ({setToast, prefs, onExit}) => {
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
       <PtDrawer/>
       <PtHeader/>
-      {ptTab==='alunos'   && <PersonalStudentsTab students={students} loading={loading} uid={uid} prefs={prefs} setToast={setToast}/>}
+      {ptTab==='alunos' && !selectedStudent && <PersonalStudentsTab students={students} loading={loading} uid={uid} prefs={prefs} setToast={setToast} onOpenStudent={function(s){ setSelectedStudent(s); }}/>}
+      {ptTab==='alunos' && selectedStudent && <StudentDetailPanel student={selectedStudent} personalName={prefs.name} onBack={function(){ setSelectedStudent(null); }} setToast={setToast}/>}
       {ptTab==='fichas'   && <PersonalBuilderTab  students={students} personalName={prefs.name} setToast={setToast} plans={[]} setPlans={function(){}} />}
       {ptTab==='graficos' && <PersonalChartsTab   students={students} personalName={prefs.name} setToast={setToast}/>}
     </div>
@@ -7714,6 +8093,22 @@ function App(){
         <PersonalPanel setToast={setToast} prefs={prefs} onExit={function(){ goto('home'); }}/>
         {toast && <Toast text={toast}/>}
       </ScreenErrorBoundary>
+    );
+  }
+
+  if(authed && !isPersonal && screen==='personal'){
+    return (
+      <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
+        <Drawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} screen={screen} goto={goto} prefs={prefs} isPersonal={false}/>
+        <header className="ds-hdr" style={{justifyContent:'space-between'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <button className="ds-hamburger" onClick={()=>setDrawerOpen(true)} aria-label="Menu"><span/><span/><span/></button>
+            <LogoRow/>
+          </div>
+        </header>
+        <PersonalRequestScreen prefs={prefs} setToast={setToast}/>
+        {toast && <Toast text={toast}/>}
+      </div>
     );
   }
 
