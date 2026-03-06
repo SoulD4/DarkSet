@@ -6707,29 +6707,28 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
   const [planName, setPlanName] = React.useState('Nova Ficha');
   const [byDay, setByDay] = React.useState(JSON.parse(JSON.stringify(EMPTY_DAYS)));
   const [activeDay, setActiveDay] = React.useState('Segunda');
-  const [tab, setTab] = React.useState('ficha'); // 'ficha' | 'buscar'
+  const [tab, setTab] = React.useState('ficha');
   const [filters, setFilters] = React.useState({q:'',m:'',s:'',e:'',d:''});
   const [saving, setSaving] = React.useState(false);
   const [sentPlans, setSentPlans] = React.useState([]);
   const [loadingPlans, setLoadingPlans] = React.useState(false);
-  const {q,m,s,e,d} = filters;
+  const {q,m,e} = filters;
   var selStudent = students.find(function(s){ return s.studentUid===selUid; });
 
-  // Filter exercises same as Builder
   var list = React.useMemo(function(){
     var filtered = EXS.filter(function(ex){
       return ex.name.toLowerCase().includes(q.toLowerCase()) &&
-        (!m||ex.primary===m) && (!s||ex.subgroup===s) && (!e||ex.equipment===e) && (!d||ex.difficulty===d);
+        (!m||ex.primary===m) && (!e||ex.equipment===e);
     });
     var GROUP_ORDER=["Peito","Ombro","Trapézio","Costas","Bíceps","Tríceps","Antebraço","Lombar","Quadríceps","Posterior de Coxa","Glúteo","Abdutores","Adutores","Panturrilha","Abdômen"];
     return filtered.sort(function(a,b){
       var gi=GROUP_ORDER.indexOf(a.primary)-GROUP_ORDER.indexOf(b.primary);
-      if(gi!==0) return gi;
-      return a.name.localeCompare(b.name,'pt');
+      return gi!==0?gi:a.name.localeCompare(b.name,'pt');
     });
-  }, [q,m,s,e,d]);
+  }, [q,m,e]);
 
-  var dayItems = byDay[activeDay] || [];
+  var dayItems = byDay[activeDay]||[];
+  var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; },0);
 
   React.useEffect(function(){
     if(!selUid||!window._db){ setSentPlans([]); return; }
@@ -6740,180 +6739,187 @@ const PersonalBuilderTab = ({students, personalName, setToast}) => {
   }, [selUid]);
 
   var resetForm = function(){ setPlanName('Nova Ficha'); setByDay(JSON.parse(JSON.stringify(EMPTY_DAYS))); setActiveDay('Segunda'); setTab('ficha'); setFilters({q:'',m:'',s:'',e:'',d:''}); };
-
   var addEx = function(ex){
     setByDay(function(prev){
       var n=JSON.parse(JSON.stringify(prev));
-      if(!n[activeDay].some(function(it){ return it.exId===ex.id||it.name===ex.name; }))
-        n[activeDay].push({exId:ex.id||ex.name, name:ex.name, setsPlanned:3});
+      if(!n[activeDay].some(function(it){ return it.name===ex.name; }))
+        n[activeDay].push({exId:ex.id||ex.name, name:ex.name, setsPlanned:3, repsTarget:'12'});
       return n;
     });
     setToast('+ '+ex.name);
     setTab('ficha');
   };
-
-  var removeEx = function(day,idx){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day].splice(idx,1); return n; }); };
-  var updateSets = function(day,idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[day][idx].setsPlanned=Math.max(1,Math.min(10,parseInt(val)||1)); return n; }); };
-  var moveEx = function(day,idx,dir){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); var arr=n[day]; var j=idx+dir; if(j<0||j>=arr.length) return p; var tmp=arr[idx]; arr[idx]=arr[j]; arr[j]=tmp; return n; }); };
-
-  var totalExs = Object.values(byDay).reduce(function(a,b){ return a+b.length; }, 0);
-
+  var removeEx = function(idx){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay].splice(idx,1); return n; }); };
+  var updateSets = function(idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay][idx].setsPlanned=Math.max(1,Math.min(10,parseInt(val)||1)); return n; }); };
+  var updateReps = function(idx,val){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); n[activeDay][idx].repsTarget=val; return n; }); };
+  var moveEx = function(idx,dir){ setByDay(function(p){ var n=JSON.parse(JSON.stringify(p)); var arr=n[activeDay]; var j=idx+dir; if(j<0||j>=arr.length) return p; var tmp=arr[idx]; arr[idx]=arr[j]; arr[j]=tmp; return n; }); };
   var deletePlan = function(planId){
     if(!confirm('Remover esta ficha?')) return;
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(planId).delete()
       .then(function(){ setSentPlans(function(p){ return p.filter(function(x){ return x.id!==planId; }); }); setToast('Ficha removida'); })
       .catch(function(){ setToast('Erro ao remover'); });
   };
-
   var save = function(){
     if(!selUid){ setToast('Selecione um aluno'); return; }
     if(!planName.trim()){ setToast('Dê um nome à ficha'); return; }
     if(totalExs===0){ setToast('Adicione ao menos um exercício'); return; }
     setSaving(true);
-    var p = {id:'pt_'+Date.now(), name:planName.trim(), byDay:byDay, fromPersonal:true, personalName:personalName||'Personal', createdAt:Date.now()};
+    var p={id:'pt_'+Date.now(),name:planName.trim(),byDay:byDay,fromPersonal:true,personalName:personalName||'Personal',createdAt:Date.now()};
     window._db.collection('personal_plans').doc(selUid).collection('plans').doc(p.id).set(p)
       .then(function(){ setSentPlans(function(prev){ return prev.concat([p]); }); setToast('✅ Ficha enviada para '+(selStudent?selStudent.name:'aluno')+'!'); resetForm(); setSaving(false); })
-      .catch(function(){ setToast('Erro. Verifique as regras do Firestore.'); setSaving(false); });
+      .catch(function(){ setToast('Erro. Verifique regras do Firestore.'); setSaving(false); });
   };
 
   if(students.length===0) return (
-    <div style={{padding:'1rem',maxWidth:'520px',margin:'0 auto'}}>
-      <div style={{textAlign:'center',padding:'3rem 1rem',color:'#444',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
-        <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
-        <div style={{fontSize:'.88rem',color:'#555',fontWeight:600}}>Nenhum aluno ainda</div>
-        <div style={{fontSize:'.75rem',color:'#333',marginTop:'.3rem'}}>Vincule alunos na aba Alunos</div>
-      </div>
+    <div style={{padding:'1.5rem',textAlign:'center',color:'#444',margin:'2rem 1rem',borderRadius:'12px',border:'1px dashed #1e1e1e'}}>
+      <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
+      <div style={{fontSize:'.9rem',color:'#555',fontWeight:600}}>Nenhum aluno vinculado</div>
+      <div style={{fontSize:'.78rem',color:'#333',marginTop:'.3rem'}}>Vá para Alunos e convide seus alunos primeiro</div>
     </div>
   );
 
-  var MUSCLES_LIST = [...new Set(EXS.map(function(e){ return e.primary; }).filter(Boolean))].sort();
-  var SUBS = selUid ? [] : [];
-  var subgroups = m ? [...new Set(EXS.filter(function(e){ return e.primary===m && e.subgroup; }).map(function(e){ return e.subgroup; }))] : [];
-  var equipments = [...new Set(EXS.map(function(e){ return e.equipment; }).filter(Boolean))].sort();
-  var difficulties = [...new Set(EXS.map(function(e){ return e.difficulty; }).filter(Boolean))];
+  var MUSCLES_LIST = [...new Set(EXS.map(function(ex){ return ex.primary; }).filter(Boolean))].sort();
+  var equipments = [...new Set(EXS.map(function(ex){ return ex.equipment; }).filter(Boolean))].sort();
 
   return (
-    <div style={{padding:'1rem',maxWidth:'600px',margin:'0 auto'}}>
+    <div style={{padding:'1rem 1rem 6rem',maxWidth:'640px',margin:'0 auto'}}>
 
-      {/* Aluno selector — always visible at top */}
+      {/* Aluno */}
       <PersonalStudentPicker students={students} selectedUid={selUid} onSelect={function(u){ setSelUid(u); resetForm(); }}/>
 
-      {!!selUid && (
-        <div>
-          {/* Sent plans */}
-          {loadingPlans ? null : sentPlans.length>0 && (
-            <div style={{marginBottom:'1rem'}}>
-              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Fichas Enviadas</div>
-              {sentPlans.map(function(f,i){ return (
-                <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.7rem 1rem',marginBottom:'.35rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                  <div style={{width:'34px',height:'34px',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.85rem',flexShrink:0}}>📋</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'.88rem'}}>{f.name}</div>
-                    <div style={{fontSize:'.7rem',color:'#555'}}>{Object.values(f.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
-                  </div>
-                  <button onClick={function(){ deletePlan(f.id); }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.3rem .55rem',color:'#444',cursor:'pointer',fontSize:'.82rem'}}>✕</button>
+      {!!selUid && (<div>
+
+        {/* Fichas enviadas */}
+        {!loadingPlans && sentPlans.length>0 && (
+          <div style={{marginBottom:'1.25rem'}}>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.5rem',fontWeight:700}}>Fichas Enviadas</div>
+            {sentPlans.map(function(f,i){ return (
+              <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.75rem 1rem',marginBottom:'.35rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                <span style={{fontSize:'1.1rem'}}>📋</span>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:'.9rem'}}>{f.name}</div>
+                  <div style={{fontSize:'.72rem',color:'#555'}}>{Object.values(f.byDay||{}).reduce(function(a,b){ return a+b.length; },0)} exercícios</div>
                 </div>
-              ); })}
-            </div>
-          )}
-
-          {/* Plan name */}
-          <input value={planName} onChange={function(e){ setPlanName(e.target.value); }}
-            style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',padding:'.65rem .9rem',color:'#fff',fontSize:'1rem',fontWeight:700,marginBottom:'1rem',outline:'none'}}/>
-
-          {/* Tab ficha/buscar */}
-          <div style={{display:'flex',gap:'.3rem',marginBottom:'1rem'}}>
-            {[{id:'ficha',label:'📋 Ficha'},{id:'buscar',label:'🔍 Exercícios'}].map(function(t){ return (
-              <button key={t.id} onClick={function(){ setTab(t.id); }}
-                style={{flex:1,background:tab===t.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(tab===t.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'8px',padding:'.5rem',color:tab===t.id?'#fff':'#666',fontWeight:700,fontSize:'.8rem',cursor:'pointer'}}>
-                {t.label}
-              </button>
-            ); })}
-          </div>
-
-          {/* Day tabs */}
-          <div style={{display:'flex',gap:'.25rem',marginBottom:'1rem',overflowX:'auto',paddingBottom:'.2rem'}}>
-            {DAYS.map(function(dd){ var cnt=byDay[dd]?byDay[dd].length:0; return (
-              <button key={dd} onClick={function(){ setActiveDay(dd); }}
-                style={{flexShrink:0,background:activeDay===dd?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===dd?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'8px',padding:'.32rem .55rem',color:activeDay===dd?'#fff':'#666',fontWeight:700,fontSize:'.72rem',cursor:'pointer',position:'relative',minWidth:'38px',textAlign:'center'}}>
-                {dd.slice(0,3)}
-                {cnt>0&&<span style={{position:'absolute',top:'-5px',right:'-5px',background:'var(--color-accent)',color:'#fff',borderRadius:'50%',width:'15px',height:'15px',fontSize:'.5rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,border:'2px solid #080808'}}>{cnt}</span>}
-              </button>
-            ); })}
-          </div>
-
-          {/* FICHA TAB */}
-          {tab==='ficha' && (
-            <div>
-              {dayItems.length===0 ? (
-                <div style={{textAlign:'center',padding:'2rem',color:'#333',fontSize:'.85rem',border:'1px dashed #1a1a1a',borderRadius:'10px',marginBottom:'1rem'}}>
-                  Nenhum exercício em {activeDay} · Vá para "Exercícios" para adicionar
-                </div>
-              ) : dayItems.map(function(it,i){ return (
-                <div key={i} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.06)',borderRadius:'10px',padding:'.65rem .9rem',marginBottom:'.4rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:'.15rem',marginRight:'.25rem'}}>
-                    <button onClick={function(){ moveEx(activeDay,i,-1); }} style={{background:'none',border:'none',color:'#333',cursor:'pointer',fontSize:'.75rem',padding:0,lineHeight:1}}>▲</button>
-                    <button onClick={function(){ moveEx(activeDay,i,1); }} style={{background:'none',border:'none',color:'#333',cursor:'pointer',fontSize:'.75rem',padding:0,lineHeight:1}}>▼</button>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:'.88rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</div>
-                  </div>
-                  <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
-                    <span style={{fontSize:'.68rem',color:'#555'}}>séries</span>
-                    <input type="number" value={it.setsPlanned||3} min="1" max="10"
-                      onChange={function(e){ updateSets(activeDay,i,e.target.value); }}
-                      style={{width:'36px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'6px',padding:'.2rem .25rem',color:'#fff',fontSize:'.85rem',textAlign:'center',outline:'none'}}/>
-                  </div>
-                  <button onClick={function(){ removeEx(activeDay,i); }} style={{background:'none',border:'none',color:'#444',cursor:'pointer',fontSize:'.9rem',flexShrink:0}}>✕</button>
-                </div>
-              ); })}
-            </div>
-          )}
-
-          {/* BUSCAR TAB */}
-          {tab==='buscar' && (
-            <div>
-              {/* Filters */}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem',marginBottom:'.75rem'}}>
-                <input value={q} onChange={function(e){ setFilters(function(f){ return Object.assign({},f,{q:e.target.value}); }); }} placeholder="🔍 Buscar…"
-                  style={{gridColumn:'1/-1',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.5rem .75rem',color:'#fff',fontSize:'.85rem',outline:'none'}}/>
-                <select value={m} onChange={function(e){ setFilters(function(f){ return Object.assign({},f,{m:e.target.value,s:''}); }); }}
-                  style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.45rem .6rem',color:m?'#fff':'#555',fontSize:'.8rem',outline:'none'}}>
-                  <option value="">Músculo</option>
-                  {MUSCLES_LIST.map(function(mu,i){ return <option key={i} value={mu}>{mu}</option>; })}
-                </select>
-                <select value={e} onChange={function(ev){ setFilters(function(f){ return Object.assign({},f,{e:ev.target.value}); }); }}
-                  style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.45rem .6rem',color:e?'#fff':'#555',fontSize:'.8rem',outline:'none'}}>
-                  <option value="">Equipamento</option>
-                  {equipments.map(function(eq,i){ return <option key={i} value={eq}>{eq}</option>; })}
-                </select>
+                <button onClick={function(){ deletePlan(f.id); }} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'8px',padding:'.35rem .6rem',color:'#555',cursor:'pointer',fontSize:'.82rem'}}>✕</button>
               </div>
-              {/* Exercise list */}
-              <div style={{maxHeight:'50vh',overflowY:'auto',borderRadius:'10px',border:'1px solid rgba(255,255,255,.06)'}}>
-                {list.slice(0,60).map(function(ex,i){ var inDay=dayItems.some(function(it){ return it.exId===ex.id||it.name===ex.name; }); return (
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.6rem .85rem',borderBottom:'1px solid rgba(255,255,255,.04)',background:'rgba(255,255,255,.01)'}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:600,fontSize:'.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</div>
-                      <div style={{fontSize:'.68rem',color:'#555',marginTop:'.1rem'}}>{ex.primary}{ex.equipment?' · '+ex.equipment:''}</div>
+            ); })}
+          </div>
+        )}
+
+        {/* Nome da ficha */}
+        <input value={planName} onChange={function(e){ setPlanName(e.target.value); }}
+          style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'10px',padding:'.7rem .9rem',color:'#fff',fontSize:'1.05rem',fontWeight:700,marginBottom:'1rem',outline:'none'}}/>
+
+        {/* Tabs ficha/exercícios */}
+        <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem'}}>
+          {[{id:'ficha',label:'📋 Ficha ('+(totalExs)+')'},{id:'buscar',label:'🔍 Exercícios'}].map(function(t){ return (
+            <button key={t.id} onClick={function(){ setTab(t.id); }}
+              style={{flex:1,background:tab===t.id?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(tab===t.id?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'9px',padding:'.55rem',color:tab===t.id?'#fff':'#666',fontWeight:700,fontSize:'.82rem',cursor:'pointer'}}>
+              {t.label}
+            </button>
+          ); })}
+        </div>
+
+        {/* Dias */}
+        <div style={{display:'flex',gap:'.3rem',marginBottom:'1rem',overflowX:'auto',paddingBottom:'.25rem'}}>
+          {DAYS.map(function(dd){ var cnt=byDay[dd]?byDay[dd].length:0; return (
+            <button key={dd} onClick={function(){ setActiveDay(dd); }}
+              style={{flexShrink:0,background:activeDay===dd?'var(--color-accent)':'rgba(255,255,255,.04)',border:'1px solid '+(activeDay===dd?'var(--color-accent)':'rgba(255,255,255,.07)'),borderRadius:'8px',padding:'.4rem .6rem',color:activeDay===dd?'#fff':'#666',fontWeight:700,fontSize:'.75rem',cursor:'pointer',position:'relative',minWidth:'42px',textAlign:'center'}}>
+              {dd.slice(0,3)}
+              {cnt>0&&<span style={{position:'absolute',top:'-6px',right:'-6px',background:'var(--color-accent)',color:'#fff',borderRadius:'50%',width:'16px',height:'16px',fontSize:'.52rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,border:'2px solid #080808'}}>{cnt}</span>}
+            </button>
+          ); })}
+        </div>
+
+        {/* ── ABA FICHA ── */}
+        {tab==='ficha' && (<div>
+          {dayItems.length===0 ? (
+            <div style={{textAlign:'center',padding:'2rem',color:'#333',fontSize:'.88rem',border:'1px dashed #1a1a1a',borderRadius:'10px',marginBottom:'1rem'}}>
+              Nenhum exercício em {activeDay} · Clique em "Exercícios" para adicionar
+            </div>
+          ) : dayItems.map(function(it,idx){ return (
+            <div key={idx} style={{background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'12px',padding:'1rem',marginBottom:'.6rem'}}>
+              <div style={{display:'flex',alignItems:'flex-start',gap:'.75rem'}}>
+                {/* Setas de ordem */}
+                <div style={{display:'flex',flexDirection:'column',gap:'.3rem',paddingTop:'.1rem',flexShrink:0}}>
+                  <button onClick={function(){ moveEx(idx,-1); }}
+                    style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',width:'28px',height:'28px',color:'#aaa',cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>▲</button>
+                  <button onClick={function(){ moveEx(idx,1); }}
+                    style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',width:'28px',height:'28px',color:'#aaa',cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>▼</button>
+                </div>
+                {/* Nome + campos */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:'.95rem',marginBottom:'.6rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</div>
+                  <div style={{display:'flex',gap:'.6rem',alignItems:'center',flexWrap:'wrap'}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:'.2rem'}}>
+                      <span style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em'}}>Séries</span>
+                      <input type="number" value={it.setsPlanned||3} min="1" max="10"
+                        onChange={function(e){ updateSets(idx,e.target.value); }}
+                        style={{width:'52px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'8px',padding:'.45rem .4rem',color:'#fff',fontSize:'.95rem',textAlign:'center',outline:'none',fontWeight:700}}/>
                     </div>
-                    <button onClick={function(){ if(!inDay) addEx(ex); }}
-                      style={{background:inDay?'rgba(74,222,128,.1)':'var(--color-accent)',border:'none',borderRadius:'7px',padding:'.3rem .65rem',color:inDay?'#4ade80':'#fff',fontWeight:700,fontSize:'.78rem',cursor:inDay?'default':'pointer',flexShrink:0}}>
-                      {inDay?'✓':'+ Add'}
-                    </button>
+                    <div style={{color:'#333',fontSize:'1rem',paddingTop:'1.1rem'}}>×</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:'.2rem'}}>
+                      <span style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em'}}>Reps</span>
+                      <input type="text" value={it.repsTarget||'12'} placeholder="12"
+                        onChange={function(e){ updateReps(idx,e.target.value); }}
+                        style={{width:'64px',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'8px',padding:'.45rem .4rem',color:'#fff',fontSize:'.95rem',textAlign:'center',outline:'none',fontWeight:700}}/>
+                    </div>
+                    <div style={{flex:1}}/>
+                    <button onClick={function(){ removeEx(idx); }}
+                      style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.45rem .7rem',color:'#e31b23',cursor:'pointer',fontSize:'.85rem',fontWeight:700,marginTop:'1.1rem'}}>✕</button>
                   </div>
-                ); })}
-                {list.length===0 && <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.85rem'}}>Nenhum exercício encontrado</div>}
+                </div>
               </div>
             </div>
-          )}
+          ); })}
+        </div>)}
 
-          {/* Send button */}
+        {/* ── ABA BUSCAR ── */}
+        {tab==='buscar' && (<div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem',marginBottom:'.75rem'}}>
+            <input value={q} onChange={function(e){ setFilters(function(f){ return Object.assign({},f,{q:e.target.value}); }); }}
+              placeholder="🔍 Buscar exercício…"
+              style={{gridColumn:'1/-1',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.55rem .85rem',color:'#fff',fontSize:'.88rem',outline:'none'}}/>
+            <select value={m} onChange={function(e){ setFilters(function(f){ return Object.assign({},f,{m:e.target.value}); }); }}
+              style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.5rem .65rem',color:m?'#fff':'#555',fontSize:'.82rem',outline:'none'}}>
+              <option value="">Músculo</option>
+              {MUSCLES_LIST.map(function(mu,i){ return <option key={i} value={mu}>{mu}</option>; })}
+            </select>
+            <select value={e} onChange={function(ev){ setFilters(function(f){ return Object.assign({},f,{e:ev.target.value}); }); }}
+              style={{background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'9px',padding:'.5rem .65rem',color:e?'#fff':'#555',fontSize:'.82rem',outline:'none'}}>
+              <option value="">Equipamento</option>
+              {equipments.map(function(eq,i){ return <option key={i} value={eq}>{eq}</option>; })}
+            </select>
+          </div>
+          <div style={{borderRadius:'12px',border:'1px solid rgba(255,255,255,.06)',overflow:'hidden',maxHeight:'55vh',overflowY:'auto'}}>
+            {list.length===0 && <div style={{textAlign:'center',padding:'2rem',color:'#444',fontSize:'.88rem'}}>Nenhum exercício encontrado</div>}
+            {list.slice(0,80).map(function(ex,i){
+              var inDay=dayItems.some(function(it){ return it.name===ex.name; });
+              return (
+                <div key={i} style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.7rem .9rem',borderBottom:'1px solid rgba(255,255,255,.04)',background:'rgba(255,255,255,.01)'}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</div>
+                    <div style={{fontSize:'.7rem',color:'#555',marginTop:'.1rem'}}>{ex.primary}{ex.equipment?' · '+ex.equipment:''}</div>
+                  </div>
+                  <button onClick={function(){ if(!inDay) addEx(ex); }}
+                    style={{background:inDay?'rgba(74,222,128,.1)':'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.38rem .75rem',color:inDay?'#4ade80':'#fff',fontWeight:700,fontSize:'.82rem',cursor:inDay?'default':'pointer',flexShrink:0,whiteSpace:'nowrap'}}>
+                    {inDay?'✓ Adicionado':'+ Add'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>)}
+
+        {/* Botão enviar */}
+        <div style={{position:'sticky',bottom:'1rem',marginTop:'1.25rem'}}>
           <button onClick={save} disabled={saving||totalExs===0||!selUid}
-            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontWeight:900,fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',marginTop:'1rem',cursor:(saving||totalExs===0||!selUid)?'default':'pointer',opacity:(saving||totalExs===0||!selUid)?.35:1}}>
-            {saving?'Enviando…':'Enviar Ficha para '+(selStudent?selStudent.name:'Aluno')}
+            style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'.9rem',color:'#fff',fontWeight:900,fontSize:'1.05rem',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.05em',cursor:(saving||totalExs===0||!selUid)?'default':'pointer',opacity:(saving||totalExs===0||!selUid)?.35:1,boxShadow:'0 4px 24px rgba(227,27,35,.3)'}}>
+            {saving?'Enviando…':'📤  Enviar para '+(selStudent?selStudent.name:'Aluno')}
           </button>
         </div>
-      )}
+
+      </div>)}
     </div>
   );
 };
@@ -7091,7 +7097,7 @@ const PersonalChartsTab = ({students, personalName, setToast}) => {
 };
 
 // ── PersonalPanel — entry point ──
-const PersonalPanel = ({setToast, prefs}) => {
+const PersonalPanel = ({setToast, prefs, onExit}) => {
   const uid = getUID();
   const [unlocked, setUnlocked] = React.useState(false);
   const [ptTab, setPtTab] = React.useState('alunos');
@@ -7178,7 +7184,7 @@ const PersonalPanel = ({setToast, prefs}) => {
             ); })}
           </div>
           <div style={{padding:'.75rem 1.1rem',borderTop:'1px solid #111'}}>
-            <button onClick={function(){ setUnlocked(false); setPtDrawerOpen(false); }}
+            <button onClick={function(){ setUnlocked(false); setPtDrawerOpen(false); if(onExit) onExit(); }}
               style={{width:'100%',background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'10px',padding:'.6rem',color:'#e31b23',fontWeight:700,fontSize:'.82rem',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.06em'}}>
               Sair do modo Personal
             </button>
@@ -7663,7 +7669,7 @@ function App(){
   if(authed && isPersonal && screen==='personal'){
     return (
       <ScreenErrorBoundary>
-        <PersonalPanel setToast={setToast} prefs={prefs}/>
+        <PersonalPanel setToast={setToast} prefs={prefs} onExit={function(){ goto('home'); }}/>
         {toast && <Toast text={toast}/>}
       </ScreenErrorBoundary>
     );
