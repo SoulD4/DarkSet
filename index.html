@@ -3554,6 +3554,9 @@ const Onboarding = ({setPrefs, onDone}) => {
             <button onClick={() => setStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 28px rgba(227,27,35,.4)'}}>
               Começar →
             </button>
+            <button onClick={() => { if(window.openAuthModal) window.openAuthModal('signIn'); }} style={{background:'transparent',border:'1px solid #2a2a2a',borderRadius:'12px',padding:'.75rem',color:'#666',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',textTransform:'uppercase',cursor:'pointer',marginTop:'-.25rem'}}>
+              Já possuo conta — Entrar
+            </button>
           </>
         )}
 
@@ -4063,6 +4066,19 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const activePlan = plans.list.find(p => p.id === activePlanId) || null;
   const [mode, setMode] = useState('plan'); // 'plan' | 'free'
   const [started, setStarted] = useState(false);
+  const [freeStarted, setFreeStarted] = useState(false);
+  const [freeElapsed, setFreeElapsed] = useState(0);
+  const [freeStartTime, setFreeStartTime] = useState(null);
+  const freeTimerRef = useRef(null);
+  useEffect(()=>{
+    if(freeStarted){
+      if(!freeStartTime) setFreeStartTime(new Date());
+      freeTimerRef.current=setInterval(()=>setFreeElapsed(e=>e+1),1000);
+    } else {
+      clearInterval(freeTimerRef.current);
+    }
+    return ()=>clearInterval(freeTimerRef.current);
+  },[freeStarted]);
   const [day, setDay] = useState(DAYS[(new Date().getDay() || 7) - 1]);
   const [cursor, setCursor] = useState(0);
   // Personal plans from Firestore
@@ -4099,6 +4115,20 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const [sessionGif,setSessionGif]=useState(null);
   const [sessionDetail,setSessionDetail]=useState(null);
   const [showSharePopup,setShowSharePopup]=useState(false);
+  const [sessionElapsed,setSessionElapsed]=useState(0);
+  const [sessionStartTime,setSessionStartTime]=useState(null);
+  const sessionTimerRef=useRef(null);
+  useEffect(()=>{
+    if(started){
+      if(!sessionStartTime) setSessionStartTime(new Date());
+      sessionTimerRef.current=setInterval(()=>setSessionElapsed(e=>e+1),1000);
+    } else {
+      clearInterval(sessionTimerRef.current);
+      setSessionElapsed(0);
+      setSessionStartTime(null);
+    }
+    return ()=>clearInterval(sessionTimerRef.current);
+  },[started]);
   // ── FREE MODE STATE ──
   const [freeExercises, setFreeExercises] = useState(() => {
     try { const d = JSON.parse(localStorage.getItem(DRAFT_FREE_KEY)); return Array.isArray(d) && d.length ? d : []; } catch(_) { return []; }
@@ -4211,8 +4241,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     const dateKey = new Date().toISOString().slice(0, 10);
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: [], startTime: null, endTime: fmtTime(new Date()), duration: 0};
-      else { copy[dateKey].endTime = fmtTime(new Date()); }
+      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: [], startTime: freeStartTime ? fmtTime(freeStartTime) : null, endTime: fmtTime(new Date()), duration: freeElapsed};
+      else { copy[dateKey].endTime = fmtTime(new Date()); copy[dateKey].duration = freeElapsed; if(!copy[dateKey].startTime && freeStartTime) copy[dateKey].startTime = fmtTime(freeStartTime); }
       for (const ex of valid) {
         const setsOut = ex.sets.map((s, i) => ({w: s.w, r: s.r, ...(ex.rir[i] && ex.rir[i] !== '--' ? {rir: ex.rir[i]} : {})}));
         const idx = copy[dateKey].entries.findIndex(e => e.name === ex.name);
@@ -4223,6 +4253,9 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     });
     try { localStorage.removeItem(DRAFT_FREE_KEY); } catch(_) {}
     setFreeExercises([]);
+    setFreeStarted(false);
+    setFreeElapsed(0);
+    setFreeStartTime(null);
     if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100, 50, 200]);
     setToast('Treino salvo!');
     setTimeout(function(){ setShowSharePopup(true); }, 500);
@@ -4279,7 +4312,34 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
       {mode === 'free' && (
         <div className="grid gap-3">
         {prefs.showTimer && <DarkTimer prefs={prefs}/>}
+
+        {!freeStarted ? (
+          <div className="ds-card" style={{padding:'2rem 1.5rem',textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>🏋️</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'var(--color-text)',lineHeight:1,marginBottom:'.5rem'}}>
+              TREINO <span style={{color:'var(--color-accent)'}}>LIVRE</span>
+            </div>
+            <div style={{fontSize:'.8rem',color:'#555',marginBottom:'1.5rem',lineHeight:1.5}}>
+              Sem ficha? Sem problema. Adicione os exercícios conforme treina e o tempo será contado automaticamente.
+            </div>
+            <button onClick={() => setFreeStarted(true)} style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 28px rgba(227,27,35,.4)'}}>
+              Começar →
+            </button>
+          </div>
+        ) : (
         <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
+          {/* Timer do treino livre */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',padding:'.5rem .75rem',background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+              <span style={{fontSize:'1rem'}}>⏱</span>
+              <div>
+                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.06em'}}>Tempo de Treino</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{fmtDuration(freeElapsed)}</div>
+              </div>
+            </div>
+            {freeStartTime && <div style={{fontSize:'.65rem',color:'#444'}}>Início: <span style={{color:'#666',fontWeight:700}}>{fmtTime(freeStartTime)}</span></div>}
+          </div>
+
           <div style={{fontSize:'.75rem',color:'#555',marginBottom:'1rem',textTransform:'uppercase',letterSpacing:'.05em'}}>Adicione exercícios conforme vai treinando</div>
 
           {/* Search */}
@@ -4353,6 +4413,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
             </div>
           )}
         </div>
+        )}
         </div>
       )}
     </div>
@@ -8738,7 +8799,6 @@ function App(){
                 }} style={{background:'rgba(255,255,255,.07)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.8rem 1.5rem',color:'#aaa',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',width:'100%'}}>Já tenho cadastro — Entrar</button>
               </div>
               <div style={{marginTop:'.75rem'}}>
-                <button onClick={finishSplash} style={{background:'none',border:'none',color:'#2a2a2a',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Já conheço o app</button>
               </div>
             </div>
           )}
