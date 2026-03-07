@@ -6429,6 +6429,14 @@ function startDSTrial() {
 }
 
 function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
+  const [loadingPrice, setLoadingPrice] = React.useState(null);
+  const [hasSub, setHasSub] = React.useState(()=>{
+    try{
+      var pd = JSON.parse(localStorage.getItem('ds.planData')||'null');
+      return !!(pd && pd.tier && pd.tier !== 'free' && !pd.trialEnd);
+    }catch(_){ return false; }
+  });
+
   const items = [
     ['📋','Até 10 fichas de treino','vs 1 no gratuito'],
     ['📈','Todos os gráficos','15+ análises detalhadas'],
@@ -6437,6 +6445,19 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
     ['🥗','10 planos de dieta','vs 1 no gratuito'],
     ['🏅','Selo exclusivo Elite','badge permanente'],
   ];
+
+  function handleCheckout(priceKey) {
+    if (!window.DSCheckout) { alert('Aguarde, inicializando…'); return; }
+    setLoadingPrice(priceKey);
+    window.DSCheckout.startCheckout(window.DSCheckout.prices[priceKey], function(v){ if(!v) setLoadingPrice(null); });
+  }
+
+  function handlePortal() {
+    if (!window.DSCheckout) return;
+    setLoadingPrice('portal');
+    window.DSCheckout.openPortal(function(v){ if(!v) setLoadingPrice(null); });
+  }
+
   return (
     <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
@@ -6483,9 +6504,29 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
               ✨ Experimentar Elite grátis por 7 dias — sem cartão
             </button>
           ) : null}
-          <button style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontSize:'1rem',fontWeight:900,cursor:'pointer',marginBottom:'.5rem'}}>
-            Assinar Elite — Em breve
-          </button>
+          {hasSub ? (
+            <button
+              onClick={handlePortal}
+              disabled={loadingPrice==='portal'}
+              style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid #333',borderRadius:'12px',padding:'.85rem',color:'#ccc',fontSize:'1rem',fontWeight:900,cursor:'pointer',marginBottom:'.5rem',opacity:loadingPrice==='portal'?.6:1}}>
+              {loadingPrice==='portal' ? '⏳ Abrindo portal…' : '⚙️ Gerenciar Assinatura'}
+            </button>
+          ) : (
+            <div style={{display:'flex',gap:'.5rem',marginBottom:'.5rem'}}>
+              <button
+                onClick={()=>handleCheckout('elite_monthly')}
+                disabled={!!loadingPrice}
+                style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem .4rem',color:'#fff',fontSize:'.85rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
+                {loadingPrice==='elite_monthly' ? '⏳…' : '💳 Mensal'}
+              </button>
+              <button
+                onClick={()=>handleCheckout('elite_annual')}
+                disabled={!!loadingPrice}
+                style={{flex:1,background:'linear-gradient(135deg,#c01820,#8a0e12)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'12px',padding:'.85rem .4rem',color:'#fff',fontSize:'.85rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
+                {loadingPrice==='elite_annual' ? '⏳…' : '🏆 Anual'}
+              </button>
+            </div>
+          )}
           <div style={{height:'1px',background:'#1e1e22',margin:'.75rem 0'}}/>
           <div style={{background:'linear-gradient(135deg,#0d0d0f,#1a0a0a)',border:'1px solid #e31b23',borderRadius:'12px',padding:'1rem',marginBottom:'.5rem'}}>
             <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.4rem'}}>
@@ -6497,11 +6538,14 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
               <div style={{fontWeight:900,fontSize:'1.4rem',color:'#fff'}}>R$249,99 <span style={{fontSize:'.7rem',color:'#555',fontWeight:400}}>único</span></div>
             </div>
-            <button style={{width:'100%',background:'transparent',border:'1px solid #e31b23',borderRadius:'10px',padding:'.6rem',color:'#e31b23',fontSize:'.88rem',fontWeight:900,cursor:'pointer'}}>
-              DarkGod Pack — Em breve
+            <button
+              onClick={()=>handleCheckout('darkgod')}
+              disabled={!!loadingPrice}
+              style={{width:'100%',background:'transparent',border:'1px solid #e31b23',borderRadius:'10px',padding:'.6rem',color:'#e31b23',fontSize:'.88rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
+              {loadingPrice==='darkgod' ? '⏳ Redirecionando…' : '👑 Quero o DarkGod Pack'}
             </button>
           </div>
-          <div style={{textAlign:'center',fontSize:'.68rem',color:'#333',marginTop:'.3rem'}}>Pagamento em breve via Google Play</div>
+          <div style={{textAlign:'center',fontSize:'.68rem',color:'#333',marginTop:'.3rem'}}>🔒 Pagamento seguro via Stripe</div>
         </div>
       </div>
     </div>
@@ -9369,6 +9413,7 @@ root.render(<App/>);
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
 <script>
 (function(){
   // ---- Helpers b64 ----
@@ -9502,6 +9547,14 @@ root.render(<App/>);
             var info = { uid: user.uid, email: user.email||null, displayName: user.displayName||null, photoURL: user.photoURL||null, lastLogin: Date.now() };
             localStorage.setItem('darkset.user', JSON.stringify(info));
             try{ if(db) await db.collection('users').doc(user.uid).set({ email: info.email, name: info.displayName, photoURL: info.photoURL, updatedAt: Date.now() }, { merge: true }); }catch(_){}
+            // ── Carrega planData do Firestore (plano pago via Stripe) ──
+            try{
+              var userDoc = await db.collection('users').doc(user.uid).get();
+              var planData = userDoc.exists && userDoc.data().planData ? userDoc.data().planData : null;
+              if(planData){
+                localStorage.setItem('ds.planData', JSON.stringify(planData));
+              }
+            }catch(_){}
             try{
               var prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
               if(info.displayName && !prefs.name){ prefs.name = info.displayName; localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs)); }
@@ -9569,6 +9622,125 @@ root.render(<App/>);
 
   // Inicia com pequeno delay para garantir que os SDKs externos carregaram
   setTimeout(tryInitFirebase, 100);
+})();
+</script>
+
+<!-- ===== DarkSet Checkout — Stripe via Firebase Functions ===== -->
+<script>
+(function(){
+  // Price IDs da Stripe
+  var PRICES = {
+    elite_monthly:  'price_1T8HL9PQCLOmkEBESS2lO5EF',
+    elite_annual:   'price_1T8HL9PQCLOmkEBE37tyxqi1',
+    darkgod:        'price_1T8HL9PQCLOmkEBE1pDC1w2T',
+    elite_monthly2: 'price_1T8HLsPQCLOmkEBEyW9OZ3BX'
+  };
+
+  // Aguarda Firebase Functions estar pronto
+  function getFunctions() {
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
+      var fn = firebase.functions();
+      fn.region = 'us-central1';
+      return fn;
+    }
+    return null;
+  }
+
+  // Redireciona para o Stripe Checkout
+  async function startCheckout(priceId, setLoading) {
+    var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+    if (!uid) {
+      if (window.openAuthModal) window.openAuthModal('signIn');
+      return;
+    }
+    if (setLoading) setLoading(true);
+    try {
+      var fns = getFunctions();
+      if (!fns) throw new Error('Firebase Functions não disponível. Tente novamente.');
+      var createCheckout = fns.httpsCallable('createCheckoutSession');
+      var result = await createCheckout({
+        priceId: priceId,
+        successUrl: window.location.origin + '/?payment=success',
+        cancelUrl:  window.location.origin + '/?payment=cancel'
+      });
+      var url = result.data && result.data.url;
+      if (!url) throw new Error('URL de checkout não recebida. Tente novamente.');
+      window.location.href = url;
+    } catch (e) {
+      console.error('[DSCheckout] Erro:', e);
+      alert('Erro ao iniciar pagamento: ' + (e.message || 'Tente novamente.'));
+      if (setLoading) setLoading(false);
+    }
+  }
+
+  // Abre o Portal da Stripe (gerenciar assinatura, cancelar etc.)
+  async function openPortal(setLoading) {
+    var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+    if (!uid) {
+      if (window.openAuthModal) window.openAuthModal('signIn');
+      return;
+    }
+    if (setLoading) setLoading(true);
+    try {
+      var fns = getFunctions();
+      if (!fns) throw new Error('Firebase Functions não disponível.');
+      var createPortal = fns.httpsCallable('createPortalSession');
+      var result = await createPortal({
+        returnUrl: window.location.origin + '/'
+      });
+      var url = result.data && result.data.url;
+      if (!url) throw new Error('URL do portal não recebida.');
+      window.location.href = url;
+    } catch (e) {
+      console.error('[DSPortal] Erro:', e);
+      alert('Erro ao abrir portal: ' + (e.message || 'Tente novamente.'));
+      if (setLoading) setLoading(false);
+    }
+  }
+
+  // Trata retorno do Stripe (?payment=success ou ?payment=cancel)
+  function handlePaymentReturn() {
+    var params = new URLSearchParams(window.location.search);
+    var status = params.get('payment');
+    if (!status) return;
+    // Limpa a URL sem recarregar
+    window.history.replaceState({}, '', window.location.pathname);
+    if (status === 'success') {
+      // Força pull do Firestore para pegar o planData atualizado pelo webhook
+      setTimeout(function(){
+        var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+        if (uid && window.DSSync) {
+          window.DSSync.pull(uid).then(function(){
+            if (window._DS_SETTERS && window._DS_SETTERS.toast) {
+              window._DS_SETTERS.toast('🎉 Pagamento confirmado! Bem-vindo ao DarkSet Elite!');
+            } else {
+              alert('🎉 Pagamento confirmado! Seu plano foi ativado.');
+            }
+          });
+        } else {
+          alert('🎉 Pagamento confirmado! Faça login para ativar seu plano.');
+        }
+      }, 1500);
+    } else if (status === 'cancel') {
+      setTimeout(function(){
+        if (window._DS_SETTERS && window._DS_SETTERS.toast) {
+          window._DS_SETTERS.toast('Pagamento cancelado. Quando quiser, é só tentar novamente!');
+        }
+      }, 500);
+    }
+  }
+
+  // Expõe globalmente
+  window.DSCheckout = {
+    prices: PRICES,
+    startCheckout: startCheckout,
+    openPortal: openPortal
+  };
+
+  // Executa ao carregar a página
+  document.addEventListener('DOMContentLoaded', handlePaymentReturn);
+  // Caso a página já tenha carregado
+  if (document.readyState !== 'loading') handlePaymentReturn();
 })();
 </script>
 
