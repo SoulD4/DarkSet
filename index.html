@@ -4151,7 +4151,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     let saved = 0;
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planId: resolvedPlan?.id||activePlanId, planName: resolvedPlan?.name||activePlan?.name, day, entries: []};
+      if (!copy[dateKey]) copy[dateKey] = {planId: resolvedPlan?.id||activePlanId, planName: resolvedPlan?.name||activePlan?.name, day, entries: [], startTime: sessionStartTime ? fmtTime(sessionStartTime) : null, endTime: fmtTime(new Date()), duration: sessionElapsed};
+      else { copy[dateKey].endTime = fmtTime(new Date()); copy[dateKey].duration = sessionElapsed; if(!copy[dateKey].startTime && sessionStartTime) copy[dateKey].startTime = fmtTime(sessionStartTime); }
       planItems.forEach((ex, ci) => {
         const exSets = allSets[ci]?.sets || [];
         const exRir  = allSets[ci]?.rir  || [];
@@ -4210,7 +4211,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     const dateKey = new Date().toISOString().slice(0, 10);
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: []};
+      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: [], startTime: null, endTime: fmtTime(new Date()), duration: 0};
+      else { copy[dateKey].endTime = fmtTime(new Date()); }
       for (const ex of valid) {
         const setsOut = ex.sets.map((s, i) => ({w: s.w, r: s.r, ...(ex.rir[i] && ex.rir[i] !== '--' ? {rir: ex.rir[i]} : {})}));
         const idx = copy[dateKey].entries.findIndex(e => e.name === ex.name);
@@ -4371,19 +4373,29 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
             <div style={{fontSize:'.76rem',color:'#555',marginTop:'.2rem'}}>Gera uma imagem 9:16 pra você postar nos stories</div>
           </div>
           {sess?.entries?.length > 0 && (
-            <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.65rem .85rem',marginBottom:'1rem',display:'flex',gap:'0',justifyContent:'space-around'}}>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.length}</div>
-                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>exercícios</div>
+            <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.65rem .85rem',marginBottom:'1rem'}}>
+              <div style={{display:'flex',gap:'0',justifyContent:'space-around',marginBottom:sess.duration?'.5rem':'0'}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.length}</div>
+                  <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>exercícios</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.reduce((a,en)=>a+(en.sets||[]).filter(s=>s.r).length,0)}</div>
+                  <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>séries</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{(()=>{const v=sess.entries.reduce((a,en)=>a+(en.sets||[]).reduce((b,s)=>b+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0),0);return v>0?Math.round(v)+'kg':'—';})()}</div>
+                  <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>volume</div>
+                </div>
+                {sess.duration > 0 && <div style={{textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{(()=>{var m=Math.floor(sess.duration/60);return m+'min';})()}</div>
+                  <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>duração</div>
+                </div>}
               </div>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{sess.entries.reduce((a,en)=>a+(en.sets||[]).filter(s=>s.r).length,0)}</div>
-                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>séries</div>
-              </div>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)',lineHeight:1}}>{(()=>{const v=sess.entries.reduce((a,en)=>a+(en.sets||[]).reduce((b,s)=>b+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0),0);return v>0?Math.round(v)+'kg':'—';})()}</div>
-                <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>volume</div>
-              </div>
+              {(sess.startTime||sess.endTime) && <div style={{display:'flex',justifyContent:'center',gap:'1.2rem',borderTop:'1px solid #1a1a1a',paddingTop:'.4rem',marginTop:'.1rem'}}>
+                {sess.startTime && <div style={{fontSize:'.65rem',color:'#444'}}>🕐 Início: <span style={{color:'#666',fontWeight:700}}>{sess.startTime}</span></div>}
+                {sess.endTime && <div style={{fontSize:'.65rem',color:'#444'}}>🏁 Fim: <span style={{color:'#666',fontWeight:700}}>{sess.endTime}</span></div>}
+              </div>}
             </div>
           )}
           <div style={{display:'flex',gap:'.6rem'}}>
@@ -4421,6 +4433,10 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.5rem'}}>
               <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{resolvedPlan?.name} · {day}</div>
               <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:'.25rem',background:'rgba(255,255,255,.04)',border:'1px solid #1a1a1a',borderRadius:'6px',padding:'.18rem .4rem'}}>
+                  <span style={{fontSize:'.55rem',color:'#444'}}>⏱</span>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'.85rem',fontWeight:700,color:'#666',letterSpacing:'.03em'}}>{fmtDuration(sessionElapsed)}</span>
+                </div>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{cursor+1}<span style={{fontSize:'.85rem',color:'#333'}}>/{planItems.length}</span></div>
                 <Button variant="ghost" onClick={back} style={{fontSize:'.62rem',padding:'.22rem .5rem',flexShrink:0}}>Sair</Button>
               </div>
@@ -6464,12 +6480,12 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
       <div style={{background:'#0d0d0f',border:'1px solid #1e1e22',borderRadius:'20px',width:'min(400px,94vw)',overflow:'hidden',boxShadow:'0 0 60px rgba(227,27,35,.15)',maxHeight:'90vh',overflowY:'auto'}}>
         <div style={{background:'linear-gradient(160deg,#130608,#0d0d0f)',padding:'1.2rem 1.4rem 1rem',borderBottom:'1px solid #1a1a1e',position:'relative'}}>
           <div style={{fontWeight:900,fontSize:'1.4rem',letterSpacing:'.06em',color:'#fff'}}>DARK<span style={{color:'#e31b23'}}>SET</span> <span style={{color:'#e31b23',fontSize:'1rem'}}>ELITE</span></div>
-          <div style={{fontSize:'.75rem',color:'#555',marginTop:'.1rem'}}>Desbloqueie todo o potencial</div>
+          <div style={{fontSize:'.75rem',color:'#555',marginTop:'.1rem'}}>Desbloqueie todo o potencial do seu treino</div>
           <button onClick={onClose} style={{position:'absolute',top:'12px',right:'12px',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',color:'#888',cursor:'pointer',width:'28px',height:'28px',borderRadius:'50%',fontSize:'13px'}}>✕</button>
         </div>
-        <div style={{padding:'1rem 1.4rem',borderBottom:'1px solid #111'}}>
-          <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.7rem 1rem',fontSize:'.82rem',color:'#f87171'}}>
-            🔒 {feature} é exclusivo do plano Elite
+        <div style={{padding:'.75rem 1.4rem',borderBottom:'1px solid #111'}}>
+          <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.6rem 1rem',fontSize:'.8rem',color:'#f87171',display:'flex',alignItems:'center',gap:'.5rem'}}>
+            <span>🔒</span><span><strong>{feature}</strong> é exclusivo do plano Elite ou superior</span>
           </div>
         </div>
         <div style={{padding:'1rem 1.4rem',borderBottom:'1px solid #111'}}>
@@ -6487,16 +6503,18 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
         </div>
         <div style={{padding:'1rem 1.4rem'}}>
           <div style={{display:'flex',gap:'.65rem',marginBottom:'.75rem'}}>
-            <div style={{flex:1,background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center'}}>
+            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_monthly');}} style={{flex:1,background:loadingPrice==='elite_monthly'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer',transition:'all .2s'}}>
               <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Mensal</div>
-              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.7rem',color:'#555'}}>/1°mês</span></div>
-              <div style={{fontSize:'.68rem',color:'#555',marginTop:'.15rem'}}>após R$15,99/mês</div>
+              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.68rem',color:'#888'}}>/1°mês</span></div>
+              <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>depois R$14,99/mês</div>
+              <div style={{marginTop:'.4rem',background:'#e31b23',borderRadius:'6px',padding:'.2rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
             </div>
-            <div style={{flex:1,background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'12px',padding:'.75rem',textAlign:'center',position:'relative'}}>
-              <div style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',background:'#e31b23',color:'#fff',fontSize:'.6rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px',whiteSpace:'nowrap'}}>2 MESES GRÁTIS</div>
+            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_annual');}} style={{flex:1,background:loadingPrice==='elite_annual'?'rgba(227,27,35,.15)':'rgba(227,27,35,.06)',border:'2px solid rgba(227,27,35,.25)',borderRadius:'12px',padding:'.75rem',textAlign:'center',position:'relative',cursor:'pointer',transition:'all .2s'}}>
+              <div style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px',whiteSpace:'nowrap'}}>🏆 MAIS POPULAR</div>
               <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Anual</div>
-              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$159,99</div>
-              <div style={{fontSize:'.68rem',color:'#555',marginTop:'.15rem'}}>R$13,33/mês</div>
+              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$119,99</div>
+              <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>R$10/mês · 2 meses grátis</div>
+              <div style={{marginTop:'.4rem',background:'rgba(227,27,35,.3)',borderRadius:'6px',padding:'.2rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
             </div>
           </div>
           {!trialUsed ? (
@@ -6511,38 +6529,34 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
               style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid #333',borderRadius:'12px',padding:'.85rem',color:'#ccc',fontSize:'1rem',fontWeight:900,cursor:'pointer',marginBottom:'.5rem',opacity:loadingPrice==='portal'?.6:1}}>
               {loadingPrice==='portal' ? '⏳ Abrindo portal…' : '⚙️ Gerenciar Assinatura'}
             </button>
-          ) : (
-            <div style={{display:'flex',gap:'.5rem',marginBottom:'.5rem'}}>
-              <button
-                onClick={()=>handleCheckout('elite_monthly')}
-                disabled={!!loadingPrice}
-                style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.85rem .4rem',color:'#fff',fontSize:'.85rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
-                {loadingPrice==='elite_monthly' ? '⏳…' : '💳 Mensal'}
-              </button>
-              <button
-                onClick={()=>handleCheckout('elite_annual')}
-                disabled={!!loadingPrice}
-                style={{flex:1,background:'linear-gradient(135deg,#c01820,#8a0e12)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'12px',padding:'.85rem .4rem',color:'#fff',fontSize:'.85rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
-                {loadingPrice==='elite_annual' ? '⏳…' : '🏆 Anual'}
-              </button>
-            </div>
-          )}
+          ) : null}
           <div style={{height:'1px',background:'#1e1e22',margin:'.75rem 0'}}/>
-          <div style={{background:'linear-gradient(135deg,#0d0d0f,#1a0a0a)',border:'1px solid #e31b23',borderRadius:'12px',padding:'1rem',marginBottom:'.5rem'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.4rem'}}>
-              <span style={{fontSize:'1.1rem'}}>👑</span>
-              <div style={{fontWeight:900,fontSize:'.95rem',color:'#e31b23'}}>DarkGod Founder Pack</div>
-              <div style={{background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.1rem .4rem',borderRadius:'10px',marginLeft:'auto',whiteSpace:'nowrap'}}>LIMITADO</div>
+          <div style={{background:'linear-gradient(135deg,#0a0a0a,#150505)',border:'1px solid rgba(227,27,35,.5)',borderRadius:'14px',padding:'1rem',marginBottom:'.5rem',boxShadow:'0 0 20px rgba(227,27,35,.08)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.5rem'}}>
+              <span style={{fontSize:'1.3rem'}}>💀</span>
+              <div>
+                <div style={{fontWeight:900,fontSize:'1rem',color:'#fff',letterSpacing:'.04em'}}>DARK<span style={{color:'#e31b23'}}>GOD</span></div>
+                <div style={{fontSize:'.65rem',color:'#555',marginTop:'.05rem'}}>Plano vitalício — pague uma vez</div>
+              </div>
+              <div style={{marginLeft:'auto',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'.2rem'}}>
+                <div style={{background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'10px',whiteSpace:'nowrap'}}>⚡ LIMITADO</div>
+                <div style={{fontSize:'.6rem',color:'#444'}}>vagas se esgotam</div>
+              </div>
             </div>
-            <div style={{fontSize:'.72rem',color:'#666',lineHeight:1.5,marginBottom:'.6rem'}}>Acesso vitalício + fichas ilimitadas + selo exclusivo de fundador — disponível apenas no 1° mês do app.</div>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
-              <div style={{fontWeight:900,fontSize:'1.4rem',color:'#fff'}}>R$249,99 <span style={{fontSize:'.7rem',color:'#555',fontWeight:400}}>único</span></div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(227,27,35,.06)',borderRadius:'10px',padding:'.6rem .8rem',marginBottom:'.6rem'}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:'1.6rem',color:'#fff',lineHeight:1}}>R$249,99</div>
+                <div style={{fontSize:'.65rem',color:'#555',marginTop:'.1rem'}}>pagamento único · acesso eterno</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:'.65rem',color:'#666',lineHeight:1.5}}>✅ Tudo do Elite<br/>✅ Fichas ilimitadas<br/>✅ Selo Fundador exclusivo<br/>✅ Sem mensalidade nunca</div>
+              </div>
             </div>
             <button
               onClick={()=>handleCheckout('darkgod')}
               disabled={!!loadingPrice}
-              style={{width:'100%',background:'transparent',border:'1px solid #e31b23',borderRadius:'10px',padding:'.6rem',color:'#e31b23',fontSize:'.88rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1}}>
-              {loadingPrice==='darkgod' ? '⏳ Redirecionando…' : '👑 Quero o DarkGod Pack'}
+              style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8a0e12)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontSize:'.9rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1,letterSpacing:'.04em'}}>
+              {loadingPrice==='darkgod' ? '⏳ Redirecionando…' : '💀 Quero o DarkGod Vitalício'}
             </button>
           </div>
           <div style={{textAlign:'center',fontSize:'.68rem',color:'#333',marginTop:'.3rem'}}>🔒 Pagamento seguro via Stripe</div>
@@ -8704,11 +8718,22 @@ function App(){
                 DARK<span style={{color:'var(--color-accent)'}}>SET</span>
               </div>
               <div style={{fontSize:'.75rem',color:'#333',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:'3rem'}}>Seu treino · Sua evolução</div>
-              <button onClick={()=>setTutStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'1rem 2.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',boxShadow:'0 0 30px rgba(227,27,35,.4)'}}>
+              <button onClick={()=>setTutStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'1rem 2.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',boxShadow:'0 0 30px rgba(227,27,35,.4)',width:'100%',maxWidth:'260px'}}>
                 Começar
               </button>
-              <div style={{marginTop:'1.5rem'}}>
-                <button onClick={finishSplash} style={{background:'none',border:'none',color:'#333',fontSize:'.75rem',cursor:'pointer',textDecoration:'underline'}}>Já conheço o app</button>
+              <div style={{marginTop:'.85rem',width:'100%',maxWidth:'260px'}}>
+                <button onClick={function(){
+                  localStorage.setItem('darkset.launched','1');
+                  setShowSplash(false);
+                  setTimeout(function(){
+                    var bd=document.getElementById('authModalBackdrop');
+                    if(bd){bd.style.display='flex';bd.setAttribute('aria-hidden','false');}
+                    if(window.openAuthModal) window.openAuthModal('signIn');
+                  },200);
+                }} style={{background:'rgba(255,255,255,.07)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.8rem 1.5rem',color:'#aaa',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',width:'100%'}}>Já tenho cadastro — Entrar</button>
+              </div>
+              <div style={{marginTop:'.75rem'}}>
+                <button onClick={finishSplash} style={{background:'none',border:'none',color:'#2a2a2a',fontSize:'.72rem',cursor:'pointer',textDecoration:'underline'}}>Já conheço o app</button>
               </div>
             </div>
           )}
