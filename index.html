@@ -3961,6 +3961,17 @@ const DarkTimer = ({prefs}) => {
 
 // ── Modo Livre (treino sem ficha) ──────────────────────────────────────────
 // ── UNIFIED SESSION: Com Ficha + Treino Livre ────────────────────────────
+// Helpers de tempo para a sessão de treino
+function fmtDuration(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+function fmtSessionTime(d) {
+  if (!d) return '';
+  const dt = d instanceof Date ? d : new Date(d);
+  return String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+}
 const DRAFT_KEY = "darkset.draft.session";
 const DRAFT_FREE_KEY = "darkset.draft.free";
 
@@ -4181,8 +4192,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     let saved = 0;
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planId: resolvedPlan?.id||activePlanId, planName: resolvedPlan?.name||activePlan?.name, day, entries: [], startTime: sessionStartTime ? fmtTime(sessionStartTime) : null, endTime: fmtTime(new Date()), duration: sessionElapsed};
-      else { copy[dateKey].endTime = fmtTime(new Date()); copy[dateKey].duration = sessionElapsed; if(!copy[dateKey].startTime && sessionStartTime) copy[dateKey].startTime = fmtTime(sessionStartTime); }
+      if (!copy[dateKey]) copy[dateKey] = {planId: resolvedPlan?.id||activePlanId, planName: resolvedPlan?.name||activePlan?.name, day, entries: [], startTime: sessionStartTime ? fmtSessionTime(sessionStartTime) : null, endTime: fmtSessionTime(new Date()), duration: sessionElapsed};
+      else { copy[dateKey].endTime = fmtSessionTime(new Date()); copy[dateKey].duration = sessionElapsed; if(!copy[dateKey].startTime && sessionStartTime) copy[dateKey].startTime = fmtSessionTime(sessionStartTime); }
       planItems.forEach((ex, ci) => {
         const exSets = allSets[ci]?.sets || [];
         const exRir  = allSets[ci]?.rir  || [];
@@ -4241,8 +4252,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     const dateKey = new Date().toISOString().slice(0, 10);
     setHistory(prev => {
       const copy = {...prev};
-      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: [], startTime: freeStartTime ? fmtTime(freeStartTime) : null, endTime: fmtTime(new Date()), duration: freeElapsed};
-      else { copy[dateKey].endTime = fmtTime(new Date()); copy[dateKey].duration = freeElapsed; if(!copy[dateKey].startTime && freeStartTime) copy[dateKey].startTime = fmtTime(freeStartTime); }
+      if (!copy[dateKey]) copy[dateKey] = {planName: 'Treino Livre', day: DAYS[(new Date().getDay() || 7) - 1], entries: [], startTime: freeStartTime ? fmtSessionTime(freeStartTime) : null, endTime: fmtSessionTime(new Date()), duration: freeElapsed};
+      else { copy[dateKey].endTime = fmtSessionTime(new Date()); copy[dateKey].duration = freeElapsed; if(!copy[dateKey].startTime && freeStartTime) copy[dateKey].startTime = fmtSessionTime(freeStartTime); }
       for (const ex of valid) {
         const setsOut = ex.sets.map((s, i) => ({w: s.w, r: s.r, ...(ex.rir[i] && ex.rir[i] !== '--' ? {rir: ex.rir[i]} : {})}));
         const idx = copy[dateKey].entries.findIndex(e => e.name === ex.name);
@@ -4337,7 +4348,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'var(--color-accent)',lineHeight:1}}>{fmtDuration(freeElapsed)}</div>
               </div>
             </div>
-            {freeStartTime && <div style={{fontSize:'.65rem',color:'#444'}}>Início: <span style={{color:'#666',fontWeight:700}}>{fmtTime(freeStartTime)}</span></div>}
+            {freeStartTime && <div style={{fontSize:'.65rem',color:'#444'}}>Início: <span style={{color:'#666',fontWeight:700}}>{fmtSessionTime(freeStartTime)}</span></div>}
           </div>
 
           <div style={{fontSize:'.75rem',color:'#555',marginBottom:'1rem',textTransform:'uppercase',letterSpacing:'.05em'}}>Adicione exercícios conforme vai treinando</div>
