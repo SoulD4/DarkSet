@@ -4691,7 +4691,7 @@ async function buildWorkoutImage(session, prefs) {
   ctx.strokeStyle=sep;ctx.lineWidth=1;ctx.setLineDash([6,5]);
   ctx.beginPath();ctx.moveTo(80,395);ctx.lineTo(W-80,395);ctx.stroke();ctx.setLineDash([]);
   const entries=session.entries||[];
-  const startY=430,lineH=Math.min(108,(H-startY-270)/Math.max(entries.length,1));
+  const startY=430,lineH=Math.min(108,(H-startY-420)/Math.max(entries.length,1));
   entries.forEach((en,i)=>{
     const y=startY+i*lineH;
     const valid=(en.sets||[]).filter(s=>s.r);
@@ -4707,7 +4707,9 @@ async function buildWorkoutImage(session, prefs) {
   });
   const totalSets=entries.reduce((a,en)=>a+(en.sets||[]).filter(s=>s.r).length,0);
   const totalVol=entries.reduce((a,en)=>a+(en.sets||[]).reduce((b,s)=>b+(parseFloat(s.w)||0)*(parseFloat(s.r)||0),0),0);
-  const bY=H-240;
+
+  // ── Bloco de stats (exercícios / séries / volume) ──
+  const bY=H-380;
   ctx.strokeStyle='rgba(196,82,30,.25)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
   ctx.beginPath();ctx.moveTo(80,bY-16);ctx.lineTo(W-80,bY-16);ctx.stroke();ctx.setLineDash([]);
   [{l:'EXERCÍCIOS',v:String(entries.length)},{l:'SÉRIES',v:String(totalSets)},{l:'VOLUME',v:totalVol>0?Math.round(totalVol)+'kg':'—'}].forEach((st,i)=>{
@@ -4715,6 +4717,42 @@ async function buildWorkoutImage(session, prefs) {
     ctx.fillStyle='#c4521e';ctx.font='900 68px Barlow Condensed, Arial Black, sans-serif';ctx.fillText(st.v,x,bY+55);
     ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='26px monospace';ctx.fillText(st.l,x,bY+88);
   });
+
+  // ── Bloco de tempo (duração / início / fim) ──
+  const hasDur = session.duration > 0;
+  const hasStart = !!session.startTime;
+  const hasEnd = !!session.endTime;
+  if (hasDur || hasStart || hasEnd) {
+    const tY = bY + 130;
+    // linha separadora
+    ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;ctx.setLineDash([4,6]);
+    ctx.beginPath();ctx.moveTo(80,tY);ctx.lineTo(W-80,tY);ctx.stroke();ctx.setLineDash([]);
+
+    // fundo do bloco de tempo
+    ctx.fillStyle='rgba(255,255,255,.03)';
+    if(ctx.roundRect) ctx.roundRect(60,tY+14,W-120,130,12); else ctx.rect(60,tY+14,W-120,130);
+    ctx.fill();
+
+    const durStr = hasDur ? (()=>{ const m=Math.floor(session.duration/60); const s=session.duration%60; return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); })() : null;
+
+    const timeCols = [];
+    if (durStr)  timeCols.push({icon:'⏱', label:'DURAÇÃO',  val: durStr});
+    if (hasStart) timeCols.push({icon:'🕐', label:'INÍCIO',   val: session.startTime});
+    if (hasEnd)   timeCols.push({icon:'🏁', label:'FIM',      val: session.endTime});
+
+    const colW = (W-120) / timeCols.length;
+    timeCols.forEach((col, i) => {
+      const cx = 60 + colW * i + colW / 2;
+      ctx.textAlign='center';
+      ctx.fillStyle='rgba(255,255,255,.25)'; ctx.font='28px Arial';
+      ctx.fillText(col.icon, cx, tY+52);
+      ctx.fillStyle='#fff'; ctx.font='900 52px Barlow Condensed, Arial Black, sans-serif';
+      ctx.fillText(col.val, cx, tY+102);
+      ctx.fillStyle='rgba(255,255,255,.3)'; ctx.font='22px monospace';
+      ctx.fillText(col.label, cx, tY+128);
+    });
+  }
+
   ctx.fillStyle='rgba(255,255,255,.15)';ctx.font='24px monospace';ctx.textAlign='center';
   ctx.fillText('#DarkSet · darkset.app',W/2,H-55);
   return new Promise(res=>c.toBlob(res,'image/png',.92));
