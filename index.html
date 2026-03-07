@@ -6503,19 +6503,23 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
           })}
         </div>
         <div style={{padding:'1rem 1.4rem'}}>
-          <div style={{display:'flex',gap:'.65rem',marginBottom:'.75rem'}}>
-            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_monthly');}} style={{flex:1,background:loadingPrice==='elite_monthly'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer',transition:'all .2s'}}>
-              <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Mensal</div>
-              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.68rem',color:'#888'}}>/1°mês</span></div>
-              <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>depois R$14,99/mês</div>
-              <div style={{marginTop:'.4rem',background:'#e31b23',borderRadius:'6px',padding:'.2rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
+          <div style={{display:'flex',gap:'.65rem',marginBottom:'.75rem',alignItems:'stretch'}}>
+            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_monthly');}} style={{flex:1,background:loadingPrice==='elite_monthly'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Mensal</div>
+                <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.68rem',color:'#888'}}>/1°mês</span></div>
+                <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>depois R$14,99/mês</div>
+              </div>
+              <div style={{marginTop:'.6rem',background:'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
             </div>
-            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_annual');}} style={{flex:1,background:loadingPrice==='elite_annual'?'rgba(227,27,35,.15)':'rgba(227,27,35,.06)',border:'2px solid rgba(227,27,35,.25)',borderRadius:'12px',padding:'.75rem',textAlign:'center',position:'relative',cursor:'pointer',transition:'all .2s'}}>
+            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_annual');}} style={{flex:1,background:loadingPrice==='elite_annual'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',paddingTop:'1.2rem',textAlign:'center',position:'relative',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px',whiteSpace:'nowrap'}}>🏆 MAIS POPULAR</div>
-              <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Anual</div>
-              <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$119,99</div>
-              <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>R$10/mês · 2 meses grátis</div>
-              <div style={{marginTop:'.4rem',background:'rgba(227,27,35,.3)',borderRadius:'6px',padding:'.2rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
+              <div>
+                <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Anual</div>
+                <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$119,99</div>
+                <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>R$10/mês · 2 meses grátis</div>
+              </div>
+              <div style={{marginTop:'.6rem',background:'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
             </div>
           </div>
           {!trialUsed ? (
