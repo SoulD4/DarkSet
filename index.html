@@ -6464,8 +6464,13 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
 
   function handleCheckout(priceKey) {
     if (!window.DSCheckout) { alert('Aguarde, inicializando…'); return; }
+    var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+    if (!uid) { if(window.openAuthModal) window.openAuthModal('signIn'); return; }
     setLoadingPrice(priceKey);
-    window.DSCheckout.startCheckout(window.DSCheckout.prices[priceKey], function(v){ if(!v) setLoadingPrice(null); });
+    window.DSCheckout.startCheckout(
+      window.DSCheckout.prices[priceKey],
+      function(ok){ if(!ok) setLoadingPrice(null); }
+    );
   }
 
   function handlePortal() {
@@ -6483,11 +6488,7 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
           <div style={{fontSize:'.75rem',color:'#555',marginTop:'.1rem'}}>Desbloqueie todo o potencial do seu treino</div>
           <button onClick={onClose} style={{position:'absolute',top:'12px',right:'12px',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',color:'#888',cursor:'pointer',width:'28px',height:'28px',borderRadius:'50%',fontSize:'13px'}}>✕</button>
         </div>
-        <div style={{padding:'.75rem 1.4rem',borderBottom:'1px solid #111'}}>
-          <div style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'10px',padding:'.6rem 1rem',fontSize:'.8rem',color:'#f87171',display:'flex',alignItems:'center',gap:'.5rem'}}>
-            <span>🔒</span><span><strong>{feature}</strong> é exclusivo do plano Elite ou superior</span>
-          </div>
-        </div>
+
         <div style={{padding:'1rem 1.4rem',borderBottom:'1px solid #111'}}>
           {items.map(function(item) {
             return (
@@ -9655,71 +9656,72 @@ root.render(<App/>);
 (function(){
   // Price IDs da Stripe
   var PRICES = {
-    elite_monthly:  'price_1T8HL9PQCLOmkEBESS2lO5EF',
-    elite_annual:   'price_1T8HL9PQCLOmkEBE37tyxqi1',
-    darkgod:        'price_1T8HL9PQCLOmkEBE1pDC1w2T',
-    elite_monthly2: 'price_1T8HLsPQCLOmkEBEyW9OZ3BX'
+    elite_monthly:  'price_1T8HL9PQCLOmkEBESS2lO5EF',   // R$9,99 1°mes (intro)
+    elite_annual:   'price_1T8HL9PQCLOmkEBE37tyxqi1',   // R$119,99/ano
+    darkgod:        'price_1T8HLsPQCLOmkEBEyW9OZ3BX'    // R$249,99 vitalicio
   };
 
   // Aguarda Firebase Functions estar pronto
   function getFunctions() {
     if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
-      var fn = firebase.functions();
-      fn.region = 'us-central1';
-      return fn;
+      return firebase.app().functions('us-central1');
     }
     return null;
   }
 
+  function getUID() {
+    try {
+      var u = JSON.parse(localStorage.getItem('darkset.user'));
+      return u && u.uid ? u.uid : null;
+    } catch(_){ return null; }
+  }
+
   // Redireciona para o Stripe Checkout
-  async function startCheckout(priceId, setLoading) {
-    var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+  async function startCheckout(priceId, onDone) {
+    var uid = getUID();
     if (!uid) {
       if (window.openAuthModal) window.openAuthModal('signIn');
+      if (onDone) onDone(false);
       return;
     }
-    if (setLoading) setLoading(true);
     try {
       var fns = getFunctions();
-      if (!fns) throw new Error('Firebase Functions não disponível. Tente novamente.');
+      if (!fns) throw new Error('Firebase não inicializado. Recarregue a página.');
       var createCheckout = fns.httpsCallable('createCheckoutSession');
-      var result = await createCheckout({
-        priceId: priceId,
-        successUrl: window.location.origin + '/?payment=success',
-        cancelUrl:  window.location.origin + '/?payment=cancel'
-      });
+      var result = await createCheckout({ priceId: priceId });
       var url = result.data && result.data.url;
-      if (!url) throw new Error('URL de checkout não recebida. Tente novamente.');
+      if (!url) throw new Error('Sem URL de checkout. Tente novamente.');
       window.location.href = url;
     } catch (e) {
       console.error('[DSCheckout] Erro:', e);
-      alert('Erro ao iniciar pagamento: ' + (e.message || 'Tente novamente.'));
-      if (setLoading) setLoading(false);
+      var msg = e.message || 'Erro desconhecido';
+      // Erros comuns do Firebase Functions
+      if (msg.includes('internal')) msg = 'Erro interno. Tente novamente em instantes.';
+      if (msg.includes('unauthenticated')) msg = 'Faça login novamente.';
+      alert('Erro ao iniciar pagamento: ' + msg);
+      if (onDone) onDone(false);
     }
   }
 
   // Abre o Portal da Stripe (gerenciar assinatura, cancelar etc.)
-  async function openPortal(setLoading) {
-    var uid = (function(){ try{ return JSON.parse(localStorage.getItem('darkset.user'))?.uid||null; }catch(_){ return null; } })();
+  async function openPortal(onDone) {
+    var uid = getUID();
     if (!uid) {
       if (window.openAuthModal) window.openAuthModal('signIn');
       return;
     }
-    if (setLoading) setLoading(true);
     try {
       var fns = getFunctions();
-      if (!fns) throw new Error('Firebase Functions não disponível.');
+      if (!fns) throw new Error('Firebase não inicializado.');
       var createPortal = fns.httpsCallable('createPortalSession');
-      var result = await createPortal({
-        returnUrl: window.location.origin + '/'
-      });
+      var result = await createPortal({});
       var url = result.data && result.data.url;
       if (!url) throw new Error('URL do portal não recebida.');
       window.location.href = url;
     } catch (e) {
       console.error('[DSPortal] Erro:', e);
       alert('Erro ao abrir portal: ' + (e.message || 'Tente novamente.'));
-      if (setLoading) setLoading(false);
+      if (onDone) onDone(false);
     }
   }
 
