@@ -6556,12 +6556,11 @@ function startDSTrial() {
 
 function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
   const [loadingPrice, setLoadingPrice] = React.useState(null);
-  const [hasSub, setHasSub] = React.useState(()=>{
-    try{
-      var pd = JSON.parse(localStorage.getItem('ds.planData')||'null');
-      return !!(pd && pd.tier && pd.tier !== 'free' && !pd.trialEnd);
-    }catch(_){ return false; }
-  });
+  var _ps = (typeof getDSPlan === 'function') ? getDSPlan() : {tier:'free'};
+  var currentTier = _ps.tier || 'free';
+  var hasSub = (currentTier !== 'free') && !_ps.isTrialActive;
+  var isElite = currentTier === 'elite';
+  var isGod = currentTier === 'darkgod';
 
   const items = [
     ['📋','Até 10 fichas de treino','vs 1 no gratuito'],
@@ -6614,25 +6613,25 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
         </div>
         <div style={{padding:'1rem 1.4rem'}}>
           <div style={{display:'flex',gap:'.65rem',marginBottom:'.75rem',alignItems:'stretch'}}>
-            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_monthly');}} style={{flex:1,background:loadingPrice==='elite_monthly'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
+            <div onClick={function(){if(!isElite&&!isGod&&!loadingPrice) handleCheckout('elite_monthly');}} style={{flex:1,background:loadingPrice==='elite_monthly'?'rgba(227,27,35,.15)':isElite||isGod?'rgba(255,255,255,.03)':'rgba(227,27,35,.08)',border:'2px solid '+(isElite||isGod?'rgba(255,255,255,.1)':'rgba(227,27,35,.3)'),borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div>
                 <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Mensal</div>
                 <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$9,99<span style={{fontSize:'.68rem',color:'#888'}}>/1°mês</span></div>
                 <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>depois R$14,99/mês</div>
               </div>
-              <div style={{marginTop:'.6rem',background:'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
+              <div style={{marginTop:'.6rem',background:isElite||isGod?'rgba(255,255,255,.08)':'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:isElite||isGod?'#888':'#fff',fontWeight:900}}>{isElite||isGod?'✅ Plano Ativo':'💳 Assinar'}</div>
             </div>
-            <div onClick={function(){if(!hasSub&&!loadingPrice) handleCheckout('elite_annual');}} style={{flex:1,background:loadingPrice==='elite_annual'?'rgba(227,27,35,.15)':'rgba(227,27,35,.08)',border:'2px solid rgba(227,27,35,.3)',borderRadius:'12px',padding:'.75rem',paddingTop:'1.2rem',textAlign:'center',position:'relative',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
+            <div onClick={function(){if(!isElite&&!isGod&&!loadingPrice) handleCheckout('elite_annual');}} style={{flex:1,background:loadingPrice==='elite_annual'?'rgba(227,27,35,.15)':isElite||isGod?'rgba(255,255,255,.03)':'rgba(227,27,35,.08)',border:'2px solid '+(isElite||isGod?'rgba(255,255,255,.1)':'rgba(227,27,35,.3)'),borderRadius:'12px',padding:'.75rem',paddingTop:'1.2rem',textAlign:'center',position:'relative',cursor:'pointer',transition:'all .2s',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',background:'#e31b23',color:'#fff',fontSize:'.58rem',fontWeight:900,padding:'.15rem .5rem',borderRadius:'20px',whiteSpace:'nowrap'}}>🏆 MAIS POPULAR</div>
               <div>
                 <div style={{fontSize:'.68rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',marginBottom:'.3rem'}}>Anual</div>
                 <div style={{fontWeight:900,fontSize:'1.3rem',color:'#fff'}}>R$119,99</div>
                 <div style={{fontSize:'.65rem',color:'#555',marginTop:'.15rem'}}>R$10/mês · 2 meses grátis</div>
               </div>
-              <div style={{marginTop:'.6rem',background:'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:'#fff',fontWeight:900}}>💳 Assinar</div>
+              <div style={{marginTop:'.6rem',background:isElite||isGod?'rgba(255,255,255,.08)':'#e31b23',borderRadius:'6px',padding:'.25rem .4rem',fontSize:'.6rem',color:isElite||isGod?'#888':'#fff',fontWeight:900}}>{isElite||isGod?'✅ Plano Ativo':'💳 Assinar'}</div>
             </div>
           </div>
-          {!trialUsed ? (
+          {!trialUsed && !hasSub ? (
             <button onClick={onTrial} style={{width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.7rem',color:'#aaa',fontSize:'.8rem',fontWeight:700,cursor:'pointer',marginBottom:'.65rem'}}>
               ✨ Experimentar Elite grátis por 7 dias — sem cartão
             </button>
@@ -6668,10 +6667,10 @@ function PaywallModal({ feature, onClose, onTrial, trialUsed }) {
               </div>
             </div>
             <button
-              onClick={()=>handleCheckout('darkgod')}
-              disabled={!!loadingPrice}
-              style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8a0e12)',border:'none',borderRadius:'10px',padding:'.7rem',color:'#fff',fontSize:'.9rem',fontWeight:900,cursor:'pointer',opacity:loadingPrice?0.6:1,letterSpacing:'.04em'}}>
-              {loadingPrice==='darkgod' ? '⏳ Redirecionando…' : '💀 Quero o DarkGod Vitalício'}
+              onClick={function(){ if(!isGod) handleCheckout('darkgod'); }}
+              disabled={isGod||!!loadingPrice}
+              style={{width:'100%',background:isGod?'rgba(255,255,255,.06)':'linear-gradient(135deg,#e31b23,#8a0e12)',border:isGod?'1px solid rgba(255,255,255,.1)':'none',borderRadius:'10px',padding:'.7rem',color:isGod?'#888':'#fff',fontSize:'.9rem',fontWeight:900,cursor:isGod?'default':'pointer',opacity:(!isGod&&loadingPrice)?0.6:1,letterSpacing:'.04em'}}>
+              {isGod ? '✅ Plano Ativo — DarkGod' : loadingPrice==='darkgod' ? '⏳ Redirecionando…' : '💀 Quero o DarkGod Vitalício'}
             </button>
           </div>
           <div style={{textAlign:'center',fontSize:'.68rem',color:'#333',marginTop:'.3rem'}}>🔒 Pagamento seguro via Stripe</div>
