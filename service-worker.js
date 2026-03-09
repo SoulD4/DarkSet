@@ -1,5 +1,5 @@
-// DarkSet Service Worker V5.7.7
-const CACHE_NAME = 'darkset-v5-7-7';
+// DarkSet Service Worker V5.7.8
+const CACHE_NAME = 'darkset-v5-7-8';
 const ASSETS_TO_CACHE = [
   '/',
   './index.html',
@@ -90,22 +90,53 @@ function scheduleDaily(hour, min) {
   }, delay);
 }
 
+// ── Timer background ───────────────────────────────────────────────────────
+let timerTimeout = null;
+
+function cancelTimer() {
+  if (timerTimeout) { clearTimeout(timerTimeout); timerTimeout = null; }
+}
+
+async function notifyTimerDone() {
+  await self.registration.showNotification('⏱ Descanso finalizado!', {
+    body: 'Hora da próxima série! 💪',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: 'darkset-rest',
+    renotify: true,
+    silent: false,
+    vibrate: [320, 140, 320, 140, 420]
+  });
+  const allClients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+  allClients.forEach(c => c.postMessage({ type: 'TIMER_DONE' }));
+}
+
 // ── Messages — listener único ──────────────────────────────────────────────
 self.addEventListener('message', e => {
   if (e.data?.type === 'scheduleNotif') {
     const { hour, min } = e.data;
     scheduleDaily(hour, min);
   }
+
+  // Legacy restTimer support
   if (e.data?.type === 'restTimer') {
-    const { dur, exName } = e.data;
-    setTimeout(() => {
-      self.registration.showNotification('⏱ Descanso finalizado!', {
-        body: exName ? `Próximo exercício: ${exName}` : 'Hora da próxima série!',
-        icon: './icons/icon-192.png',
-        tag: 'darkset-rest',
-        silent: false,
-      });
-    }, dur * 1000);
+    const { dur } = e.data;
+    cancelTimer();
+    timerTimeout = setTimeout(() => notifyTimerDone(), dur * 1000);
+  }
+
+  // TIMER_START: endsAt = absolute timestamp in ms
+  if (e.data?.type === 'TIMER_START') {
+    const endsAt = e.data.endsAt;
+    if (!endsAt) return;
+    cancelTimer();
+    const delay = Math.max(0, endsAt - Date.now());
+    timerTimeout = setTimeout(() => notifyTimerDone(), delay);
+  }
+
+  // TIMER_CANCEL
+  if (e.data?.type === 'TIMER_CANCEL') {
+    cancelTimer();
   }
 });
 

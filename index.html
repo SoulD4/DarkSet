@@ -3856,6 +3856,25 @@ const DarkTimer = ({prefs}) => {
   const [sec,setSec]=useState(Math.max(5, Number(prefs.timerPreset||60)));
   const [running,setRunning]=useState(false);
   const endRef = useRef(0);
+  const wakeLockRef = useRef(null);
+
+  // Acquire WakeLock to keep screen on while timer runs
+  const acquireWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+      }
+    } catch(_) {}
+  };
+  const releaseWakeLock = () => {
+    try { if (wakeLockRef.current) { wakeLockRef.current.release(); wakeLockRef.current = null; } } catch(_) {}
+  };
+  // Re-acquire WakeLock if page becomes visible again while timer running
+  useEffect(() => {
+    const onVisible = () => { if (running && document.visibilityState === 'visible') acquireWakeLock(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [running]);
 
   // Pede permissão na primeira vez que o componente monta
   useEffect(()=>{ requestNotifPermission(); },[]);
@@ -3920,6 +3939,7 @@ const DarkTimer = ({prefs}) => {
           }
         }catch(_){}
         swTimerCancel();
+        releaseWakeLock();
         setRunning(false);
         setSec(Math.max(5, Number(prefs.timerPreset||60)));
         try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
@@ -3937,18 +3957,21 @@ const DarkTimer = ({prefs}) => {
     const duration = Math.max(1, Number(sec||0));
     endRef.current = Date.now() + duration*1000;
     setRunning(true);
+    acquireWakeLock();
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:true, endTime:endRef.current})); }catch(_){}
     swTimerStart(endRef.current);
   };
   const pause = () => {
     const remain = Math.max(0, Math.ceil((endRef.current - Date.now())/1000));
     setRunning(false);
+    releaseWakeLock();
     setSec(remain || Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:false, pausedSec: remain})); }catch(_){}
     swTimerCancel();
   };
   const reset = () => {
     setRunning(false);
+    releaseWakeLock();
     setSec(Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
     swTimerCancel();
@@ -9730,6 +9753,9 @@ root.render(<App/>);
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
                 'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
               ];
+              // Preserve navigation flags before clearing
+              localStorage.setItem('darkset.launched','1');
+              localStorage.setItem('darkset.onboarded','1');
               clearKeys.forEach(function(k){ localStorage.removeItem(k); });
               if(window._DS_SETTERS){
                 if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
