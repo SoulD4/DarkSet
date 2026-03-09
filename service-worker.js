@@ -1,5 +1,5 @@
-// DarkSet Service Worker V5.7.9
-const CACHE_NAME = 'darkset-v5-7-9';
+// DarkSet Service Worker V5.8.0
+const CACHE_NAME = 'darkset-v5-8-0';
 const ASSETS_TO_CACHE = [
   '/',
   './index.html',
@@ -8,7 +8,7 @@ const ASSETS_TO_CACHE = [
   './icons/icon-512.png'
 ];
 
-// ── Install: pre-cache core assets ────────────────────────────────────────
+// ── Install ────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -17,7 +17,7 @@ self.addEventListener('install', e => {
   );
 });
 
-// ── Activate: remove old caches ────────────────────────────────────────────
+// ── Activate ───────────────────────────────────────────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -28,14 +28,11 @@ self.addEventListener('activate', e => {
   );
 });
 
-// ── Fetch: cache-first for assets, network-first for API/HTML ─────────────
+// ── Fetch ──────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // Skip non-GET and cross-origin requests (Firebase, etc.)
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
 
-  // Cache-first strategy for static assets (icons, images, fonts)
   if (
     e.request.destination === 'image' ||
     e.request.destination === 'font' ||
@@ -55,7 +52,6 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Network-first strategy for HTML and manifest (always get latest)
   e.respondWith(
     fetch(e.request)
       .then(response => {
@@ -67,7 +63,91 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ── Notification schedule ──────────────────────────────────────────────────
+// ── Timer state ────────────────────────────────────────────────────────────
+let timerEndsAt = null;
+let timerInterval = null;
+
+function cancelTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  timerEndsAt = null;
+}
+
+async function notifyTimerDone() {
+  cancelTimer();
+  try {
+    await self.registration.showNotification('⏱ Descanso finalizado!', {
+      body: 'Hora da próxima série! 💪',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: 'darkset-rest',
+      renotify: true,
+      silent: false,
+      vibrate: [400, 100, 400, 100, 600],
+      requireInteraction: false
+    });
+  } catch(err) {
+    console.warn('[SW] notification failed:', err);
+  }
+  try {
+    const allClients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    allClients.forEach(c => c.postMessage({ type: 'TIMER_DONE' }));
+  } catch(_) {}
+}
+
+// Keeps SW alive by holding a promise open while timer runs
+// Uses setInterval at 500ms — more reliable than setTimeout on Samsung One UI
+function startTimerInterval(endsAt) {
+  cancelTimer();
+  timerEndsAt = endsAt;
+
+  return new Promise(resolve => {
+    timerInterval = setInterval(() => {
+      if (Date.now() >= timerEndsAt) {
+        notifyTimerDone().then(resolve).catch(resolve);
+      }
+    }, 500);
+  });
+}
+
+// ── Messages ───────────────────────────────────────────────────────────────
+self.addEventListener('message', e => {
+  if (!e.data) return;
+
+  if (e.data.type === 'TIMER_START') {
+    const endsAt = e.data.endsAt;
+    if (!endsAt) return;
+    // e.waitUntil keeps the SW alive until the promise resolves
+    e.waitUntil(startTimerInterval(endsAt));
+  }
+
+  if (e.data.type === 'TIMER_CANCEL') {
+    cancelTimer();
+  }
+
+  // Legacy
+  if (e.data.type === 'restTimer') {
+    const endsAt = Date.now() + (e.data.dur * 1000);
+    e.waitUntil(startTimerInterval(endsAt));
+  }
+
+  if (e.data.type === 'scheduleNotif') {
+    const { hour, min } = e.data;
+    scheduleDaily(hour, min);
+  }
+});
+
+// ── Notification click ─────────────────────────────────────────────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      if (list.length > 0) return list[0].focus();
+      return clients.openWindow('./');
+    })
+  );
+});
+
+// ── Daily notification schedule ────────────────────────────────────────────
 let notifTimer = null;
 
 function scheduleDaily(hour, min) {
@@ -89,64 +169,3 @@ function scheduleDaily(hour, min) {
     scheduleDaily(hour, min);
   }, delay);
 }
-
-// ── Timer background ───────────────────────────────────────────────────────
-let timerTimeout = null;
-
-function cancelTimer() {
-  if (timerTimeout) { clearTimeout(timerTimeout); timerTimeout = null; }
-}
-
-async function notifyTimerDone() {
-  await self.registration.showNotification('⏱ Descanso finalizado!', {
-    body: 'Hora da próxima série! 💪',
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
-    tag: 'darkset-rest',
-    renotify: true,
-    silent: false,
-    vibrate: [320, 140, 320, 140, 420]
-  });
-  const allClients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-  allClients.forEach(c => c.postMessage({ type: 'TIMER_DONE' }));
-}
-
-// ── Messages — listener único ──────────────────────────────────────────────
-self.addEventListener('message', e => {
-  if (e.data?.type === 'scheduleNotif') {
-    const { hour, min } = e.data;
-    scheduleDaily(hour, min);
-  }
-
-  // Legacy restTimer support
-  if (e.data?.type === 'restTimer') {
-    const { dur } = e.data;
-    cancelTimer();
-    timerTimeout = setTimeout(() => notifyTimerDone(), dur * 1000);
-  }
-
-  // TIMER_START: endsAt = absolute timestamp in ms
-  if (e.data?.type === 'TIMER_START') {
-    const endsAt = e.data.endsAt;
-    if (!endsAt) return;
-    cancelTimer();
-    const delay = Math.max(0, endsAt - Date.now());
-    timerTimeout = setTimeout(() => notifyTimerDone(), delay);
-  }
-
-  // TIMER_CANCEL
-  if (e.data?.type === 'TIMER_CANCEL') {
-    cancelTimer();
-  }
-});
-
-// ── Notification click ─────────────────────────────────────────────────────
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      if (list.length > 0) return list[0].focus();
-      return clients.openWindow('./');
-    })
-  );
-});
