@@ -1,5 +1,5 @@
-// DarkSet Service Worker V5.7.8
-const CACHE_NAME = 'darkset-v5-7-8';
+// DarkSet Service Worker V5.7.9
+const CACHE_NAME = 'darkset-v5-7-9';
 const ASSETS_TO_CACHE = [
   '/',
   './index.html',
