@@ -3835,11 +3835,15 @@ function requestNotifPermission(){
 }
 
 // Avisa o Service Worker sobre o timer
-function swTimerStart(endsAt){
+async function swTimerStart(endsAt){
   try{
-    if(navigator.serviceWorker && navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({ type:'TIMER_START', endsAt });
+    if(!navigator.serviceWorker) return;
+    let sw = navigator.serviceWorker.controller;
+    if(!sw){
+      await navigator.serviceWorker.ready;
+      sw = navigator.serviceWorker.controller;
     }
+    if(sw) sw.postMessage({ type:'TIMER_START', endsAt });
   }catch(_){}
 }
 function swTimerCancel(){
@@ -3953,7 +3957,11 @@ const DarkTimer = ({prefs}) => {
     return ()=> clearTimeout(loop);
   },[running]);
 
-  const start = () => {
+  const start = async () => {
+    // Request notification permission if not granted — required for background timer
+    if('Notification' in window && Notification.permission === 'default'){
+      await Notification.requestPermission();
+    }
     const duration = Math.max(1, Number(sec||0));
     endRef.current = Date.now() + duration*1000;
     setRunning(true);
