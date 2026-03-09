@@ -10136,7 +10136,7 @@ root.render(<App/>);
       <button class="auth-btn" id="authPrimaryBtn">Entrar</button>
 
       <div id="authForgotRow" style="text-align:center;margin-top:-.25rem;margin-bottom:.25rem;">
-        <button id="authForgotBtn" onclick="window._handleForgotPassword()" style="background:none;border:none;color:#888;font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;">Esqueci minha senha</button>
+        <button id="authForgotBtn" style="background:none;border:none;color:#888;font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;">Esqueci minha senha</button>
       </div>
 
       <div class="auth-footer" id="authToggleRow">
@@ -10439,6 +10439,44 @@ root.render(<App/>);
   var bd = document.getElementById('deleteAccountBackdrop');
   if(bd) bd.addEventListener('click', function(e){ if(e.target===bd) window.closeDeleteAccountModal(); });
 })();
+</script>
+
+<script>
+// Delegated click for forgot password - runs after everything loads
+document.addEventListener('click', async function(e){
+  if(!e.target || e.target.id !== 'authForgotBtn') return;
+
+  var errEl = document.getElementById('authError');
+  function showErr(msg){ if(errEl){ errEl.textContent=msg; errEl.style.display=msg?'block':'none'; } }
+
+  var emailEl = document.getElementById('authEmailInput');
+  var email = (emailEl && emailEl.value || '').trim();
+
+  if(!email){ showErr('Digite seu email acima para redefinir a senha.'); return; }
+
+  var authInst = window._auth;
+  var btn = document.getElementById('authForgotBtn');
+
+  if(!authInst){
+    showErr('❌ Firebase não carregou. Recarregue a página.');
+    return;
+  }
+
+  try{
+    if(btn){ btn.textContent='Enviando…'; btn.disabled=true; }
+    showErr('');
+    await authInst.sendPasswordResetEmail(email);
+    if(btn){ btn.textContent='✅ Email enviado!'; }
+    showErr('');
+    setTimeout(function(){ if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }}, 4000);
+  }catch(e){
+    var msg = 'Erro: ' + (e.code||'') + ' ' + (e.message||'');
+    if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential') msg='Nenhuma conta encontrada com esse email.';
+    else if(e.code==='auth/invalid-email') msg='Email inválido.';
+    showErr(msg);
+    if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }
+  }
+});
 </script>
 <!-- ===== /Delete Account Modal ===== -->
 
