@@ -8848,7 +8848,7 @@ function App(){
     <div className="max-w-5xl mx-auto p-4 md:p-8 safe-pt safe-pb">
       {showOnboarding && <Onboarding setPrefs={setPrefs} onDone={()=>setShowOnboarding(false)}/>}
       {/* Splash screen */}
-      {!showOnboarding&&showSplash&&(
+      {!showOnboarding&&showSplash&&!authed&&(
         <div style={{position:'fixed',inset:0,background:'#080808',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
           {tutStep===0&&(
             <div style={{textAlign:'center',animation:'fadeIn .5s ease'}}>
@@ -9754,7 +9754,17 @@ root.render(<App/>);
             if(window._DS_SETTERS && window._DS_SETTERS.authed) window._DS_SETTERS.authed(true);
             // Fix: dismiss splash screen after login so user goes to home
             localStorage.setItem('darkset.launched','1');
-            if(window._DS_SETTERS && window._DS_SETTERS.showSplash) window._DS_SETTERS.showSplash(false);
+            // Retry until React setter is ready
+            var splashAttempts=0;
+            var trySplash=function(){
+              if(window._DS_SETTERS && window._DS_SETTERS.showSplash){
+                window._DS_SETTERS.showSplash(false);
+              } else if(splashAttempts<30){
+                splashAttempts++;
+                setTimeout(trySplash,100);
+              }
+            };
+            trySplash();
           } else {
             // Clear all user data on logout
             var keysToRemove = [
