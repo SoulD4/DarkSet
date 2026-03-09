@@ -5317,6 +5317,7 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
       <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.75rem'}}>
         <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Conta</div>
         {profileUser ? (
+          <React.Fragment>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.75rem'}}>
             <div style={{display:'flex',alignItems:'center',gap:'.65rem',minWidth:0}}>
               {profileUser.photoURL
@@ -5330,6 +5331,10 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
             </div>
             <button onClick={()=>window.DSAuth&&DSAuth.signOut()} style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'8px',padding:'.4rem .85rem',color:'#f87171',fontSize:'.78rem',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>Desconectar</button>
           </div>
+          <div style={{marginTop:'.5rem',textAlign:'right'}}>
+            <button onClick={()=>{ if(window.openDeleteAccountModal) window.openDeleteAccountModal(); }} style={{background:'none',border:'none',color:'#3a3a3a',fontSize:'.7rem',cursor:'pointer',textDecoration:'underline',padding:0}}>Excluir minha conta</button>
+          </div>
+        </React.Fragment>
         ) : (
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontSize:'.82rem',color:'var(--color-text-sub)'}}>Entre para sincronizar seus dados</div>
@@ -8726,7 +8731,11 @@ function App(){
       if(p.theme==='light') document.documentElement.setAttribute('data-theme','light');
     }catch(_){}
   },[]);
-  const [showSplash,setShowSplash]=useState(()=>!localStorage.getItem('darkset.launched'));
+  const [showSplash,setShowSplash]=useState(()=>{
+    // Never show splash if user is already logged in
+    if(localStorage.getItem('darkset.user')) return false;
+    return !localStorage.getItem('darkset.launched');
+  });
   const [tutStep,setTutStep]=useState(0);
   const tutorialSteps=[
     {title:"Bem-vindo ao DarkSet",body:"Seu app de treino pessoal. Vamos te mostrar as principais funcionalidades em 4 passos rápidos.",icon:"💪"},
@@ -10252,18 +10261,20 @@ root.render(<App/>);
   forgotBtn && forgotBtn.addEventListener('click', async function(){
     var email = (emailInput && emailInput.value || '').trim();
     if(!email){ showError('Digite seu email acima para redefinir a senha.'); return; }
-    if(!window.DSAuth || !window.DSAuth.auth){ showError('Firebase não carregou. Tente recarregar.'); return; }
+    var authInst = (window.DSAuth && window.DSAuth.auth) || window._auth;
+    if(!authInst){ showError('Firebase não carregou. Tente recarregar a página.'); return; }
+    var btn = document.getElementById('authForgotBtn');
     try{
-      forgotBtn.textContent = 'Enviando…'; forgotBtn.disabled = true;
-      await window.DSAuth.auth.sendPasswordResetEmail(email);
+      if(btn){ btn.textContent = 'Enviando…'; btn.disabled = true; }
+      await authInst.sendPasswordResetEmail(email);
       showError('');
-      alert('✅ Email de redefinição enviado para ' + email + '.\nVerifique sua caixa de entrada (e spam).');
+      if(btn){ btn.textContent = '✅ Email enviado! Verifique sua caixa.'; }
+      setTimeout(function(){ if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; } }, 4000);
     }catch(e){
-      if(e.code==='auth/user-not-found') showError('Nenhuma conta encontrada com esse email.');
+      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential') showError('Nenhuma conta encontrada com esse email.');
       else if(e.code==='auth/invalid-email') showError('Email inválido.');
       else showError(e.message || 'Erro ao enviar email.');
-    }finally{
-      forgotBtn.textContent = 'Esqueci minha senha'; forgotBtn.disabled = false;
+      if(btn){ btn.textContent = 'Esqueci minha senha'; btn.disabled = false; }
     }
   });
 
@@ -10274,6 +10285,134 @@ root.render(<App/>);
 })();
 </script>
 <!-- ===== /Auth Popup ===== -->
+
+<!-- ===== Delete Account Modal ===== -->
+<div id="deleteAccountBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;align-items:center;justify-content:center;padding:1.5rem;">
+  <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:1.75rem;width:100%;max-width:420px;position:relative;">
+    <button onclick="window.closeDeleteAccountModal()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:#555;font-size:1.2rem;cursor:pointer;line-height:1;">✕</button>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.4rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem;color:#f0f0f0;">Excluir conta</div>
+    <div style="font-size:.82rem;color:#888;line-height:1.5;margin-bottom:1.25rem;">Esta ação é <strong style="color:#f87171">permanente e irreversível</strong>. Todos os seus dados serão apagados.</div>
+
+    <div id="delStep1">
+      <div style="background:rgba(227,27,35,.08);border:1px solid rgba(227,27,35,.2);border-radius:10px;padding:.9rem;margin-bottom:1.25rem;font-size:.82rem;color:#ff8080;line-height:1.5;">
+        Para confirmar, digite o código abaixo no campo:
+        <div id="delConfirmCode" style="font-family:monospace;font-size:1.2rem;font-weight:900;letter-spacing:.2em;color:#e31b23;text-align:center;margin:.6rem 0 .2rem;"></div>
+      </div>
+      <div style="margin-bottom:.85rem;">
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem;">Digite o código de confirmação</label>
+        <input id="delCodeInput" placeholder="ex: A3B9X" style="width:100%;background:rgba(0,0,0,.5);border:1px solid #2a2a2a;border-radius:8px;padding:.7rem 1rem;color:#f0f0f0;font-size:1rem;font-family:monospace;letter-spacing:.15em;text-transform:uppercase;outline:none;" oninput="this.value=this.value.toUpperCase()"/>
+      </div>
+      <div id="delError" style="color:#f87171;font-size:.78rem;margin-bottom:.6rem;display:none;"></div>
+      <button onclick="window.handleDeleteAccount()" style="width:100%;background:#e31b23;border:none;border-radius:10px;padding:.85rem;color:#fff;font-weight:900;font-size:.95rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase;" id="delConfirmBtn">Excluir permanentemente</button>
+      <button onclick="window.closeDeleteAccountModal()" style="width:100%;background:transparent;border:1px solid #2a2a2a;border-radius:10px;padding:.7rem;color:#666;font-weight:700;font-size:.85rem;cursor:pointer;margin-top:.6rem;">Cancelar</button>
+    </div>
+
+    <div id="delStep2" style="display:none;text-align:center;padding:1.5rem 0;">
+      <div style="font-size:2.5rem;margin-bottom:.75rem;">✅</div>
+      <div style="font-weight:800;font-size:1.1rem;margin-bottom:.4rem;">Conta excluída</div>
+      <div style="font-size:.82rem;color:#888;">Todos os seus dados foram removidos permanentemente.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var generatedCode = '';
+
+  function genCode(){
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var c = '';
+    for(var i=0;i<5;i++) c += chars[Math.floor(Math.random()*chars.length)];
+    return c;
+  }
+
+  window.openDeleteAccountModal = function(){
+    generatedCode = genCode();
+    var codeEl = document.getElementById('delConfirmCode');
+    var input  = document.getElementById('delCodeInput');
+    var err    = document.getElementById('delError');
+    var s1     = document.getElementById('delStep1');
+    var s2     = document.getElementById('delStep2');
+    var btn    = document.getElementById('delConfirmBtn');
+    if(codeEl)  codeEl.textContent = generatedCode;
+    if(input)   input.value = '';
+    if(err)   { err.textContent=''; err.style.display='none'; }
+    if(s1)      s1.style.display = 'block';
+    if(s2)      s2.style.display = 'none';
+    if(btn)   { btn.textContent='Excluir permanentemente'; btn.disabled=false; }
+    var bd = document.getElementById('deleteAccountBackdrop');
+    if(bd){ bd.style.display='flex'; }
+  };
+
+  window.closeDeleteAccountModal = function(){
+    var bd = document.getElementById('deleteAccountBackdrop');
+    if(bd) bd.style.display='none';
+  };
+
+  window.handleDeleteAccount = async function(){
+    var input = document.getElementById('delCodeInput');
+    var err   = document.getElementById('delError');
+    var btn   = document.getElementById('delConfirmBtn');
+    var typed = (input && input.value || '').trim().toUpperCase();
+
+    function showDelError(msg){ if(err){ err.textContent=msg; err.style.display='block'; } }
+
+    if(typed !== generatedCode){
+      showDelError('Código incorreto. Tente novamente.');
+      if(input){ input.value=''; input.focus(); }
+      return;
+    }
+
+    var authInst = (window.DSAuth && window.DSAuth.auth) || window._auth;
+    var dbInst   = window._db;
+    var user     = authInst && authInst.currentUser;
+
+    if(!user){ showDelError('Você precisa estar logado para excluir a conta.'); return; }
+
+    btn.textContent = 'Excluindo…'; btn.disabled = true;
+
+    try{
+      var uid = user.uid;
+      // Delete Firestore subcollections
+      if(dbInst){
+        var colls = ['plans','history','prefs','diet','measures','cardio','squad'];
+        for(var i=0;i<colls.length;i++){
+          try{
+            var snap = await dbInst.collection('users').doc(uid).collection(colls[i]).get();
+            var batch = dbInst.batch();
+            snap.docs.forEach(function(d){ batch.delete(d.ref); });
+            await batch.commit();
+          }catch(_){}
+        }
+        try{ await dbInst.collection('users').doc(uid).delete(); }catch(_){}
+      }
+      // Clear localStorage
+      Object.keys(localStorage).forEach(function(k){
+        if(k.startsWith('darkset')||k.startsWith('ds.')||k.startsWith('ds_')) localStorage.removeItem(k);
+      });
+      // Delete Firebase Auth account
+      await user.delete();
+
+      // Show success
+      document.getElementById('delStep1').style.display = 'none';
+      document.getElementById('delStep2').style.display = 'block';
+      setTimeout(function(){ window.closeDeleteAccountModal(); window.location.reload(); }, 2500);
+    }catch(e){
+      if(e.code==='auth/requires-recent-login'){
+        showDelError('Por segurança, saia e entre novamente antes de excluir.');
+      } else {
+        showDelError(e.message || 'Erro ao excluir. Tente novamente.');
+      }
+      btn.textContent = 'Excluir permanentemente'; btn.disabled = false;
+    }
+  };
+
+  // Close on backdrop click
+  var bd = document.getElementById('deleteAccountBackdrop');
+  if(bd) bd.addEventListener('click', function(e){ if(e.target===bd) window.closeDeleteAccountModal(); });
+})();
+</script>
+<!-- ===== /Delete Account Modal ===== -->
 
 </body>
 </html>
