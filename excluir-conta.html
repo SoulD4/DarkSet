@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Excluir Conta — DarkSet</title>
+  <style>
+    :root { --accent: #e31b23; --bg: #080808; --card: #111; --border: #1e1e1e; --text: #f0f0f0; --sub: #888; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 4rem; }
+    .logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 2rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2rem; }
+    .logo span { color: var(--accent); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 100%; max-width: 480px; }
+    h1 { font-size: 1.3rem; font-weight: 800; margin-bottom: .5rem; }
+    p { color: var(--sub); font-size: .9rem; line-height: 1.6; margin-bottom: 1.25rem; }
+    .warning { background: rgba(227,27,35,.08); border: 1px solid rgba(227,27,35,.25); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; font-size: .85rem; color: #ff8080; line-height: 1.5; }
+    .field { margin-bottom: 1rem; }
+    label { display: block; font-size: .78rem; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .4rem; }
+    input { width: 100%; background: rgba(0,0,0,.45); border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; color: var(--text); font-size: .95rem; outline: none; transition: border-color .2s; }
+    input:focus { border-color: var(--accent); }
+    .error { color: #ff6b6b; font-size: .8rem; margin-top: .4rem; display: none; }
+    .btn-delete { width: 100%; background: var(--accent); border: none; border-radius: 10px; padding: .9rem; color: #fff; font-weight: 900; font-size: 1rem; cursor: pointer; letter-spacing: .04em; margin-top: .5rem; transition: opacity .2s; }
+    .btn-delete:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-cancel { width: 100%; background: transparent; border: 1px solid var(--border); border-radius: 10px; padding: .75rem; color: var(--sub); font-weight: 700; font-size: .9rem; cursor: pointer; margin-top: .75rem; }
+    .btn-cancel:hover { border-color: #444; }
+    .success { display: none; text-align: center; padding: 2rem 0; }
+    .success .icon { font-size: 3rem; margin-bottom: 1rem; }
+    .success h2 { font-size: 1.2rem; margin-bottom: .5rem; }
+    .success p { font-size: .85rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@900&family=Inter:wght@400;600;700;800&display=swap');
+  </style>
+</head>
+<body>
+  <a href="/" style="color:var(--sub);font-size:.8rem;margin-bottom:1.5rem;text-decoration:none;">← Voltar ao app</a>
+  <div class="logo">DARK<span>SET</span></div>
+
+  <div class="card">
+    <div id="formSection">
+      <h1>🗑️ Excluir minha conta</h1>
+      <p>Esta ação é permanente e irreversível. Todos os seus dados — fichas, histórico de treinos, medidas, progresso e informações pessoais — serão excluídos definitivamente.</p>
+
+      <div class="warning">
+        ⚠️ <strong>Atenção:</strong> a exclusão remove todos os seus dados do DarkSet e do Firebase. Esta ação não pode ser desfeita.
+      </div>
+
+      <div class="field">
+        <label>Email da conta</label>
+        <input id="emailInput" type="email" placeholder="email@exemplo.com" autocomplete="email"/>
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input id="passInput" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+
+      <div class="error" id="errorMsg"></div>
+
+      <button class="btn-delete" id="deleteBtn" onclick="handleDelete()">Excluir minha conta permanentemente</button>
+      <button class="btn-cancel" onclick="window.location.href='/'">Cancelar — manter minha conta</button>
+    </div>
+
+    <div class="success" id="successSection">
+      <div class="icon">✅</div>
+      <h2>Conta excluída</h2>
+      <p style="color:var(--sub)">Seus dados foram removidos permanentemente do DarkSet. Lamentamos ver você partir.</p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script>
+    var firebaseConfig = {
+      apiKey: "AIzaSyB3bu3XercwmnlV0jdaldoXvd5gnHfj0GU",
+      authDomain: "darkset-538d1.firebaseapp.com",
+      projectId: "darkset-538d1",
+      storageBucket: "darkset-538d1.firebasestorage.app",
+      messagingSenderId: "354165019689",
+      appId: "1:354165019689:web:dc458f0a61e26e6289f838"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    var auth = firebase.auth();
+    var db   = firebase.firestore();
+
+    function showError(msg) {
+      var el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = msg ? 'block' : 'none';
+    }
+
+    async function handleDelete() {
+      showError('');
+      var email = document.getElementById('emailInput').value.trim();
+      var pass  = document.getElementById('passInput').value.trim();
+      if (!email || !pass) { showError('Preencha email e senha.'); return; }
+
+      var btn = document.getElementById('deleteBtn');
+      btn.disabled = true;
+      btn.textContent = 'Excluindo…';
+
+      try {
+        // Sign in first to verify credentials
+        var cred = await auth.signInWithEmailAndPassword(email, pass);
+        var user = cred.user;
+        var uid  = user.uid;
+
+        // Delete Firestore data
+        var collections = ['plans', 'history', 'prefs', 'diet', 'measures', 'cardio', 'squad'];
+        for (var i = 0; i < collections.length; i++) {
+          try { await db.collection('users').doc(uid).collection(collections[i]).get()
+            .then(function(snap){ var batch=db.batch(); snap.docs.forEach(function(d){batch.delete(d.ref);}); return batch.commit(); });
+          } catch(_) {}
+        }
+        try { await db.collection('users').doc(uid).delete(); } catch(_) {}
+
+        // Delete the Firebase Auth account
+        await user.delete();
+
+        // Show success
+        document.getElementById('formSection').style.display = 'none';
+        document.getElementById('successSection').style.display = 'block';
+
+      } catch(e) {
+        if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') showError('Email ou senha incorretos.');
+        else if (e.code === 'auth/user-not-found') showError('Nenhuma conta encontrada com esse email.');
+        else if (e.code === 'auth/invalid-email') showError('Email inválido.');
+        else if (e.code === 'auth/too-many-requests') showError('Muitas tentativas. Aguarde alguns minutos.');
+        else showError(e.message || 'Erro ao excluir conta. Tente novamente.');
+        btn.disabled = false;
+        btn.textContent = 'Excluir minha conta permanentemente';
+      }
+    }
+  </script>
+</body>
+</html>

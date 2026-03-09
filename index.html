@@ -8797,6 +8797,7 @@ function App(){
   const syncStatus = useSyncStatus();
   const [authed, setAuthed] = useState(()=>!!getUID());
   window._DS_SETTERS.authed = setAuthed;
+  window._DS_SETTERS.showSplash = setShowSplash;
   const syncLabel = {saving:'Salvando…',saved:'Salvo ✓',syncing:'Sincronizando…',error:'Erro sync',idle:''}[syncStatus]||'';
   const syncColor = {saving:'#888',saved:'#4ade80',syncing:'#facc15',error:'#e31b23',idle:'transparent'}[syncStatus]||'transparent';
 
@@ -9699,7 +9700,8 @@ root.render(<App/>);
         signInEmail: function(email, pass){
           return auth.signInWithEmailAndPassword(email, pass);
         },
-        signOut: function(){ return auth.signOut(); }
+        signOut: function(){ return auth.signOut(); },
+        auth: auth
       };
 
       auth.onAuthStateChanged(async function(user){
@@ -9750,6 +9752,9 @@ root.render(<App/>);
             }
             if(window.closeAuthModal) closeAuthModal();
             if(window._DS_SETTERS && window._DS_SETTERS.authed) window._DS_SETTERS.authed(true);
+            // Fix: dismiss splash screen after login so user goes to home
+            localStorage.setItem('darkset.launched','1');
+            if(window._DS_SETTERS && window._DS_SETTERS.showSplash) window._DS_SETTERS.showSplash(false);
           } else {
             // Clear all user data on logout
             var keysToRemove = [
@@ -10079,6 +10084,10 @@ root.render(<App/>);
 
       <button class="auth-btn" id="authPrimaryBtn">Entrar</button>
 
+      <div id="authForgotRow" style="text-align:center;margin-top:-.25rem;margin-bottom:.25rem;">
+        <button id="authForgotBtn" style="background:none;border:none;color:#888;font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;">Esqueci minha senha</button>
+      </div>
+
       <div class="auth-footer" id="authToggleRow">
         Ainda não tem uma conta? <button id="authToggleBtn">Criar conta</button>
       </div>
@@ -10102,6 +10111,8 @@ root.render(<App/>);
   var errorEl  = document.getElementById('authError');
   var termsField=document.getElementById('authTermsField');
   var termsCheck=document.getElementById('authTermsCheck');
+  var forgotRow= document.getElementById('authForgotRow');
+  var forgotBtn= document.getElementById('authForgotBtn');
 
   function showError(msg){ if(errorEl){ errorEl.textContent=msg; errorEl.style.display=msg?'block':'none'; } }
 
@@ -10112,6 +10123,7 @@ root.render(<App/>);
     if(primaryBtn) primaryBtn.textContent = isUp ? 'Criar conta' : 'Entrar';
     if(nameField)  nameField.style.display  = isUp ? 'flex' : 'none';
     if(termsField) termsField.style.display = isUp ? 'block' : 'none';
+    if(forgotRow)  forgotRow.style.display  = isUp ? 'none' : 'block';
     if(termsCheck) termsCheck.checked = false;
     if(toggleRow){
       toggleRow.innerHTML = isUp
@@ -10199,6 +10211,25 @@ root.render(<App/>);
   });
 
   toggleBtn && toggleBtn.addEventListener('click', function(){ setMode(mode==='signUp'?'signIn':'signUp'); showError(''); });
+
+  // Esqueci minha senha
+  forgotBtn && forgotBtn.addEventListener('click', async function(){
+    var email = (emailInput && emailInput.value || '').trim();
+    if(!email){ showError('Digite seu email acima para redefinir a senha.'); return; }
+    if(!window.DSAuth || !window.DSAuth.auth){ showError('Firebase não carregou. Tente recarregar.'); return; }
+    try{
+      forgotBtn.textContent = 'Enviando…'; forgotBtn.disabled = true;
+      await window.DSAuth.auth.sendPasswordResetEmail(email);
+      showError('');
+      alert('✅ Email de redefinição enviado para ' + email + '.\nVerifique sua caixa de entrada (e spam).');
+    }catch(e){
+      if(e.code==='auth/user-not-found') showError('Nenhuma conta encontrada com esse email.');
+      else if(e.code==='auth/invalid-email') showError('Email inválido.');
+      else showError(e.message || 'Erro ao enviar email.');
+    }finally{
+      forgotBtn.textContent = 'Esqueci minha senha'; forgotBtn.disabled = false;
+    }
+  });
 
   try{
     var hasUser = !!JSON.parse(localStorage.getItem('darkset.user')||'null');
