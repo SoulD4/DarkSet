@@ -10270,9 +10270,12 @@ root.render(<App/>);
     var errEl = document.getElementById('authError');
     function showForgotError(msg){ if(errEl){ errEl.textContent=msg; errEl.style.display=msg?'block':'none'; } }
 
+    showForgotError('🔄 Iniciando...');
+
     if(!email){ showForgotError('Digite seu email acima para redefinir a senha.'); return; }
 
-    // Wait up to 3s for Firebase to be ready
+    showForgotError('🔄 Email: ' + email + ' | Buscando Firebase...');
+
     var authInst = window._auth;
     if(!authInst){
       var waited = 0;
@@ -10284,7 +10287,10 @@ root.render(<App/>);
         }, 100);
       });
     }
-    if(!authInst){ showForgotError('Firebase não carregou. Recarregue a página.'); return; }
+
+    if(!authInst){ showForgotError('❌ Firebase não encontrado. window._auth = ' + typeof window._auth); return; }
+
+    showForgotError('🔄 Firebase ok, enviando email...');
 
     var btn = document.getElementById('authForgotBtn');
     try{
@@ -10294,10 +10300,7 @@ root.render(<App/>);
       if(btn){ btn.textContent='✅ Email enviado! Verifique sua caixa.'; }
       setTimeout(function(){ if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }}, 4000);
     }catch(e){
-      var msg = 'Erro ao enviar email.';
-      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential') msg='Nenhuma conta encontrada com esse email.';
-      else if(e.code==='auth/invalid-email') msg='Email inválido.';
-      else if(e.message) msg = e.message;
+      var msg = '❌ Erro: code=' + (e.code||'?') + ' | ' + (e.message||'sem mensagem');
       showForgotError(msg);
       if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }
     }
