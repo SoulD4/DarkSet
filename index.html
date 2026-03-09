@@ -2443,12 +2443,17 @@ const Cardio = ({goto, setToast}) => {
   const [metrics, setMetrics] = useState({distancia:'', calorias:'', rounds:'', andares:'', pace:'', velocidade:''});
   const [notes, setNotes] = useState('');
   const timerRef = useRef(null);
+  const cardioStartTsRef = useRef(null);
 
   useEffect(()=>{
     if(running){
-      timerRef.current = setInterval(()=>setElapsed(e=>e+1),1000);
+      if(!cardioStartTsRef.current) cardioStartTsRef.current = Date.now() - (elapsed * 1000);
+      timerRef.current = setInterval(()=>{
+        setElapsed(Math.floor((Date.now() - cardioStartTsRef.current) / 1000));
+      },1000);
     } else {
       clearInterval(timerRef.current);
+      if(!running) cardioStartTsRef.current = null;
     }
     return ()=>clearInterval(timerRef.current);
   },[running]);
@@ -3962,12 +3967,18 @@ const DarkTimer = ({prefs}) => {
     if('Notification' in window && Notification.permission === 'default'){
       await Notification.requestPermission();
     }
+    // Register FCM token if not done yet
+    if(window._registerFCMToken && !window._fcmToken) {
+      await window._registerFCMToken();
+    }
     const duration = Math.max(1, Number(sec||0));
     endRef.current = Date.now() + duration*1000;
     setRunning(true);
     acquireWakeLock();
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:true, endTime:endRef.current})); }catch(_){}
     swTimerStart(endRef.current);
+    // FCM: schedule push notification via Cloud Function
+    if(window._fcmTimerStart) window._fcmTimerStart(endRef.current);
   };
   const pause = () => {
     const remain = Math.max(0, Math.ceil((endRef.current - Date.now())/1000));
@@ -3976,6 +3987,7 @@ const DarkTimer = ({prefs}) => {
     setSec(remain || Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({active:false, pausedSec: remain})); }catch(_){}
     swTimerCancel();
+    if(window._fcmTimerCancel) window._fcmTimerCancel();
   };
   const reset = () => {
     setRunning(false);
@@ -3983,6 +3995,7 @@ const DarkTimer = ({prefs}) => {
     setSec(Math.max(5, Number(prefs.timerPreset||60)));
     try{ localStorage.removeItem(STORAGE_KEY); }catch(_){}
     swTimerCancel();
+    if(window._fcmTimerCancel) window._fcmTimerCancel();
   };
 
   const fmtTime = (s) => {
@@ -4135,12 +4148,17 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const [freeElapsed, setFreeElapsed] = useState(0);
   const [freeStartTime, setFreeStartTime] = useState(null);
   const freeTimerRef = useRef(null);
+  const freeStartTsRef = useRef(null); // real timestamp for accurate elapsed
   useEffect(()=>{
     if(freeStarted){
       if(!freeStartTime) setFreeStartTime(new Date());
-      freeTimerRef.current=setInterval(()=>setFreeElapsed(e=>e+1),1000);
+      if(!freeStartTsRef.current) freeStartTsRef.current = Date.now() - (freeElapsed * 1000);
+      freeTimerRef.current=setInterval(()=>{
+        setFreeElapsed(Math.floor((Date.now() - freeStartTsRef.current) / 1000));
+      },1000);
     } else {
       clearInterval(freeTimerRef.current);
+      if(!freeStarted) freeStartTsRef.current = null;
     }
     return ()=>clearInterval(freeTimerRef.current);
   },[freeStarted]);
@@ -4183,14 +4201,19 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const [sessionElapsed,setSessionElapsed]=useState(0);
   const [sessionStartTime,setSessionStartTime]=useState(null);
   const sessionTimerRef=useRef(null);
+  const sessionStartTsRef=useRef(null); // real timestamp for accurate elapsed
   useEffect(()=>{
     if(started){
       if(!sessionStartTime) setSessionStartTime(new Date());
-      sessionTimerRef.current=setInterval(()=>setSessionElapsed(e=>e+1),1000);
+      if(!sessionStartTsRef.current) sessionStartTsRef.current = Date.now();
+      sessionTimerRef.current=setInterval(()=>{
+        setSessionElapsed(Math.floor((Date.now() - sessionStartTsRef.current) / 1000));
+      },1000);
     } else {
       clearInterval(sessionTimerRef.current);
       setSessionElapsed(0);
       setSessionStartTime(null);
+      sessionStartTsRef.current = null;
     }
     return ()=>clearInterval(sessionTimerRef.current);
   },[started]);
@@ -9620,6 +9643,7 @@ root.render(<App/>);
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js"></script>
 <script>
 (function(){
   // ---- Helpers b64 ----
@@ -9699,6 +9723,75 @@ root.render(<App/>);
       if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       window._db   = firebase.firestore();
       window._auth = firebase.auth();
+
+      // ── FCM Setup ──────────────────────────────────────────────────────────
+      try {
+        const messaging = firebase.messaging();
+        window._messaging = messaging;
+
+        const VAPID_KEY = 'BICL0WoMZ7XLUdUHsrpStLU9_QDq3WxCuuTRVgNoyJdbvug0gv0uPHRtJjKRScATw1PpSQkbneIUhmH1DtIiqw0';
+
+        // Register FCM token and save to Firestore
+        window._registerFCMToken = async function() {
+          try {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return null;
+            const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+            if (token) {
+              window._fcmToken = token;
+              // Save token to Firestore under the user's doc
+              const uid = window._auth && window._auth.currentUser && window._auth.currentUser.uid;
+              if (uid && window._db) {
+                await window._db.collection('users').doc(uid).set(
+                  { fcmToken: token, fcmUpdatedAt: Date.now() },
+                  { merge: true }
+                );
+              }
+              return token;
+            }
+          } catch(e) {
+            console.warn('[FCM] token error:', e);
+          }
+          return null;
+        };
+
+        // Schedule FCM timer notification via Firestore
+        // Cloud Function watches this doc and sends push at the right time
+        window._fcmTimerStart = async function(endsAt) {
+          try {
+            const uid = window._auth && window._auth.currentUser && window._auth.currentUser.uid;
+            const token = window._fcmToken || await window._registerFCMToken();
+            if (!token) return;
+            await window._db.collection('fcm_timers').doc(uid || token.slice(0,20)).set({
+              token: token,
+              endsAt: endsAt,
+              createdAt: Date.now(),
+              done: false
+            });
+          } catch(e) {
+            console.warn('[FCM] timer start error:', e);
+          }
+        };
+
+        window._fcmTimerCancel = async function() {
+          try {
+            const uid = window._auth && window._auth.currentUser && window._auth.currentUser.uid;
+            const token = window._fcmToken;
+            if (!uid && !token) return;
+            await window._db.collection('fcm_timers').doc(uid || token.slice(0,20)).delete();
+          } catch(e) {}
+        };
+
+        // Register token on load
+        if (Notification.permission === 'granted') {
+          setTimeout(window._registerFCMToken, 2000);
+        }
+
+      } catch(e) {
+        console.warn('[FCM] init error:', e);
+      }
+      // ── /FCM Setup ─────────────────────────────────────────────────────────
+
     }catch(e){ console.warn('Firebase init failed', e); return; }
 
     // ---- DSAuth API ----
