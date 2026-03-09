@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.darkset.app",
+        "sha256_cert_fingerprints": ["85:63:B1:D0:0F:9F:78:36:53:A2:1F:DC:FD:28:C3:C8:0F:58:61:72:BF:02:6F:43:93:B6:45:7A:83:A2:68:B9"]
+      }
+    }]
