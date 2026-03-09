@@ -8778,7 +8778,10 @@ function App(){
   const [builderPlanId,setBuilderPlanId]=useState(null);
   const [viewerPlanId,setViewerPlanId]=useState(null);
   const [prCelebration,setPrCelebration]=useState(null);
-  const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem('darkset.onboarded'));
+  const [showOnboarding,setShowOnboarding]=useState(()=>{
+    if(localStorage.getItem('darkset.user')) return false;
+    return !localStorage.getItem('darkset.onboarded');
+  });
   const [drawerOpen,setDrawerOpen]=useState(false);
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
@@ -8830,6 +8833,7 @@ function App(){
   const [authed, setAuthed] = useState(()=>!!getUID());
   window._DS_SETTERS.authed = setAuthed;
   window._DS_SETTERS.showSplash = setShowSplash;
+  window._DS_SETTERS.showOnboarding = setShowOnboarding;
   const syncLabel = {saving:'Salvando…',saved:'Salvo ✓',syncing:'Sincronizando…',error:'Erro sync',idle:''}[syncStatus]||'';
   const syncColor = {saving:'#888',saved:'#4ade80',syncing:'#facc15',error:'#e31b23',idle:'transparent'}[syncStatus]||'transparent';
 
@@ -9770,6 +9774,8 @@ root.render(<App/>);
                 if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
                 if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
                 if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
+                if(window._DS_SETTERS.showOnboarding) window._DS_SETTERS.showOnboarding(false);
+                if(window._DS_SETTERS.showSplash) window._DS_SETTERS.showSplash(false);
               }
               // Retry até os setters do React estarem registrados (max 3s)
               var attempts=0;
@@ -10130,7 +10136,7 @@ root.render(<App/>);
       <button class="auth-btn" id="authPrimaryBtn">Entrar</button>
 
       <div id="authForgotRow" style="text-align:center;margin-top:-.25rem;margin-bottom:.25rem;">
-        <button id="authForgotBtn" style="background:none;border:none;color:#888;font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;">Esqueci minha senha</button>
+        <button id="authForgotBtn" onclick="window._handleForgotPassword()" style="background:none;border:none;color:#888;font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;">Esqueci minha senha</button>
       </div>
 
       <div class="auth-footer" id="authToggleRow">
@@ -10257,26 +10263,45 @@ root.render(<App/>);
 
   toggleBtn && toggleBtn.addEventListener('click', function(){ setMode(mode==='signUp'?'signIn':'signUp'); showError(''); });
 
-  // Esqueci minha senha
-  forgotBtn && forgotBtn.addEventListener('click', async function(){
-    var email = (emailInput && emailInput.value || '').trim();
-    if(!email){ showError('Digite seu email acima para redefinir a senha.'); return; }
-    var authInst = (window.DSAuth && window.DSAuth.auth) || window._auth;
-    if(!authInst){ showError('Firebase não carregou. Tente recarregar a página.'); return; }
+  // Esqueci minha senha — global function called via onclick
+  window._handleForgotPassword = async function(){
+    var emailEl = document.getElementById('authEmailInput');
+    var email = (emailEl && emailEl.value || '').trim();
+    var errEl = document.getElementById('authError');
+    function showForgotError(msg){ if(errEl){ errEl.textContent=msg; errEl.style.display=msg?'block':'none'; } }
+
+    if(!email){ showForgotError('Digite seu email acima para redefinir a senha.'); return; }
+
+    // Wait up to 3s for Firebase to be ready
+    var authInst = window._auth;
+    if(!authInst){
+      var waited = 0;
+      await new Promise(function(res){
+        var t = setInterval(function(){
+          waited += 100;
+          if(window._auth){ authInst = window._auth; clearInterval(t); res(); }
+          else if(waited >= 3000){ clearInterval(t); res(); }
+        }, 100);
+      });
+    }
+    if(!authInst){ showForgotError('Firebase não carregou. Recarregue a página.'); return; }
+
     var btn = document.getElementById('authForgotBtn');
     try{
-      if(btn){ btn.textContent = 'Enviando…'; btn.disabled = true; }
+      if(btn){ btn.textContent='Enviando…'; btn.disabled=true; }
       await authInst.sendPasswordResetEmail(email);
-      showError('');
-      if(btn){ btn.textContent = '✅ Email enviado! Verifique sua caixa.'; }
-      setTimeout(function(){ if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; } }, 4000);
+      showForgotError('');
+      if(btn){ btn.textContent='✅ Email enviado! Verifique sua caixa.'; }
+      setTimeout(function(){ if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }}, 4000);
     }catch(e){
-      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential') showError('Nenhuma conta encontrada com esse email.');
-      else if(e.code==='auth/invalid-email') showError('Email inválido.');
-      else showError(e.message || 'Erro ao enviar email.');
-      if(btn){ btn.textContent = 'Esqueci minha senha'; btn.disabled = false; }
+      var msg = 'Erro ao enviar email.';
+      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential') msg='Nenhuma conta encontrada com esse email.';
+      else if(e.code==='auth/invalid-email') msg='Email inválido.';
+      else if(e.message) msg = e.message;
+      showForgotError(msg);
+      if(btn){ btn.textContent='Esqueci minha senha'; btn.disabled=false; }
     }
-  });
+  };
 
   try{
     var hasUser = !!JSON.parse(localStorage.getItem('darkset.user')||'null');
