@@ -6078,7 +6078,7 @@ function calcStreak(history, prefs) {
   const d = new Date(today);
   const todayKey = today.toISOString().slice(0,10);
   if (trainDays.includes(today.getDay()) && !history[todayKey]) d.setDate(d.getDate()-1);
-  for (let i=0; i<90; i++) {
+  for (let i=0; i<800; i++) {
     const k = d.toISOString().slice(0,10);
     const isTrain = trainDays.includes(d.getDay());
     if (!isTrain) { d.setDate(d.getDate()-1); continue; }
@@ -7546,15 +7546,22 @@ const StreakEditor = ({setToast}) => {
       var existing = {};
       try { existing = JSON.parse(localStorage.getItem('darkset.v3.history') || '{}'); } catch(_) {}
       var now = new Date();
+      // Fill ALL days in range (no gaps = valid streak)
       for (var i = 0; i < days; i++) {
         var d = new Date(now); d.setDate(now.getDate() - i);
         var dk = d.toISOString().slice(0, 10);
-        if (!existing[dk]) existing[dk] = {
+        existing[dk] = {
           date: dk,
           startTime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 7, 0).toISOString(),
-          entries: [{name:'Treino', sets:[{w:'80', r:'10'}]}]
+          entries: [{name:'Supino Reto', sets:[{w:'80', r:'10'},{w:'85', r:'8'}]}]
         };
       }
+      // Set trainDays = all 7 so calcStreak doesn't skip any day
+      var prefs = {};
+      try { prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs') || '{}'); } catch(_) {}
+      prefs.trainDays = [0,1,2,3,4,5,6];
+      localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs));
+      if (window._DS_SETTERS && window._DS_SETTERS.prefs) window._DS_SETTERS.prefs(prefs);
       localStorage.setItem('darkset.v3.history', JSON.stringify(existing));
       if (window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(existing);
       setToast('✅ Streak de ' + days + ' dias aplicado!');
