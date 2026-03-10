@@ -2929,30 +2929,25 @@ const NotifSettings = ({prefs, setPrefs, setToast}) => {
 
 const Community = ({history, setToast, prefs}) => {
   const getUID = () => { try { return JSON.parse(localStorage.getItem('darkset.user'))?.uid || null; } catch(_) { return null; } };
-  const uid    = getUID();
-  const db     = () => window._db || null;
+  const uid = getUID();
+  const db  = () => window._db || null;
 
-  // ── Firestore helpers ──────────────────────────────────────────────────
-  // squads/{code}           → { name, code, pass, createdAt, creatorUid }
-  // squads/{code}/members/{uid} → { uid, name, avatar, joinedAt, role }
-  // squads/{code}/chat/{msgId}  → { uid, name, avatar, text, ts }
-  // squads/{code}/checkins/{date_uid} → { uid, name, avatar, ts, hadWorkout, date }
+  const squadRef = (code) => db()?.collection('squads').doc(code.toUpperCase());
+  const membRef  = (code, u) => squadRef(code)?.collection('members').doc(u);
+  const chatRef  = (code) => squadRef(code)?.collection('chat');
+  const cinRef   = (code) => squadRef(code)?.collection('checkins');
 
-  const squadRef  = (code) => db()?.collection('squads').doc(code.toUpperCase());
-  const membRef   = (code, u) => squadRef(code)?.collection('members').doc(u);
-  const chatRef   = (code) => squadRef(code)?.collection('chat');
-  const cinRef    = (code) => squadRef(code)?.collection('checkins');
-
-  // ── State ──────────────────────────────────────────────────────────────
-  const [tab, setTab]         = useState('feed');
-  const [squad, setSquad]     = useState(() => { try { return JSON.parse(localStorage.getItem('ds.squad')) || null; } catch(_) { return null; } });
-  const [loading, setLoading] = useState(false);
-  const [members, setMembers] = useState([]);
-  const [chatLog, setChatLog] = useState([]);
-  const [checkins, setCheckins] = useState([]);  // flat array
+  const [tab, setTab]           = useState('feed');
+  const [squad, setSquad]       = useState(() => { try { return JSON.parse(localStorage.getItem('ds.squad')) || null; } catch(_) { return null; } });
+  const [loading, setLoading]   = useState(false);
+  const [members, setMembers]   = useState([]);
+  const [chatLog, setChatLog]   = useState([]);
+  const [checkins, setCheckins] = useState([]);
   const [chatMsg, setChatMsg]   = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin]     = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [joinPreview, setJoinPreview] = useState(null); // {name, memberCount} for invite link popup
   const [squadName, setSquadName]   = useState('');
   const [squadPass, setSquadPass]   = useState('');
   const [joinCode, setJoinCode]     = useState('');
@@ -2960,38 +2955,41 @@ const Community = ({history, setToast, prefs}) => {
   const [chatUnsub, setChatUnsub]   = useState(null);
   const [cinUnsub, setCinUnsub]     = useState(null);
   const [membUnsub, setMembUnsub]   = useState(null);
-  const [notLogged, setNotLogged]   = useState(!uid);
-  const [squadErr, setSquadErr]       = useState('');
+  const [squadErr, setSquadErr]     = useState('');
+  const [unreadChat, setUnreadChat] = useState(0);
+  const lastSeenChatTs = React.useRef(parseInt(localStorage.getItem('ds.squad.lastSeenChat')||'0'));
 
   const myName   = prefs.name   || 'Usuário';
   const myAvatar = prefs.avatarUrl || null;
   const todayKey = new Date().toISOString().slice(0,10);
 
-  // ── Live listeners ─────────────────────────────────────────────────────
+  // ── Live listeners ──────────────────────────────────────────────────────
   const startListeners = React.useCallback((code) => {
     if (!db()) return;
-
-    // Members
-    const uM = squadRef(code).collection('members')
-      .onSnapshot(snap => {
-        setMembers(snap.docs.map(d => d.data()));
-      }, () => {});
+    const uM = squadRef(code).collection('members').onSnapshot(snap => {
+      setMembers(snap.docs.map(d => d.data()));
+    }, () => {});
     setMembUnsub(() => uM);
 
-    // Chat (last 60 msgs ordered by ts)
-    const uC = chatRef(code).orderBy('ts','asc').limitToLast(60)
-      .onSnapshot(snap => {
-        setChatLog(snap.docs.map(d => d.data()));
-      }, () => {});
+    const uC = chatRef(code).orderBy('ts','asc').limitToLast(80).onSnapshot(snap => {
+      const msgs = snap.docs.map(d => d.data());
+      setChatLog(msgs);
+      const newMsgs = msgs.filter(m => m.uid !== uid && m.ts > lastSeenChatTs.current);
+      setUnreadChat(newMsgs.length);
+      if(newMsgs.length > 0 && document.hidden) {
+        const last = newMsgs[newMsgs.length-1];
+        if('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`${last.avatar||'👤'} ${last.name||'Membro'} no Squad`, {
+            body: last.text, icon: './icons/icon-192.png', tag: 'darkset-squad-chat'
+          });
+        }
+      }
+    }, () => {});
     setChatUnsub(() => uC);
 
-    // Check-ins (last 30 days)
     const since = new Date(); since.setDate(since.getDate()-30);
-    const sinceStr = since.toISOString().slice(0,10);
-    const uCi = cinRef(code).where('date','>=',sinceStr)
-      .onSnapshot(snap => {
-        setCheckins(snap.docs.map(d => d.data()));
-      }, () => {});
+    const uCi = cinRef(code).where('date','>=',since.toISOString().slice(0,10))
+      .onSnapshot(snap => { setCheckins(snap.docs.map(d => d.data())); }, () => {});
     setCinUnsub(() => uCi);
   }, []);
 
@@ -3001,24 +2999,38 @@ const Community = ({history, setToast, prefs}) => {
     membUnsub?.(); setMembUnsub(null);
   };
 
-  // Attach listeners when squad loads
   useEffect(() => {
     if (squad?.code) startListeners(squad.code);
     return () => stopListeners();
   }, [squad?.code]);
 
-  // ── Create squad ───────────────────────────────────────────────────────
+  // Handle invite link: ?squad=CODE in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('squad');
+    if (inviteCode && !squad && db()) {
+      db().collection('squads').doc(inviteCode.toUpperCase()).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          doc.ref.collection('members').get().then(membSnap => {
+            setJoinPreview({ code: inviteCode.toUpperCase(), name: data.name, memberCount: membSnap.size, pass: data.pass });
+          });
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
   const waitForDb = () => new Promise((res, rej) => {
     let n = 0;
     const t = setInterval(() => {
       if (window._db) { clearInterval(t); res(window._db); }
-      else if (++n > 30) { clearInterval(t); rej(new Error('Firebase não conectado. Verifique sua conexão.')); }
+      else if (++n > 30) { clearInterval(t); rej(new Error('Firebase não conectado.')); }
     }, 200);
   });
 
   const createSquad = async () => {
-    if (!uid) { setSquadErr('Faça login primeiro (Perfil → Entrar).'); return; }
-    if (!squadName.trim()) { setSquadErr('Digite um nome para o squad.'); return; }
+    if (!uid) { setSquadErr('Faça login primeiro.'); return; }
+    if (!squadName.trim()) { setSquadErr('Digite um nome.'); return; }
     setLoading(true); setSquadErr('');
     try {
       const fdb = await waitForDb();
@@ -3029,55 +3041,41 @@ const Community = ({history, setToast, prefs}) => {
       localStorage.setItem('ds.squad', JSON.stringify(sq));
       setSquad(sq); setShowCreate(false);
       setToast('Squad criado! Código: ' + code);
-    } catch(e) {
-      setSquadErr('Erro ao criar: ' + (e.message || e.code || String(e)));
-    }
+    } catch(e) { setSquadErr('Erro: ' + (e.message || String(e))); }
     setLoading(false);
   };
 
-  // ── Join squad ─────────────────────────────────────────────────────────
-  const joinSquad = async () => {
-    if (!uid) { setSquadErr('Faça login primeiro (Perfil → Entrar).'); return; }
-    const code = joinCode.trim().toUpperCase();
+  const joinSquad = async (codeOverride, passOverride) => {
+    if (!uid) { setSquadErr('Faça login primeiro.'); return; }
+    const code = (codeOverride || joinCode).trim().toUpperCase();
     if (code.length < 4) { setSquadErr('Código inválido.'); return; }
     setLoading(true); setSquadErr('');
     try {
       const fdb = await waitForDb();
       const snap = await fdb.collection('squads').doc(code).get();
-      if (!snap.exists) { setSquadErr('Squad não encontrado. Verifique o código.'); setLoading(false); return; }
+      if (!snap.exists) { setSquadErr('Squad não encontrado.'); setLoading(false); return; }
       const sq = snap.data();
-      if (sq.pass && sq.pass.trim() && sq.pass.trim() !== joinPass.trim()) { setSquadErr('Senha incorreta.'); setLoading(false); return; }
+      const pw = passOverride !== undefined ? passOverride : joinPass;
+      if (sq.pass && sq.pass.trim() && sq.pass.trim() !== pw.trim()) { setSquadErr('Senha incorreta.'); setLoading(false); return; }
       await fdb.collection('squads').doc(code).collection('members').doc(uid).set({ uid, name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'member' });
       localStorage.setItem('ds.squad', JSON.stringify(sq));
-      setSquad(sq); setShowJoin(false);
-      setToast('Entrou no squad ' + sq.name + '!');
-    } catch(e) {
-      setSquadErr('Erro: ' + (e.message || e.code || String(e)));
-    }
+      setSquad(sq); setShowJoin(false); setJoinPreview(null);
+      setToast('Entrou no ' + sq.name + '!');
+    } catch(e) { setSquadErr('Erro: ' + (e.message || String(e))); }
     setLoading(false);
   };
 
-  // ── Leave squad ────────────────────────────────────────────────────────
   const leaveSquad = async () => {
     if (!confirm('Sair do squad?')) return;
-    // Remover do Firestore primeiro (com waitForDb para garantir conexão)
     if (uid && squad?.code) {
-      try {
-        const fdb = await waitForDb();
-        await fdb.collection('squads').doc(squad.code.toUpperCase())
-                 .collection('members').doc(uid).delete();
-      } catch(e) {
-        console.warn('leaveSquad Firestore error:', e);
-      }
+      try { const fdb = await waitForDb(); await fdb.collection('squads').doc(squad.code).collection('members').doc(uid).delete(); } catch(_) {}
     }
     stopListeners();
     localStorage.removeItem('ds.squad');
-    setSquad(null);
-    setMembers([]); setChatLog([]); setCheckins([]);
+    setSquad(null); setMembers([]); setChatLog([]); setCheckins([]);
     setToast('Saiu do squad');
   };
 
-  // ── Send chat ──────────────────────────────────────────────────────────
   const sendChat = async () => {
     if (!chatMsg.trim() || !squad || !uid || !db()) return;
     const msg = { uid, name: myName, avatar: myAvatar, text: chatMsg.trim(), ts: Date.now() };
@@ -3085,19 +3083,16 @@ const Community = ({history, setToast, prefs}) => {
     try { await chatRef(squad.code).add(msg); } catch(_) {}
   };
 
-  // ── Check-in ───────────────────────────────────────────────────────────
   const doCheckin = async () => {
     if (!squad || !uid || !db()) return;
-    const alreadyDone = checkins.some(ci => ci.uid === uid && ci.date === todayKey);
-    if (alreadyDone) { setToast('Já fez check-in hoje!'); return; }
-    const ci = { uid, name: myName, avatar: myAvatar, ts: Date.now(), date: todayKey, hadWorkout: !!history[todayKey], weeklyGoal: prefs&&prefs.weeklyGoal||3 };
-    try {
-      await cinRef(squad.code).doc(todayKey + '_' + uid).set(ci);
-      setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!');
-    } catch(_) {}
+    if (checkins.some(ci => ci.uid === uid && ci.date === todayKey)) { setToast('Já fez check-in hoje!'); return; }
+    const ci = { uid, name: myName, avatar: myAvatar, ts: Date.now(), date: todayKey, hadWorkout: !!history[todayKey], weeklyGoal: prefs?.weeklyGoal||3 };
+    try { await cinRef(squad.code).doc(todayKey + '_' + uid).set(ci); setToast(history[todayKey] ? '💪 Check-in com treino!' : '✅ Check-in feito!'); } catch(_) {}
   };
 
-  // ── Derived data ───────────────────────────────────────────────────────
+  const getInviteLink = () => `${window.location.origin}${window.location.pathname}?squad=${squad.code}`;
+  const copyInviteLink = () => { navigator.clipboard?.writeText(getInviteLink()).then(() => setToast('Link copiado!')).catch(() => setToast(getInviteLink())); };
+
   const ranking = useMemo(() => {
     const scores = {};
     checkins.forEach(ci => {
@@ -3107,71 +3102,95 @@ const Community = ({history, setToast, prefs}) => {
       if (ci.weeklyGoal) scores[ci.uid].goal = ci.weeklyGoal;
     });
     return Object.values(scores)
-      .map(function(m){ return Object.assign({},m,{pct:Math.min(100,Math.round((m.workouts/(m.goal||3))*100))}); })
-      .sort(function(a,b){ return b.pct-a.pct||b.workouts-a.workouts; });
+      .map(m => ({...m, pct: Math.min(100, Math.round((m.workouts/(m.goal||3))*100))}))
+      .sort((a,b) => b.pct-a.pct||b.workouts-a.workouts);
   }, [checkins]);
 
   const todayCi = checkins.filter(ci => ci.date === todayKey);
   const myCheckedIn = todayCi.some(ci => ci.uid === uid);
+  const feed = useMemo(() => [...checkins].sort((a,b) => b.ts-a.ts).slice(0,40), [checkins]);
+  const fmtTime = ts => { const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+  const fmtDate = str => { if(!str) return ''; const [y,m,d]=str.split('-'); return `${d}/${m}`; };
 
-  const fmtTime = ts => { const d = new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
-  const fmtDate = str => { if(!str) return ''; const [y,m,d] = str.split('-'); return `${d}/${m}`; };
+  const Avatar = ({src, name, size=36}) => src
+    ? <img src={src} style={{width:size,height:size,borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
+    : <div style={{width:size,height:size,borderRadius:'50%',background:'rgba(227,27,35,.15)',border:'1px solid rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:size*.35,color:'var(--color-accent)',flexShrink:0}}>{(name||'?').slice(0,2).toUpperCase()}</div>;
 
-  // Feed: all recent check-ins sorted by ts desc
-  const feed = useMemo(() => [...checkins].sort((a,b) => b.ts - a.ts).slice(0, 40), [checkins]);
-
-  // ── Not logged in ──────────────────────────────────────────────────────
-  if (!uid) return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div></div>
-      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.5rem',textAlign:'center'}}>
-        <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🔐</div>
-        <div style={{fontWeight:700,marginBottom:'.35rem'}}>Login necessário</div>
-        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)'}}>Faça login no seu perfil para usar o Squad</div>
+  // ── Invite link join popup ──────────────────────────────────────────────
+  if (joinPreview) return (
+    <div style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.85)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem',backdropFilter:'blur(8px)'}}>
+      <div style={{background:'#0d0d0d',border:'1px solid #2a0a0a',borderRadius:'20px',padding:'2rem',maxWidth:'340px',width:'100%',textAlign:'center',boxShadow:'0 0 80px rgba(227,27,35,.2)'}}>
+        <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>⚔️</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#555',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.25rem'}}>Convite para o squad</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',textTransform:'uppercase',color:'#fff',lineHeight:1,marginBottom:'.5rem'}}>{joinPreview.name}</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem',marginBottom:'1.5rem'}}>
+          <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#e31b23',animation:'pulse 2s infinite'}}/>
+          <div style={{fontSize:'.85rem',color:'#888'}}>{joinPreview.memberCount} membro{joinPreview.memberCount!==1?'s':''} ativos</div>
+        </div>
+        {joinPreview.pass && (
+          <div style={{marginBottom:'1rem'}}>
+            <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha do squad..." type="password"
+              style={{width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'.9rem',textAlign:'center'}}/>
+          </div>
+        )}
+        {squadErr && <div style={{color:'#f87171',fontSize:'.78rem',marginBottom:'.75rem',padding:'.35rem',background:'rgba(248,113,113,.08)',borderRadius:'8px'}}>{squadErr}</div>}
+        <button onClick={() => joinSquad(joinPreview.code, joinPreview.pass ? joinPass : '')} disabled={loading}
+          style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#a81018)',border:'none',borderRadius:'12px',padding:'.9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 30px rgba(227,27,35,.4)',marginBottom:'.75rem',opacity:loading?.6:1}}>
+          {loading ? 'Entrando...' : 'Entrar no squad →'}
+        </button>
+        <button onClick={() => setJoinPreview(null)} style={{background:'none',border:'none',color:'#444',fontSize:'.8rem',cursor:'pointer',textDecoration:'underline'}}>Recusar</button>
       </div>
     </div>
   );
 
-  // ── No squad — landing ─────────────────────────────────────────────────
+  // ── Not logged in ───────────────────────────────────────────────────────
+  if (!uid) return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div>
+      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'16px',padding:'2rem',textAlign:'center'}}>
+        <div style={{fontSize:'2.5rem',marginBottom:'.75rem'}}>🔐</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.35rem'}}>Login necessário</div>
+        <div style={{fontSize:'.78rem',color:'var(--color-text-sub)'}}>Faça login no perfil para usar o Squad</div>
+      </div>
+    </div>
+  );
+
+  // ── No squad — landing ──────────────────────────────────────────────────
   if (!squad) return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
       <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Treine junto, evolua junto</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',textTransform:'uppercase',lineHeight:.9}}>DARK<span style={{color:'var(--color-accent)'}}>SQUAD</span></div>
+        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'4px'}}>Treine junto. Evolua junto.</div>
       </div>
 
-      <button onClick={()=>setShowCreate(true)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',right:'-12px',top:'-12px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1,pointerEvents:'none'}}>+</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff'}}>Criar Squad</div>
-        <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.65)',marginTop:'.2rem'}}>Crie um grupo e convide amigos com código</div>
+      <button onClick={()=>setShowCreate(true)} style={{background:'linear-gradient(135deg,#e31b23 0%,#8b0000 100%)',border:'none',borderRadius:'16px',padding:'1.4rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden',boxShadow:'0 0 40px rgba(227,27,35,.25)'}}>
+        <div style={{position:'absolute',right:'-20px',top:'-20px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'8rem',fontWeight:900,color:'rgba(0,0,0,.2)',lineHeight:1,pointerEvents:'none',userSelect:'none'}}>⚔</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#fff',letterSpacing:'.04em'}}>Criar Squad</div>
+        <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.6)',marginTop:'.3rem'}}>Monte seu grupo e domine o ranking</div>
       </button>
 
-      <button onClick={()=>setShowJoin(true)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1.1rem',textAlign:'left',cursor:'pointer'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase'}}>Entrar com Código</div>
-        <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'.2rem'}}>Digite o código do squad que alguém criou</div>
+      <button onClick={()=>setShowJoin(true)} style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'16px',padding:'1.4rem',textAlign:'left',cursor:'pointer'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'var(--color-accent)',letterSpacing:'.04em'}}>Entrar com Código</div>
+        <div style={{fontSize:'.75rem',color:'var(--color-text-sub)',marginTop:'.3rem'}}>Use o código ou link de convite</div>
       </button>
 
-      {!db() && (
-        <div style={{background:'rgba(248,113,113,.07)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'10px',padding:'.75rem',fontSize:'.73rem',color:'#f87171',textAlign:'center'}}>
-          ⚠️ Firebase não conectado. Aguarde ou recarregue a página.
-        </div>
-      )}
+      {!db() && <div style={{background:'rgba(248,113,113,.07)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'12px',padding:'.85rem',fontSize:'.75rem',color:'#f87171',textAlign:'center'}}>⚠️ Firebase não conectado. Aguarde ou recarregue.</div>}
 
       {showCreate && (
         <Modal onClose={()=>{setShowCreate(false);setSquadErr('');}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Criar Squad</div>
-          {squadErr && <div style={{color:'#f87171',fontSize:'.78rem',marginBottom:'.5rem',padding:'.35rem .6rem',background:'rgba(248,113,113,.08)',borderRadius:'6px'}}>{squadErr}</div>}
-          <div style={{display:'grid',gap:'.6rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',marginBottom:'.85rem',color:'var(--color-accent)'}}>⚔️ Criar Squad</div>
+          {squadErr && <div style={{color:'#f87171',fontSize:'.78rem',marginBottom:'.6rem',padding:'.4rem .7rem',background:'rgba(248,113,113,.08)',borderRadius:'8px'}}>{squadErr}</div>}
+          <div style={{display:'grid',gap:'.65rem'}}>
             <input value={squadName} onChange={e=>setSquadName(e.target.value)} placeholder="Nome do squad..." autoFocus
-              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
+              style={{background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'1rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:'.04em',width:'100%'}}/>
             <div>
-              <div style={{fontSize:'.6rem',color:'var(--color-text-sub)',textTransform:'uppercase',marginBottom:'3px'}}>Senha (opcional — deixe vazio para squad aberto)</div>
-              <input value={squadPass} onChange={e=>setSquadPass(e.target.value)} placeholder="Senha..." type="password"
-                style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
+              <div style={{fontSize:'.6rem',color:'#555',textTransform:'uppercase',marginBottom:'4px'}}>Senha (opcional)</div>
+              <input value={squadPass} onChange={e=>setSquadPass(e.target.value)} placeholder="Deixe vazio para squad aberto" type="password"
+                style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.6rem .85rem',color:'#fff',fontSize:'.9rem',width:'100%'}}/>
             </div>
             <button onClick={createSquad} disabled={loading}
-              style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer',opacity:loading?.6:1}}>
-              {loading ? 'Criando...' : 'Criar Squad'}
+              style={{background:'linear-gradient(135deg,#e31b23,#a81018)',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',opacity:loading?.6:1,boxShadow:'0 0 20px rgba(227,27,35,.35)'}}>
+              {loading ? 'Criando...' : 'Fundar Squad ⚔️'}
             </button>
           </div>
         </Modal>
@@ -3179,16 +3198,16 @@ const Community = ({history, setToast, prefs}) => {
 
       {showJoin && (
         <Modal onClose={()=>{setShowJoin(false);setSquadErr('');}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>Entrar no Squad</div>
-          {squadErr && <div style={{color:'#f87171',fontSize:'.78rem',marginBottom:'.5rem',padding:'.35rem .6rem',background:'rgba(248,113,113,.08)',borderRadius:'6px'}}>{squadErr}</div>}
-          <div style={{display:'grid',gap:'.6rem'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',marginBottom:'.85rem'}}>Entrar no Squad</div>
+          {squadErr && <div style={{color:'#f87171',fontSize:'.78rem',marginBottom:'.6rem',padding:'.4rem .7rem',background:'rgba(248,113,113,.08)',borderRadius:'8px'}}>{squadErr}</div>}
+          <div style={{display:'grid',gap:'.65rem'}}>
             <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} placeholder="Código (ex: AB3X9K)" autoFocus
-              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',letterSpacing:'.1em',fontWeight:700,width:'100%'}}/>
-            <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha (se houver)" type="password"
-              style={{background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',color:'var(--color-text)',fontSize:'.9rem',width:'100%'}}/>
-            <button onClick={joinSquad} disabled={loading}
-              style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.65rem',color:'#fff',fontWeight:900,fontSize:'.9rem',cursor:'pointer',opacity:loading?.6:1}}>
-              {loading ? 'Entrando...' : 'Entrar'}
+              style={{background:'rgba(255,255,255,.05)',border:'1px solid #2a2a2a',borderRadius:'10px',padding:'.65rem .85rem',color:'#fff',fontSize:'1.2rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,letterSpacing:'.15em',textAlign:'center',width:'100%'}}/>
+            <input value={joinPass} onChange={e=>setJoinPass(e.target.value)} placeholder="Senha (se o squad tiver)" type="password"
+              style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'.6rem .85rem',color:'#fff',fontSize:'.9rem',width:'100%'}}/>
+            <button onClick={()=>joinSquad()} disabled={loading}
+              style={{background:'linear-gradient(135deg,#e31b23,#a81018)',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',opacity:loading?.6:1,boxShadow:'0 0 20px rgba(227,27,35,.35)'}}>
+              {loading ? 'Entrando...' : 'Entrar →'}
             </button>
           </div>
         </Modal>
@@ -3196,71 +3215,98 @@ const Community = ({history, setToast, prefs}) => {
     </div>
   );
 
-  // ── Squad dashboard ────────────────────────────────────────────────────
+  // ── Squad dashboard ─────────────────────────────────────────────────────
+  const accentBorder = '1px solid rgba(227,27,35,.3)';
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',lineHeight:1}}>{squad.name}</div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
-            Código: <span style={{color:'var(--color-accent)',fontWeight:700,letterSpacing:'.1em'}}>{squad.code}</span>
-            {squad.pass && <span style={{marginLeft:'.5rem',color:'#4ade80',fontSize:'.6rem'}}>🔒 Privado</span>}
-            <span style={{marginLeft:'.5rem',color:'#555'}}>· {members.length} membro{members.length!==1?'s':''}</span>
+      {/* HERO HEADER */}
+      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.12) 0%,rgba(0,0,0,0) 60%)',border:accentBorder,borderRadius:'18px',padding:'1.25rem',position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',right:'-10px',top:'-10px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'7rem',fontWeight:900,color:'rgba(227,27,35,.06)',lineHeight:1,pointerEvents:'none',userSelect:'none'}}>⚔</div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div style={{fontSize:'.58rem',color:'#555',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'2px'}}>DARK SQUAD</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1,color:'#fff'}}>{squad.name}</div>
+            <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginTop:'.4rem',flexWrap:'wrap'}}>
+              <span style={{background:'rgba(227,27,35,.15)',border:accentBorder,borderRadius:'6px',padding:'2px 10px',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'var(--color-accent)',letterSpacing:'.1em'}}>{squad.code}</span>
+              {squad.pass && <span style={{fontSize:'.65rem',color:'#4ade80'}}>🔒</span>}
+              <span style={{fontSize:'.7rem',color:'#555'}}>👥 {members.length}</span>
+            </div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'.4rem',alignItems:'flex-end'}}>
+            <button onClick={copyInviteLink} style={{background:'rgba(227,27,35,.1)',border:accentBorder,borderRadius:'8px',padding:'.35rem .7rem',color:'var(--color-accent)',fontSize:'.68rem',fontWeight:800,cursor:'pointer',textTransform:'uppercase',letterSpacing:'.04em',whiteSpace:'nowrap'}}>
+              🔗 Convidar
+            </button>
+            <button onClick={leaveSquad} style={{background:'rgba(255,255,255,.03)',border:'1px solid #1e1e1e',borderRadius:'8px',padding:'.3rem .6rem',color:'#555',fontSize:'.65rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
           </div>
         </div>
-        <button onClick={leaveSquad} style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:'8px',padding:'.35rem .7rem',color:'#f87171',fontSize:'.7rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
       </div>
 
-      {/* Check-in button */}
+      {/* CHECK-IN CARD */}
       <button onClick={doCheckin} style={{
-        background: myCheckedIn ? 'rgba(74,222,128,.06)' : 'var(--color-accent)',
-        border: myCheckedIn ? '1px solid rgba(74,222,128,.3)' : 'none',
-        borderRadius:'12px', padding:'.9rem 1rem', cursor:'pointer',
-        display:'flex', alignItems:'center', justifyContent:'space-between'
+        background: myCheckedIn ? 'rgba(74,222,128,.06)' : 'linear-gradient(135deg,#e31b23,#8b0000)',
+        border: myCheckedIn ? '1px solid rgba(74,222,128,.25)' : 'none',
+        borderRadius:'14px', padding:'1rem 1.2rem', cursor:'pointer',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        boxShadow: myCheckedIn ? 'none' : '0 0 30px rgba(227,27,35,.2)'
       }}>
         <div style={{textAlign:'left'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:myCheckedIn?'#4ade80':'#fff'}}>
-            {myCheckedIn ? '✓ Check-in feito hoje!' : '📍 Fazer Check-in'}
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:myCheckedIn?'#4ade80':'#fff',letterSpacing:'.04em'}}>
+            {myCheckedIn ? '✓ Presença marcada' : '📍 Marcar presença'}
           </div>
-          <div style={{fontSize:'.7rem',color:myCheckedIn?'rgba(74,222,128,.6)':'rgba(255,255,255,.55)',marginTop:'1px'}}>
-            {myCheckedIn ? (history[todayKey]?'Com treino':'Sem treino hoje') : 'Marque presença no squad'}
+          <div style={{fontSize:'.72rem',color:myCheckedIn?'rgba(74,222,128,.5)':'rgba(255,255,255,.5)',marginTop:'2px'}}>
+            {myCheckedIn ? (history[todayKey]?'Com treino hoje':'Sem treino hoje') : 'Mostre pro squad que você foi'}
           </div>
         </div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:myCheckedIn?'#4ade80':'#fff'}}>
-          {todayCi.length}
+        <div style={{textAlign:'right'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',lineHeight:1,color:myCheckedIn?'#4ade80':'#fff'}}>{todayCi.length}</div>
+          <div style={{fontSize:'.6rem',color:myCheckedIn?'rgba(74,222,128,.4)':'rgba(255,255,255,.35)',textTransform:'uppercase'}}>hoje</div>
         </div>
       </button>
 
-      {/* Tabs */}
-      <div style={{display:'flex',background:'rgba(255,255,255,.04)',borderRadius:'10px',padding:'3px',gap:'3px'}}>
-        {[['feed','📰 Feed'],['ranking','🏆 Rank'],['chat','💬 Chat'],['members','👥 Membros']].map(([t,l])=>(
-          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'.38rem',borderRadius:'7px',border:'none',
-            background:tab===t?'rgba(255,255,255,.1)':'transparent',
-            color:tab===t?'var(--color-text)':'var(--color-text-sub)',
-            fontWeight:700,fontSize:'.68rem',cursor:'pointer',letterSpacing:'-.01em'}}>
+      {/* TABS */}
+      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #1a1a1a',borderRadius:'12px',padding:'3px',gap:'3px'}}>
+        {[['feed','FEED'],['ranking','RANK'],['chat','CHAT'],['members','TIME']].map(([t,l])=>(
+          <button key={t} onClick={()=>{
+            setTab(t);
+            if(t==='chat'){
+              const now=Date.now(); lastSeenChatTs.current=now;
+              localStorage.setItem('ds.squad.lastSeenChat',String(now));
+              setUnreadChat(0);
+            }
+          }} style={{
+            flex:1,padding:'.45rem .2rem',borderRadius:'9px',border:'none',
+            background:tab===t?'rgba(227,27,35,.15)':'transparent',
+            color:tab===t?'var(--color-accent)':'#444',
+            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
+            fontSize:'.75rem',cursor:'pointer',letterSpacing:'.06em',
+            position:'relative',transition:'all .15s',
+            boxShadow:tab===t?'inset 0 0 0 1px rgba(227,27,35,.3)':'none'
+          }}>
             {l}
+            {t==='chat'&&unreadChat>0&&<span style={{position:'absolute',top:'2px',right:'4px',background:'var(--color-accent)',color:'#fff',borderRadius:'999px',fontSize:'.5rem',fontWeight:900,padding:'1px 4px',minWidth:'14px',textAlign:'center',lineHeight:'14px'}}>{unreadChat>9?'9+':unreadChat}</span>}
           </button>
         ))}
       </div>
 
       {/* FEED */}
-      {tab==='feed' && (
+      {tab==='feed'&&(
         <div style={{display:'grid',gap:'.4rem'}}>
           {feed.length===0
-            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>
-                Nenhuma atividade ainda. Façam check-in!
+            ? <div style={{textAlign:'center',padding:'3rem 1rem',color:'#2a2a2a'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:900,textTransform:'uppercase',marginBottom:'.4rem'}}>NINGUÉM APARECEU</div>
+                <div style={{fontSize:'.8rem',color:'#333'}}>Faça o primeiro check-in</div>
               </div>
             : feed.map((ci,i)=>(
-              <div key={ci.uid+ci.ts+i} style={{display:'flex',alignItems:'center',gap:'.65rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.65rem .85rem'}}>
-                {ci.avatar
-                  ? <img src={ci.avatar} style={{width:'34px',height:'34px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
-                  : <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:'var(--color-accent)',flexShrink:0}}>{(ci.name||'?').slice(0,2).toUpperCase()}</div>}
+              <div key={ci.uid+ci.ts+i} style={{display:'flex',alignItems:'center',gap:'.75rem',background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'12px',padding:'.75rem 1rem'}}>
+                <Avatar src={ci.avatar} name={ci.name} size={38}/>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:'.84rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ci.name}</div>
-                  <div style={{fontSize:'.68rem',color:'var(--color-text-sub)'}}>{ci.hadWorkout?'💪 Treinou':'✅ Check-in'} · {fmtDate(ci.date)}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',letterSpacing:'.02em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ci.name}</div>
+                  <div style={{fontSize:'.7rem',color:'#555',marginTop:'1px'}}>
+                    <span style={{color:ci.hadWorkout?'var(--color-accent)':'#4ade80'}}>{ci.hadWorkout?'💪 TREINOU':'✅ CHECK-IN'}</span>
+                    <span style={{color:'#2a2a2a'}}> · {fmtDate(ci.date)}</span>
+                  </div>
                 </div>
-                <div style={{fontSize:'.66rem',color:'#555',flexShrink:0}}>{fmtTime(ci.ts)}</div>
+                <div style={{fontSize:'.65rem',color:'#2a2a2a',flexShrink:0}}>{fmtTime(ci.ts)}</div>
               </div>
             ))
           }
@@ -3268,28 +3314,30 @@ const Community = ({history, setToast, prefs}) => {
       )}
 
       {/* RANKING */}
-      {tab==='ranking' && (
+      {tab==='ranking'&&(
         <div style={{display:'grid',gap:'.4rem'}}>
-          <div style={{fontSize:'.58rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>Últimos 30 dias — por treinos</div>
+          <div style={{fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.08em',padding:'0 .2rem'}}>Últimos 30 dias</div>
           {ranking.length===0
-            ? <div style={{textAlign:'center',padding:'2rem',color:'var(--color-text-sub)',fontSize:'.85rem',background:'var(--color-card)',borderRadius:'12px',border:'1px solid var(--color-border)'}}>Façam check-in para aparecer!</div>
+            ? <div style={{textAlign:'center',padding:'3rem 1rem',color:'#2a2a2a',background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'12px'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.5rem',fontWeight:900,textTransform:'uppercase'}}>RANKING VAZIO</div>
+              </div>
             : ranking.map((m,i)=>{
-              const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-              const isMe = m.uid===uid;
-              return (
-                <div key={m.uid} style={{display:'flex',alignItems:'center',gap:'.65rem',
-                  background:isMe?'rgba(227,27,35,.05)':'var(--color-card)',
-                  border:isMe?'1px solid rgba(227,27,35,.2)':'1px solid var(--color-border)',
-                  borderRadius:'10px',padding:'.6rem .85rem'}}>
-                  <div style={{width:'26px',textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:i<3?'#facc15':'#555',flexShrink:0}}>{medal||i+1}</div>
-                  {m.avatar
-                    ? <img src={m.avatar} style={{width:'30px',height:'30px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
-                    : <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',fontWeight:700,color:'#555',flexShrink:0}}>{(m.name||'?').slice(0,2).toUpperCase()}</div>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:'.84rem',fontWeight:700,color:isMe?'var(--color-accent)':'var(--color-text)'}}>{m.name}{isMe?' (você)':''}</div>
-                    <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.workouts}/{m.goal} treinos · {m.pct}% consistência</div>
+              const medals=['🥇','🥈','🥉'];
+              const isMe=m.uid===uid;
+              const barW=Math.max(4,m.pct);
+              return(
+                <div key={m.uid} style={{background:isMe?'rgba(227,27,35,.06)':'rgba(255,255,255,.015)',border:isMe?accentBorder:'1px solid #131313',borderRadius:'14px',padding:'.85rem 1rem',position:'relative',overflow:'hidden'}}>
+                  {/* progress bar bg */}
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:barW+'%',background:isMe?'rgba(227,27,35,.08)':'rgba(255,255,255,.03)',transition:'width .5s',borderRadius:'14px 0 0 14px'}}/>
+                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                    <div style={{width:'28px',textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:i<3?'':'#333',flexShrink:0}}>{medals[i]||<span style={{color:'#333'}}>{i+1}</span>}</div>
+                    <Avatar src={m.avatar} name={m.name} size={34}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:isMe?'var(--color-accent)':'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}{isMe?' ◀':''}</div>
+                      <div style={{fontSize:'.65rem',color:'#444',marginTop:'1px'}}>{m.workouts} treinos · {m.days} check-ins</div>
+                    </div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':isMe?'var(--color-accent)':'#333',flexShrink:0}}>{m.pct}%</div>
                   </div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:i===0?'#facc15':i===1?'#c0c0c0':i===2?'#cd7f32':'#555',flexShrink:0}}>{m.pct}%</div>
                 </div>
               );
             })
@@ -3298,24 +3346,25 @@ const Community = ({history, setToast, prefs}) => {
       )}
 
       {/* CHAT */}
-      {tab==='chat' && (
+      {tab==='chat'&&(
         <div style={{display:'grid',gap:'.5rem'}}>
-          <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.5rem',height:'52vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:'.35rem'}} id="chatBox">
+          <div style={{background:'#080808',border:'1px solid #131313',borderRadius:'14px',padding:'.6rem',height:'55vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:'.4rem'}} id="chatBox"
+            ref={el => { if(el) el.scrollTop=el.scrollHeight; }}>
             {chatLog.length===0
-              ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#444',fontSize:'.82rem'}}>Seja o primeiro a mandar mensagem!</div>
+              ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#2a2a2a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',textAlign:'center'}}>
+                  SEM MENSAGENS<br/><span style={{fontSize:'.7rem',fontWeight:400,color:'#1a1a1a',fontFamily:'sans-serif',textTransform:'none'}}>Comece a conversa</span>
+                </div>
               : chatLog.map((msg,i)=>{
-                const isMe = msg.uid===uid;
-                return (
-                  <div key={msg.ts+i} style={{display:'flex',flexDirection:isMe?'row-reverse':'row',gap:'.35rem',alignItems:'flex-end'}}>
-                    {!isMe && (msg.avatar
-                      ? <img src={msg.avatar} style={{width:'22px',height:'22px',borderRadius:'50%',flexShrink:0}} alt=""/>
-                      : <div style={{width:'22px',height:'22px',borderRadius:'50%',background:'rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.6rem',fontWeight:700,flexShrink:0}}>{(msg.name||'?').slice(0,1)}</div>)}
-                    <div style={{maxWidth:'75%'}}>
-                      {!isMe && <div style={{fontSize:'.58rem',color:'#555',marginBottom:'2px',paddingLeft:'4px'}}>{msg.name}</div>}
-                      <div style={{background:isMe?'var(--color-accent)':'rgba(255,255,255,.07)',borderRadius:isMe?'12px 12px 3px 12px':'12px 12px 12px 3px',padding:'.4rem .65rem'}}>
-                        <div style={{fontSize:'.84rem',color:isMe?'#fff':'var(--color-text)',lineHeight:1.4,wordBreak:'break-word'}}>{msg.text}</div>
+                const isMe=msg.uid===uid;
+                return(
+                  <div key={msg.ts+i} style={{display:'flex',flexDirection:isMe?'row-reverse':'row',gap:'.4rem',alignItems:'flex-end'}}>
+                    {!isMe&&<Avatar src={msg.avatar} name={msg.name} size={26}/>}
+                    <div style={{maxWidth:'78%'}}>
+                      {!isMe&&<div style={{fontSize:'.58rem',color:'#444',marginBottom:'2px',paddingLeft:'4px',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:'.04em'}}>{msg.name}</div>}
+                      <div style={{background:isMe?'var(--color-accent)':'rgba(255,255,255,.06)',border:isMe?'none':'1px solid #1a1a1a',borderRadius:isMe?'14px 14px 3px 14px':'14px 14px 14px 3px',padding:'.45rem .75rem'}}>
+                        <div style={{fontSize:'.88rem',color:'#fff',lineHeight:1.45,wordBreak:'break-word'}}>{msg.text}</div>
                       </div>
-                      <div style={{fontSize:'.56rem',color:'#444',marginTop:'2px',textAlign:isMe?'right':'left',paddingLeft:isMe?0:'4px'}}>{fmtTime(msg.ts)}</div>
+                      <div style={{fontSize:'.55rem',color:'#2a2a2a',marginTop:'2px',textAlign:isMe?'right':'left',paddingLeft:isMe?0:'4px'}}>{fmtTime(msg.ts)}</div>
                     </div>
                   </div>
                 );
@@ -3325,453 +3374,202 @@ const Community = ({history, setToast, prefs}) => {
           <div style={{display:'flex',gap:'.4rem'}}>
             <input value={chatMsg} onChange={e=>setChatMsg(e.target.value)}
               onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendChat()}
-              placeholder="Mensagem..." maxLength={500}
-              style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .7rem',color:'var(--color-text)',fontSize:'.88rem'}}/>
-            <button onClick={sendChat} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:800,fontSize:'.95rem',cursor:'pointer'}}>→</button>
+              placeholder="Manda ver..." maxLength={500}
+              style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.55rem .85rem',color:'#fff',fontSize:'.9rem'}}/>
+            <button onClick={sendChat} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.55rem 1rem',color:'#fff',fontWeight:900,fontSize:'1.1rem',cursor:'pointer'}}>→</button>
           </div>
         </div>
       )}
 
       {/* MEMBERS */}
-      {tab==='members' && (
+      {tab==='members'&&(
         <div style={{display:'grid',gap:'.4rem'}}>
-          <div style={{fontSize:'.58rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>{members.length} membro{members.length!==1?'s':''}</div>
-          {members.map((m,i)=>(
-            <div key={m.uid||i} style={{display:'flex',alignItems:'center',gap:'.65rem',background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.6rem .85rem'}}>
-              {m.avatar
-                ? <img src={m.avatar} style={{width:'34px',height:'34px',borderRadius:'50%',objectFit:'cover',flexShrink:0}} alt=""/>
-                : <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.9rem',color:'#555',flexShrink:0}}>{(m.name||'?').slice(0,2).toUpperCase()}</div>}
-              <div style={{flex:1}}>
-                <div style={{fontSize:'.84rem',fontWeight:700}}>{m.name}{m.uid===uid?' (você)':''}</div>
-                <div style={{fontSize:'.65rem',color:'var(--color-text-sub)'}}>{m.role==='admin'?'👑 Admin':'Membro'}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ONBOARDING — primeira vez no app
-// ═══════════════════════════════════════════════════════════════════════════
-// ── PR Celebration ───────────────────────────────────────────────────────────
-const PRCelebration = ({exName, weight, onClose}) => {
-  useEffect(() => {
-    const t = setTimeout(onClose, 4000);
-    return () => clearTimeout(t);
-  }, []);
-  return (
-    <div onClick={onClose} style={{
-      position:'fixed',inset:0,zIndex:99999,
-      background:'rgba(0,0,0,.9)',
-      display:'flex',flexDirection:'column',
-      alignItems:'center',justifyContent:'center',
-      gap:'1rem',padding:'2rem',cursor:'pointer'
-    }}>
-      <div style={{fontSize:'3.5rem'}}>🏆</div>
-      <div style={{
-        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-        fontSize:'2.5rem',textTransform:'uppercase',
-        color:'#FFD700',textAlign:'center',lineHeight:1,
-        textShadow:'0 0 40px rgba(255,215,0,.6)'
-      }}>NOVO RECORDE!</div>
-      <div style={{
-        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,
-        fontSize:'1.1rem',textTransform:'uppercase',
-        color:'#fff',textAlign:'center'
-      }}>{exName}</div>
-      <div style={{display:'flex',alignItems:'baseline',gap:'.4rem'}}>
-        <span style={{
-          fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-          fontSize:'3.5rem',color:'var(--color-accent)',lineHeight:1
-        }}>{weight}</span>
-        <span style={{
-          fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,
-          fontSize:'1.5rem',color:'#666'
-        }}>kg</span>
-      </div>
-      <div style={{fontSize:'.72rem',color:'#444',marginTop:'.5rem'}}>Toque para fechar</div>
-    </div>
-  );
-};
-
-// ── Playlist de Treino ───────────────────────────────────────────────────────
-const PLAYLISTS = [
-  {emoji:'🔥',name:'Push Day',desc:'Peito · Ombro · Tríceps',url:'https://open.spotify.com/playlist/37i9dQZF1DX76Wlfdnj7AP'},
-  {emoji:'💪',name:'Pull Day',desc:'Costas · Bíceps',url:'https://open.spotify.com/playlist/37i9dQZF1DXdxcBWuJkbcy'},
-  {emoji:'🦵',name:'Leg Day',desc:'Pernas · Glúteo',url:'https://open.spotify.com/playlist/37i9dQZF1DWZUtWMZbGSMS'},
-  {emoji:'⚡',name:'HIIT & Cardio',desc:'Alta intensidade',url:'https://open.spotify.com/playlist/37i9dQZF1DXaXB8fQg7xof'},
-  {emoji:'🏋️',name:'Full Body',desc:'Corpo todo',url:'https://open.spotify.com/playlist/37i9dQZF1DX6VdMW310YC7'},
-  {emoji:'🎯',name:'Foco Total',desc:'Sem letra · concentração',url:'https://open.spotify.com/playlist/37i9dQZF1DWZeKCadgRdKQ'},
-];
-
-const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
-  const [custom, setCustom]   = useState('');
-  const [label, setLabel]     = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-
-  // Lista de playlists salvas pelo usuário
-  const saved = prefs.playlists || [];
-
-  const savePlaylist = () => {
-    const url = custom.trim();
-    if (!url) return;
-    const name = label.trim() || 'Minha playlist';
-    const updated = [...saved, {name, url}];
-    setPrefs(p => ({...p, playlists: updated}));
-    setCustom(''); setLabel(''); setShowAdd(false);
-    setToast('Playlist salva!');
-  };
-
-  const removePlaylist = (i) => {
-    const updated = saved.filter((_, idx) => idx !== i);
-    setPrefs(p => ({...p, playlists: updated}));
-    setToast('Playlist removida');
-  };
-
-  const open = (url) => window.open(url, '_blank');
-
-  return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-            DARK<span style={{color:'#1DB954'}}>BEATS</span>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0 .2rem',marginBottom:'.2rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:'#444'}}>{members.length} guerreiro{members.length!==1?'s':''}</div>
+            <button onClick={copyInviteLink} style={{background:'rgba(227,27,35,.08)',border:accentBorder,borderRadius:'8px',padding:'.3rem .65rem',color:'var(--color-accent)',fontSize:'.68rem',fontWeight:800,cursor:'pointer',textTransform:'uppercase'}}>🔗 Compartilhar link</button>
           </div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>Abre direto no Spotify</div>
-        </div>
-        <button onClick={() => setShowAdd(s => !s)} style={{background:showAdd?'rgba(255,255,255,.08)':'#1DB954',border:'none',borderRadius:'8px',padding:'.45rem .9rem',color:'#fff',fontWeight:700,fontSize:'.78rem',cursor:'pointer',textTransform:'uppercase'}}>
-          {showAdd ? 'Cancelar' : '+ Adicionar'}
-        </button>
-      </div>
-
-      {/* Adicionar playlist */}
-      {showAdd && (
-        <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem 1.1rem',display:'grid',gap:'.6rem'}}>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Nova playlist</div>
-          <input
-            placeholder="Nome (ex: Push Day, Favoritas...)"
-            value={label}
-            onChange={e => setLabel(e.target.value)}
-            style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'var(--color-text)'}}
-          />
-          <input
-            placeholder="Link do Spotify..."
-            value={custom}
-            onChange={e => setCustom(e.target.value)}
-            style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'var(--color-text)'}}
-          />
-          <button onClick={savePlaylist} style={{background:'#1DB954',border:'none',borderRadius:'8px',padding:'.6rem',color:'#fff',fontWeight:700,fontSize:'.85rem',cursor:'pointer',textTransform:'uppercase'}}>
-            Salvar playlist
-          </button>
-        </div>
-      )}
-
-      {/* Playlists salvas pelo usuário */}
-      {saved.length > 0 && (
-        <div style={{display:'grid',gap:'.5rem'}}>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Suas playlists</div>
-          {saved.map((pl, i) => (
-            <div key={i} style={{background:'rgba(29,185,84,.07)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-              <button onClick={() => open(pl.url)} style={{flex:1,background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem',padding:0}}>
-                <span style={{fontSize:'1.4rem'}}>⭐</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{pl.name}</div>
-                  <div style={{fontSize:'.65rem',color:'#1DB954',marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'220px'}}>
-                    {pl.url.replace('https://open.spotify.com/playlist/','spotify:playlist:')}
-                  </div>
-                </div>
-                <span style={{color:'#1DB954',fontSize:'1.2rem',flexShrink:0}}>▶</span>
-              </button>
-              <button onClick={() => removePlaylist(i)} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',padding:'.3rem .55rem',color:'#555',fontSize:'.8rem',cursor:'pointer',flexShrink:0}}>
-                ✕
-              </button>
+          {members.map((m,i)=>(
+            <div key={m.uid||i} style={{display:'flex',alignItems:'center',gap:'.75rem',background:'rgba(255,255,255,.02)',border:m.uid===uid?accentBorder:'1px solid #131313',borderRadius:'12px',padding:'.75rem 1rem'}}>
+              <Avatar src={m.avatar} name={m.name} size={38}/>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:m.uid===uid?'var(--color-accent)':'#fff'}}>{m.name}{m.uid===uid?' (você)':''}</div>
+                <div style={{fontSize:'.65rem',color:'#444',marginTop:'1px'}}>{m.role==='admin'?'👑 Fundador':'Membro'}</div>
+              </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* Playlists padrão */}
-      <div style={{display:'grid',gap:'.5rem'}}>
-        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Playlists sugeridas</div>
-        {PLAYLISTS.map((pl, i) => (
-          <button key={i} onClick={() => open(pl.url)} style={{
-            background:'rgba(255,255,255,.03)',border:'1px solid var(--color-border)',
-            borderRadius:'10px',padding:'.75rem 1rem',
-            display:'flex',alignItems:'center',gap:'.75rem',
-            cursor:'pointer',textAlign:'left',width:'100%'
-          }}>
-            <div style={{width:'38px',height:'38px',borderRadius:'8px',background:'rgba(29,185,84,.12)',border:'1px solid rgba(29,185,84,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>
-              {pl.emoji}
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:'.85rem',color:'var(--color-text)'}}>{pl.name}</div>
-              <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{pl.desc}</div>
-            </div>
-            <span style={{color:'#1DB954',fontSize:'1rem',flexShrink:0}}>▶</span>
-          </button>
-        ))}
-      </div>
     </div>
   );
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ONBOARDING
-// ═══════════════════════════════════════════════════════════════════════════
-const TRAIN_DAYS_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-
-const Onboarding = ({setPrefs, onDone}) => {
-  const [step, setStep]       = useState(0);
-  const [name, setName]       = useState('');
-  const [goal, setGoal]       = useState('hipertrofia');
-  const [days, setDays]       = useState([1,2,3,4,5,6]);
-
-  const toggleDay = d => setDays(prev =>
-    prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a,b)=>a-b)
-  );
-
-  const finish = () => {
-    setPrefs(p => ({
-      ...p,
-      name: name.trim() || p.name,
-      goal,
-      trainDays: days,
-      weeklyGoal: days.length,
-      onboarded: true,
-    }));
-    localStorage.setItem('darkset.onboarded','1');
-    onDone();
-  };
-
-  const btnStyle = (active) => ({
-    background: active ? 'var(--color-accent)' : 'rgba(255,255,255,.04)',
-    border: active ? 'none' : '1px solid var(--color-border)',
-    borderRadius: '10px', padding: '.7rem 1rem',
-    display: 'flex', alignItems: 'center', gap: '.75rem',
-    cursor: 'pointer', textAlign: 'left', width: '100%',
-    boxShadow: active ? '0 0 16px rgba(227,27,35,.3)' : 'none',
-  });
-
-  return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'var(--color-bg)',display:'flex',flexDirection:'column',overflowY:'auto'}}>
-      {/* Progress bar */}
-      <div style={{display:'flex',justifyContent:'center',gap:'.4rem',padding:'1.5rem 1rem .5rem'}}>
-        {[0,1,2].map(i => (
-          <div key={i} style={{height:'4px',borderRadius:'2px',background:i<=step?'var(--color-accent)':'#1e1e1e',flex:i===step?2:1,transition:'all .3s'}}/>
-        ))}
-      </div>
-
-      <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',padding:'1.5rem',maxWidth:'420px',width:'100%',margin:'0 auto',gap:'1.5rem'}}>
-
-        {step === 0 && (
-          <>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',textTransform:'uppercase',lineHeight:.9,color:'var(--color-text)'}}>
-                BEM-VINDO AO<br/><span style={{color:'var(--color-accent)'}}>DARKSET</span>
-              </div>
-              <div style={{fontSize:'.88rem',color:'var(--color-text-sub)',marginTop:'1.25rem',lineHeight:1.6}}>
-                Seu app de treino com histórico, streak inteligente e evolução real. Configuração rápida em 3 passos.
-              </div>
-            </div>
-            <div style={{textAlign:'center',fontSize:'4rem',lineHeight:1}}>💪</div>
-            <button onClick={() => setStep(1)} style={{background:'var(--color-accent)',border:'none',borderRadius:'12px',padding:'1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 28px rgba(227,27,35,.4)'}}>
-              Começar →
-            </button>
-            <button onClick={() => { if(window.openAuthModal) window.openAuthModal('signIn'); }} style={{background:'transparent',border:'1px solid #2a2a2a',borderRadius:'12px',padding:'.75rem',color:'#666',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',textTransform:'uppercase',cursor:'pointer',marginTop:'-.25rem'}}>
-              Já possuo conta — Entrar
-            </button>
-          </>
-        )}
-
-        {step === 1 && (
-          <>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'var(--color-text)'}}>Como te chamamos?</div>
-              <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginTop:'.3rem'}}>Aparece nas saudações e no Squad</div>
-            </div>
-            <input
-              autoFocus
-              placeholder="Seu nome ou apelido..."
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key==='Enter' && name.trim() && setStep(2)}
-              style={{background:'rgba(255,255,255,.05)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.85rem 1rem',fontSize:'1.1rem',color:'var(--color-text)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}
-            />
-            <div style={{display:'grid',gap:'.5rem'}}>
-              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Seu objetivo</div>
-              {[
-                {k:'hipertrofia', l:'Hipertrofia 💪', d:'Ganhar massa muscular'},
-                {k:'forca',       l:'Força 🏋️',       d:'Aumentar carga e performance'},
-                {k:'emagrecer',   l:'Emagrecimento 🔥',d:'Perder gordura e definir'},
-                {k:'saude',       l:'Saúde 🌿',        d:'Manter atividade e bem-estar'},
-              ].map(({k,l,d}) => (
-                <button key={k} onClick={() => setGoal(k)} style={btnStyle(goal===k)}>
-                  <div style={{width:'14px',height:'14px',borderRadius:'50%',border:'2px solid',borderColor:goal===k?'#fff':'#333',background:goal===k?'#fff':'transparent',flexShrink:0}}/>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:'.88rem',color:goal===k?'#fff':'var(--color-text)'}}>{l}</div>
-                    <div style={{fontSize:'.68rem',color:goal===k?'rgba(255,255,255,.7)':'var(--color-text-sub)'}}>{d}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <button disabled={!name.trim()} onClick={() => setStep(2)} style={{background:name.trim()?'var(--color-accent)':'rgba(0,0,0,.2)',border:'none',borderRadius:'10px',padding:'.85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:name.trim()?'pointer':'default'}}>
-              Próximo →
-            </button>
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'var(--color-text)'}}>Quando você treina?</div>
-              <div style={{fontSize:'.78rem',color:'var(--color-text-sub)',marginTop:'.3rem'}}>Dias de descanso não quebram seu streak</div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'.35rem'}}>
-              {TRAIN_DAYS_LABELS.map((d,i) => {
-                const sel = days.includes(i);
-                return (
-                  <button key={i} onClick={() => toggleDay(i)} style={{
-                    height:'48px',borderRadius:'10px',border:'none',cursor:'pointer',
-                    fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',
-                    background: sel ? 'var(--color-accent)' : 'rgba(255,255,255,.04)',
-                    color: sel ? '#fff' : 'var(--color-text-sub)',
-                    boxShadow: sel ? '0 0 10px rgba(227,27,35,.3)' : 'none',
-                    textTransform:'uppercase',
-                  }}>{d.slice(0,3)}</button>
-                );
-              })}
-            </div>
-            <div style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-text-sub)'}}>
-              {days.length} dia{days.length!==1?'s':''} de treino por semana
-            </div>
-            <button disabled={days.length===0} onClick={finish} style={{background:days.length?'var(--color-accent)':'rgba(0,0,0,.2)',border:'none',borderRadius:'12px',padding:'1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',cursor:days.length?'pointer':'default',boxShadow:days.length?'0 0 28px rgba(227,27,35,.4)':'none'}}>
-              Começar a treinar 🔥
-            </button>
-          </>
-        )}
-
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MODO ACADEMIA
+// MODO ACADEMIA — V2
 // ═══════════════════════════════════════════════════════════════════════════
 const GymMode = ({prefs, setPrefs, setToast, goto}) => {
-  const [detecting, setDetecting] = useState(false);
   const active = !!prefs.gymMode;
+  const [detecting, setDetecting] = useState(false);
+  const [wifiInput, setWifiInput] = useState(prefs.gymWifi||'');
+
+  const PLAYLISTS_GYM = [
+    {emoji:'🔥',name:'Beast Mode',url:'https://open.spotify.com/playlist/37i9dQZF1DX76Wlfdnj7AP'},
+    {emoji:'⚡',name:'HIIT Energy',url:'https://open.spotify.com/playlist/37i9dQZF1DXaXB8fQg7xof'},
+    {emoji:'💀',name:'Metal Workout',url:'https://open.spotify.com/playlist/37i9dQZF1DWTggY0yqBxES'},
+    {emoji:'🏋️',name:'Trap Gym',url:'https://open.spotify.com/playlist/37i9dQZF1DX0HRj9P7NxeE'},
+  ];
 
   const toggle = (val) => {
     setPrefs(p => ({...p, gymMode: val}));
     if (val) {
-      setToast('🏋️ Modo Academia ativado!');
-      if (prefs.vibrate && navigator.vibrate) navigator.vibrate([50,30,100]);
+      setToast('🏋️ DarkGym ativado!');
+      if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100,50,200]);
+      // Apply dark mode extreme via CSS vars
+      document.documentElement.style.setProperty('--color-bg', '#000000');
+      document.documentElement.style.setProperty('--color-card', '#080808');
+      document.documentElement.style.setProperty('--color-border', '#2a0a0a');
+      document.documentElement.style.setProperty('--color-text-sub', '#444');
+      // Red accent glow on body
+      document.body.style.boxShadow = 'inset 0 0 120px rgba(227,27,35,.08)';
     } else {
-      setToast('Modo Academia desativado');
+      setToast('DarkGym desativado');
+      // Restore original CSS vars
+      document.documentElement.style.removeProperty('--color-bg');
+      document.documentElement.style.removeProperty('--color-card');
+      document.documentElement.style.removeProperty('--color-border');
+      document.documentElement.style.removeProperty('--color-text-sub');
+      document.body.style.boxShadow = '';
     }
+  };
+
+  // Apply visual on mount if already active
+  useEffect(() => {
+    if (active) {
+      document.documentElement.style.setProperty('--color-bg', '#000000');
+      document.documentElement.style.setProperty('--color-card', '#080808');
+      document.documentElement.style.setProperty('--color-border', '#2a0a0a');
+      document.documentElement.style.setProperty('--color-text-sub', '#444');
+      document.body.style.boxShadow = 'inset 0 0 120px rgba(227,27,35,.08)';
+    }
+    return () => {};
+  }, []);
+
+  const calcDist = (lat1,lng1,lat2,lng2) => {
+    const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
   };
 
   const saveLocation = () => {
     setDetecting(true);
     navigator.geolocation?.getCurrentPosition(
-      pos => {
-        setPrefs(p => ({...p, gymLocation: {lat: pos.coords.latitude, lng: pos.coords.longitude}}));
-        setDetecting(false);
-        setToast('📍 Localização da academia salva!');
-      },
+      pos => { setPrefs(p=>({...p,gymLocation:{lat:pos.coords.latitude,lng:pos.coords.longitude}})); setDetecting(false); setToast('📍 Local salvo!'); },
       () => { setDetecting(false); setToast('GPS não disponível'); }
     );
   };
 
-  const checkNearby = () => {
-    if (!prefs.gymLocation) { setToast('Salve a localização primeiro'); return; }
-    navigator.geolocation?.getCurrentPosition(pos => {
-      const R = 6371000;
-      const dLat = (pos.coords.latitude  - prefs.gymLocation.lat) * Math.PI / 180;
-      const dLng = (pos.coords.longitude - prefs.gymLocation.lng) * Math.PI / 180;
-      const a = Math.sin(dLat/2)**2 + Math.cos(prefs.gymLocation.lat*Math.PI/180) * Math.cos(pos.coords.latitude*Math.PI/180) * Math.sin(dLng/2)**2;
-      const dist = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-      if (dist < 200) { toggle(true); }
-      else { setToast(`Você está ${dist}m longe da academia`); }
-    }, () => setToast('GPS não disponível'));
-  };
+  // Auto-detect GPS
+  useEffect(() => {
+    if (!prefs.gymLocation || active) return;
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(pos => {
+      const dist = calcDist(pos.coords.latitude, pos.coords.longitude, prefs.gymLocation.lat, prefs.gymLocation.lng);
+      if (dist < 200) toggle(true);
+    }, () => {}, { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 });
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [prefs.gymLocation, active]);
 
-  const [wifiInput, setWifiInput] = useState(prefs.gymWifi||'');
-  const saveWifi = () => { setPrefs(p=>({...p, gymWifi:wifiInput})); setToast('Wi-Fi salvo!'); };
+  const saveWifi = () => { setPrefs(p=>({...p,gymWifi:wifiInput})); setToast('Wi-Fi salvo!'); };
+  const openPlaylist = (url) => window.open(url, '_blank');
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,color:'var(--color-text)'}}>
-          DARK<span style={{color:'var(--color-accent)'}}>GYM</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>Ativa timer de descanso automático · bloqueia tela · vibração · foco total</div>
-      </div>
 
-      {/* Toggle */}
-      <div style={{background:active?'rgba(227,27,35,.06)':'var(--color-card)',border:active?'1px solid rgba(227,27,35,.25)':'1px solid var(--color-border)',borderRadius:'14px',padding:'1.1rem',transition:'all .3s'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:active?'.85rem':'0'}}>
+      {/* MAIN TOGGLE — big and dramatic */}
+      <div style={{
+        background: active ? 'linear-gradient(135deg,rgba(227,27,35,.15),rgba(100,0,0,.1))' : 'rgba(255,255,255,.02)',
+        border: active ? '1px solid rgba(227,27,35,.4)' : '1px solid #1a1a1a',
+        borderRadius:'20px', padding:'1.5rem',
+        boxShadow: active ? '0 0 60px rgba(227,27,35,.15), inset 0 0 40px rgba(227,27,35,.05)' : 'none',
+        transition:'all .4s', position:'relative', overflow:'hidden'
+      }}>
+        {active && <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at center,rgba(227,27,35,.06) 0%,transparent 70%)',pointerEvents:'none'}}/>}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom: active ? '1.25rem' : 0}}>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',color:active?'var(--color-accent)':'var(--color-text)'}}>
-              {active ? '🏋️ Na academia' : 'Desligado'}
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1,letterSpacing:'.04em',color:'var(--color-text)'}}>
+              DARK<span style={{color:'var(--color-accent)'}}>GYM</span>
             </div>
-            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
-              {active ? 'Timer auto · tela ativa · vibração entre séries' : 'Ative ao chegar na academia'}
+            <div style={{fontSize:'.68rem',color:active?'rgba(227,27,35,.6)':'#333',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'3px',transition:'color .3s'}}>
+              {active ? '🔴 MODO ATIVO — APP NO MODO TREINO' : 'Modo foco total para academia'}
             </div>
           </div>
           <Switch checked={active} onChange={toggle}/>
         </div>
+
         {active && (
-          <button onClick={() => goto('session')} style={{width:'100%',background:'var(--color-accent)',border:'none',borderRadius:'9px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 20px rgba(227,27,35,.3)'}}>
-            Iniciar treino agora →
-          </button>
+          <div style={{display:'grid',gap:'.6rem'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem'}}>
+              {[
+                ['⏱','Timer auto','Entre séries'],
+                ['📺','Tela sempre ativa','WakeLock'],
+                ['🎨','Visual extremo','Modo escuro máximo'],
+                ['📳','Vibração','Entre séries'],
+              ].map(([icon,title,sub])=>(
+                <div key={title} style={{background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.12)',borderRadius:'10px',padding:'.6rem .75rem'}}>
+                  <div style={{fontSize:'1.1rem',marginBottom:'2px'}}>{icon}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',color:'#fff'}}>{title}</div>
+                  <div style={{fontSize:'.6rem',color:'#444'}}>{sub}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>goto('session')} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'12px',padding:'.9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 30px rgba(227,27,35,.4)',letterSpacing:'.06em'}}>
+              INICIAR TREINO →
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Ativação automática */}
-      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1rem 1.1rem',display:'grid',gap:'1rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'var(--color-text)'}}>Ativação automática</div>
-
-        {/* GPS */}
-        <div style={{display:'grid',gap:'.4rem'}}>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>📍 Por localização GPS</div>
-          <div style={{display:'flex',gap:'.5rem'}}>
-            <button onClick={saveLocation} disabled={detecting} style={{flex:1,background:'rgba(0,0,0,.2)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem',color:prefs.gymLocation?'#4ade80':'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>
-              {detecting ? 'Detectando...' : prefs.gymLocation ? '✓ Local salvo' : 'Salvar local atual'}
-            </button>
-            {prefs.gymLocation && (
-              <button onClick={checkNearby} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.55rem .9rem',color:'#fff',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>
-                Verificar
-              </button>
-            )}
-          </div>
-          <div style={{fontSize:'.62rem',color:'#444'}}>Ativa automaticamente se você estiver a menos de 200m</div>
+      {/* PLAYLISTS */}
+      <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'16px',padding:'1rem 1.1rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:'#4ade80',letterSpacing:'.06em',marginBottom:'.75rem'}}>
+          🎵 MÚSICA — Abre no Spotify
         </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem'}}>
+          {PLAYLISTS_GYM.map((pl,i)=>(
+            <button key={i} onClick={()=>openPlaylist(pl.url)} style={{background:'rgba(29,185,84,.06)',border:'1px solid rgba(29,185,84,.15)',borderRadius:'10px',padding:'.65rem .75rem',cursor:'pointer',textAlign:'left',display:'flex',gap:'.5rem',alignItems:'center'}}>
+              <span style={{fontSize:'1.2rem',flexShrink:0}}>{pl.emoji}</span>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',textTransform:'uppercase',color:'#fff'}}>{pl.name}</div>
+                <div style={{fontSize:'.58rem',color:'#1DB954'}}>Spotify ▶</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Wi-Fi */}
+      {/* AUTO ACTIVATION */}
+      <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'16px',padding:'1rem 1.1rem',display:'grid',gap:'.85rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.95rem',textTransform:'uppercase',color:'#555',letterSpacing:'.06em'}}>Ativação automática</div>
         <div style={{display:'grid',gap:'.4rem'}}>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.06em'}}>📶 Por nome do Wi-Fi</div>
+          <div style={{fontSize:'.62rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>📍 GPS — ativa ao chegar na academia</div>
           <div style={{display:'flex',gap:'.5rem'}}>
-            <input
-              placeholder="Nome da rede da academia..."
-              value={wifiInput}
-              onChange={e => setWifiInput(e.target.value)}
-              style={{flex:1,background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.82rem',color:'var(--color-text)'}}
-            />
+            <button onClick={saveLocation} disabled={detecting} style={{flex:1,background:prefs.gymLocation?'rgba(74,222,128,.06)':'rgba(255,255,255,.03)',border:prefs.gymLocation?'1px solid rgba(74,222,128,.2)':'1px solid #1a1a1a',borderRadius:'8px',padding:'.55rem',color:prefs.gymLocation?'#4ade80':'#555',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>
+              {detecting ? '...' : prefs.gymLocation ? '✓ Local salvo' : 'Salvar local atual'}
+            </button>
+          </div>
+        </div>
+        <div style={{display:'grid',gap:'.4rem'}}>
+          <div style={{fontSize:'.62rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em'}}>📶 Wi-Fi da academia</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input placeholder="Nome da rede..." value={wifiInput} onChange={e=>setWifiInput(e.target.value)}
+              style={{flex:1,background:'rgba(255,255,255,.03)',border:'1px solid #1a1a1a',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.82rem',color:'#fff'}}/>
             <button onClick={saveWifi} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem .85rem',color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer'}}>OK</button>
           </div>
-          <div style={{fontSize:'.62rem',color:'#444'}}>Detecção automática de Wi-Fi disponível apenas no app nativo</div>
         </div>
       </div>
     </div>
   );
 };
+
 
 
 const Viewer = ({planId, plans, goto}) => {
