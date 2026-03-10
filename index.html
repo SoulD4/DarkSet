@@ -3406,6 +3406,110 @@ const Community = ({history, setToast, prefs}) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // MODO ACADEMIA — V2
 // ═══════════════════════════════════════════════════════════════════════════
+// ── Playlist de Treino ───────────────────────────────────────────────────────
+const PLAYLISTS = [
+  {emoji:'🔥',name:'Push Day',desc:'Peito · Ombro · Tríceps',url:'spotify:playlist:37i9dQZF1DX76Wlfdnj7AP'},
+  {emoji:'💪',name:'Pull Day',desc:'Costas · Bíceps',url:'spotify:playlist:37i9dQZF1DXdxcBWuJkbcy'},
+  {emoji:'🦵',name:'Leg Day',desc:'Pernas · Glúteo',url:'spotify:playlist:37i9dQZF1DWZUtWMZbGSMS'},
+  {emoji:'⚡',name:'HIIT & Cardio',desc:'Alta intensidade',url:'spotify:playlist:37i9dQZF1DXaXB8fQg7xof'},
+  {emoji:'🏋️',name:'Full Body',desc:'Corpo todo',url:'spotify:playlist:37i9dQZF1DX6VdMW310YC7'},
+  {emoji:'🎯',name:'Foco Total',desc:'Sem letra · concentração',url:'spotify:playlist:37i9dQZF1DWZeKCadgRdKQ'},
+];
+
+const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
+  const [custom, setCustom]   = useState('');
+  const [label, setLabel]     = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+
+  const saved = prefs.playlists || [];
+
+  const savePlaylist = () => {
+    const url = custom.trim();
+    if (!url) return;
+    const name = label.trim() || 'Minha playlist';
+    const updated = [...saved, {name, url}];
+    setPrefs(p => ({...p, playlists: updated}));
+    setCustom(''); setLabel(''); setShowAdd(false);
+    setToast('Playlist salva!');
+  };
+
+  const removePlaylist = (i) => {
+    setPrefs(p => ({...p, playlists: saved.filter((_, idx) => idx !== i)}));
+    setToast('Playlist removida');
+  };
+
+  const open = (url) => {
+    // Try spotify deeplink first, fall back to web
+    const webUrl = url.startsWith('spotify:playlist:')
+      ? 'https://open.spotify.com/playlist/' + url.replace('spotify:playlist:','')
+      : url;
+    window.location.href = url;
+    setTimeout(() => window.open(webUrl, '_blank'), 800);
+  };
+
+  return (
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'#1DB954'}}>BEATS</span>
+          </div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>Abre direto no Spotify</div>
+        </div>
+        <button onClick={() => setShowAdd(s => !s)} style={{background:showAdd?'rgba(255,255,255,.08)':'#1DB954',border:'none',borderRadius:'8px',padding:'.45rem .9rem',color:'#fff',fontWeight:700,fontSize:'.78rem',cursor:'pointer',textTransform:'uppercase'}}>
+          {showAdd ? 'Cancelar' : '+ Adicionar'}
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem 1.1rem',display:'grid',gap:'.6rem'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Nova playlist</div>
+          <input placeholder="Nome (ex: Push Day...)" value={label} onChange={e=>setLabel(e.target.value)}
+            style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+          <input placeholder="Link do Spotify..." value={custom} onChange={e=>setCustom(e.target.value)}
+            style={{background:'rgba(0,0,0,.25)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .75rem',fontSize:'.85rem',color:'var(--color-text)'}}/>
+          <button onClick={savePlaylist} style={{background:'#1DB954',border:'none',borderRadius:'8px',padding:'.6rem',color:'#fff',fontWeight:700,fontSize:'.85rem',cursor:'pointer',textTransform:'uppercase'}}>
+            Salvar playlist
+          </button>
+        </div>
+      )}
+
+      {saved.length > 0 && (
+        <div style={{display:'grid',gap:'.5rem'}}>
+          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Suas playlists</div>
+          {saved.map((pl, i) => (
+            <div key={i} style={{background:'rgba(29,185,84,.07)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+              <button onClick={() => open(pl.url)} style={{flex:1,background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem',padding:0}}>
+                <span style={{fontSize:'1.4rem'}}>⭐</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{pl.name}</div>
+                  <div style={{fontSize:'.65rem',color:'#1DB954',marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pl.url}</div>
+                </div>
+                <span style={{color:'#1DB954',fontSize:'1.2rem',flexShrink:0}}>▶</span>
+              </button>
+              <button onClick={() => removePlaylist(i)} style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'6px',padding:'.3rem .55rem',color:'#555',fontSize:'.8rem',cursor:'pointer',flexShrink:0}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{display:'grid',gap:'.5rem'}}>
+        <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Playlists sugeridas</div>
+        {PLAYLISTS.map((pl, i) => (
+          <button key={i} onClick={() => open(pl.url)} style={{background:'rgba(255,255,255,.03)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+            <div style={{width:'38px',height:'38px',borderRadius:'8px',background:'rgba(29,185,84,.12)',border:'1px solid rgba(29,185,84,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>{pl.emoji}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:'.85rem',color:'var(--color-text)'}}>{pl.name}</div>
+              <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>{pl.desc}</div>
+            </div>
+            <span style={{color:'#1DB954',fontSize:'1rem',flexShrink:0}}>▶</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const GymMode = ({prefs, setPrefs, setToast, goto}) => {
   const active = !!prefs.gymMode;
   const [detecting, setDetecting] = useState(false);
@@ -8818,9 +8922,9 @@ function App(){
       {authed && screen==="profile" && <ScreenErrorBoundary><Profile prefs={prefs} setPrefs={setPrefs} history={history} setToast={setToast}/></ScreenErrorBoundary>}
 
 
+      {authed && screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
+      {authed && screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
-      {screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
-      {screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
       {paywallFeature ? <PaywallModal feature={paywallFeature} onClose={function(){ setPaywallFeature(null); }} onTrial={function(){ startDSTrial(); setPlanState(getDSPlan()); setPaywallFeature(null); setToast('✨ Trial Elite ativo por 7 dias!'); }} trialUsed={trialUsed}/> : null}
 
