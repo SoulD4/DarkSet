@@ -6153,7 +6153,11 @@ const NIVEIS = [
 
 const FEATURED_SELO_KEY = 'ds.featuredSelo';
 
-const DarkSelos = ({history, prefs, cardioCount}) => {
+const DarkSelos = ({history, prefs}) => {
+  // Read cardioCount from localStorage reactively (updates when history changes)
+  const cardioCount = React.useMemo(() => {
+    return parseInt(localStorage.getItem('ds.cardioCount') || '0');
+  }, [history]); // re-read whenever history changes (unlock button sets both)
   const unlocked = useMemo(() => {
     const set = new Set();
     SELOS.forEach(s => { if(s.check(history, prefs, cardioCount)) set.add(s.id); });
@@ -7979,36 +7983,69 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
             </div>
             <button onClick={function(){
               try {
-                // Build big fake history (800 days, rich entries for all selo checks)
-                var fakeHistory = {};
                 var now = new Date();
-                var exNames = ['Supino Reto','Agachamento','Levantamento Terra','Rosca Direta','Desenvolvimento','Remada Curvada','Leg Press','Puxada Frontal','Tríceps Corda','Panturrilha','Abdominais','Bíceps Barra','Crucifixo','Hack Squat','Stiff'];
-                for(var i=0;i<800;i++){
+                var fakeHistory = {};
+                // 30 distinct exercise names for countUniqueEx >= 80... we need 80 unique
+                var exNames = [
+                  'Supino Reto','Supino Inclinado','Supino Declinado','Crucifixo','Peck Deck',
+                  'Agachamento','Leg Press','Hack Squat','Cadeira Extensora','Cadeira Flexora',
+                  'Levantamento Terra','Stiff','Mesa Flexora','Glúteo Máquina','Abdução',
+                  'Desenvolvimento','Elevação Lateral','Elevação Frontal','Encolhimento','Remada Curvada',
+                  'Remada Unilateral','Puxada Frontal','Puxada Pegada Fechada','Serrátil','Pull Over',
+                  'Rosca Direta','Rosca Scott','Rosca Alternada','Rosca Concentrada','Rosca Martelo',
+                  'Tríceps Corda','Tríceps Testa','Tríceps Mergulho','Tríceps Francês','Tríceps Polia',
+                  'Panturrilha Em Pé','Panturrilha Sentado','Abdominais','Prancha','Oblíquo',
+                  'Agachamento Búlgaro','Avanço','Afundo','Glúteo Quatro Apoios','Hiperextensão',
+                  'Rosca Inversa','Barra Fixa','Paralela','Flexão','Burpee',
+                  'Kettlebell Swing','Clean','Push Press','Snatch','Thruster',
+                  'Face Pull','Voador','Crucifixo Inverso','Rotação Externa','Band Pull Apart',
+                  'Farmer Walk','Carregada','Argola','TRX Remada','Corda Battle',
+                  'Polichinelo','Mountain Climber','Jump Squat','Box Jump','Step Up',
+                  'Barra Guiada Supino','Barra Guiada Agachamento','Smith Desenvolvimento','Polia Alta','Polia Baixa',
+                  'Hack Machine','Prensa 45','Cadeira Adutora','Mesa Extensora','Leg Curl Deitado',
+                  'Plank com Rotação','Russian Twist','Bicycle Crunch','Hollow Body','Dragon Flag',
+                ];
+                // Build 800 days of history
+                // Strategy: each exercise gets a new PR every 2 days → 8 exs × 400 cycles = 3200 PRs
+                // Early workouts: first 10 days at 5am
+                for(var i=0; i<800; i++){
                   var d=new Date(now); d.setDate(now.getDate()-i);
                   var dk=d.toISOString().slice(0,10);
-                  fakeHistory[dk]={
-                    date:dk,
-                    startTime:new Date(d.getFullYear(),d.getMonth(),d.getDate(),6,0).toISOString(),
-                    entries:exNames.map(function(name,ei){
-                      return {name:name, sets:[{w:String(80+ei*5),r:'10'},{w:String(85+ei*5),r:'8'},{w:String(90+ei*5),r:'6'}]};
+                  var hour = i < 10 ? 5 : 7;
+                  var dayExs = [];
+                  for(var e=0;e<8;e++) dayExs.push(exNames[(i*8+e) % exNames.length]);
+                  var prog = 800 - i; // i=0=today=highest weight, i=799=oldest=lowest → PRs accumulate forward in time
+                  fakeHistory[dk] = {
+                    date: dk,
+                    startTime: new Date(d.getFullYear(),d.getMonth(),d.getDate(),hour,0).toISOString(),
+                    entries: dayExs.map(function(name, ei){
+                      var base = 40 + ei*5;
+                      var w1 = base + prog * 0.5;
+                      var w2 = w1 + 0.5;
+                      return {name:name, sets:[
+                        {w:String(w1.toFixed(1)),r:'10'},
+                        {w:String(w2.toFixed(1)),r:'8'},
+                        {w:String((w2+0.5).toFixed(1)),r:'6'}
+                      ]};
                     })
                   };
                 }
-                // Also set cardio entries
-                var fakeCardio = [];
-                for(var c=0;c<60;c++) fakeCardio.push({date:new Date(Date.now()-c*86400000).toISOString().slice(0,10),type:'Corrida',duration:30});
-                // Persist to localStorage keys the app reads
-                localStorage.setItem('darkset.v3.history', JSON.stringify(fakeHistory));
-                localStorage.setItem('ds.planData', JSON.stringify({tier:'darkgod',purchasedAt:Date.now()}));
-                localStorage.setItem('ds.squadWins','24');
+                // trainDays = all 7 days to guarantee hasPerfectWeek
+                var fakePrefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
+                fakePrefs.trainDays = [0,1,2,3,4,5,6];
+                localStorage.setItem('darkset.v3.prefs', JSON.stringify(fakePrefs));
+                if(window._DS_SETTERS && window._DS_SETTERS.prefs) window._DS_SETTERS.prefs(fakePrefs);
+                // Cardio
                 localStorage.setItem('ds.cardioCount','60');
-                localStorage.setItem('ds.darkCardio', JSON.stringify(fakeCardio));
-                // Update React state via DS_SETTERS
-                if(window._DS_SETTERS){
-                  if(window._DS_SETTERS.history) window._DS_SETTERS.history(fakeHistory);
-                  if(window._DS_SETTERS.planData) window._DS_SETTERS.planData({tier:'darkgod',purchasedAt:Date.now()});
-                }
-                setToast('✅ Selos desbloqueados! Vai em DarkSelos.');
+                // Squad wins
+                localStorage.setItem('ds.squadWins','24');
+                // planData darkgod
+                localStorage.setItem('ds.planData', JSON.stringify({tier:'darkgod',purchasedAt:Date.now()}));
+                if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData({tier:'darkgod',purchasedAt:Date.now()});
+                // History — save AFTER prefs so calcStreak uses correct trainDays
+                localStorage.setItem('darkset.v3.history', JSON.stringify(fakeHistory));
+                if(window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(fakeHistory);
+                setToast('✅ Todos os selos desbloqueados! Vai em DarkSelos.');
               } catch(e){ setToast('Erro: '+e.message); }
             }} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.06em'}}>
               🔓 DESBLOQUEAR TODOS OS SELOS
@@ -9952,7 +9989,7 @@ function App(){
       {authed && screen==="history" && <History history={history} setHistory={setHistory} prefs={prefs}/>}
       {authed && screen==="cardio" && <Cardio goto={goto} setToast={setToast}/>}
       {authed && screen==="community" && <Community history={history} setToast={setToast} prefs={prefs} onVictory={setSquadVictoryAnim}/>}
-      {authed && screen==="selos"     && <DarkSelos history={history} prefs={prefs} cardioCount={parseInt(localStorage.getItem("ds.cardioCount")||"0")}/>}
+      {authed && screen==="selos"     && <DarkSelos history={history} prefs={prefs}/>}
       {authed && screen==="diet"   && <Diet setToast={setToast}/>}
       {authed && screen==="measures" && <Measures setToast={setToast}/>}
       {authed && screen==="viewer" && <Viewer planId={(viewerPlanId||(plans.activeId||plans.list[0]?.id))} plans={plans} goto={goto}/>}
