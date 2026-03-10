@@ -1384,7 +1384,7 @@ function usePlans(){
 }
 function useHistory(){
   const [history,setHistoryState]=useState(()=>load(LS.history,{}));
-  useEffect(()=>{ window._DS_SETTERS.history=setHistoryState; return ()=>{window._DS_SETTERS.history=null;}; },[]);
+  useEffect(()=>{ window._DS_SETTERS.history=setHistory; return ()=>{window._DS_SETTERS.history=null;}; },[]);
   const setHistory=(v)=>setHistoryState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.history,next);
@@ -1395,7 +1395,7 @@ function useHistory(){
 }
 function usePrefs(){
   const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
-  useEffect(()=>{ window._DS_SETTERS.prefs=setPrefsState; return ()=>{window._DS_SETTERS.prefs=null;}; },[]);
+  useEffect(()=>{ window._DS_SETTERS.prefs=setPrefs; return ()=>{window._DS_SETTERS.prefs=null;}; },[]);
   const setPrefs=(v)=>setPrefsState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.prefs,next);
@@ -6073,7 +6073,14 @@ const SELOS = [
 
 function calcStreak(history, prefs) {
   const today = new Date();
-  const trainDays = prefs?.trainDays || [1,2,3,4,5,6];
+  // Always read trainDays fresh from localStorage to avoid stale React state
+  let trainDays;
+  try {
+    const stored = JSON.parse(localStorage.getItem('darkset.v3.prefs') || '{}');
+    trainDays = stored.trainDays || prefs?.trainDays || [1,2,3,4,5,6];
+  } catch(_) {
+    trainDays = prefs?.trainDays || [1,2,3,4,5,6];
+  }
   let s = 0;
   const d = new Date(today);
   const todayKey = today.toISOString().slice(0,10);
