@@ -18,7 +18,7 @@ messaging.onBackgroundMessage(function(payload) {
   const notificationTitle = payload.notification?.title || '⏱ Descanso finalizado!';
   const notificationOptions = {
     body: payload.notification?.body || 'Hora da próxima série! 💪',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjM2IiBmaWxsPSIjMGQwZDBkIi8+PHRleHQgeD0iOTYiIHk9IjE0NCIgZm9udC1mYW1pbHk9IkltcGFjdCxBcmlhbCBOYXJyb3csc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNlMzFiMjMiPkRTPC90ZXh0Pjwvc3ZnPg==',
+    icon: './icons/icon-192.png',
     badge: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PHRleHQgeD0iNDgiIHk9Ijc0IiBmb250LWZhbWlseT0iSW1wYWN0LEFyaWFsIE5hcnJvdyxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjcyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSI+RFM8L3RleHQ+PC9zdmc+',
     tag: 'darkset-rest',
     renotify: true,
