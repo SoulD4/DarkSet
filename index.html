@@ -2021,10 +2021,11 @@ const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
   const thisWeekEntries=entries.filter(([iso])=>iso>=weekStartStr);
   const thisWeek=thisWeekEntries.length;
 
-  // Streak inteligente — dias de descanso programados não quebram
-  // Lê trainDays direto do localStorage para sempre ter valor atualizado
+  // Streak — suporta override do admin (ds.streakOverride)
   const trainDays = (()=>{ try{ return JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}').trainDays || prefs.trainDays || [1,2,3,4,5,6]; }catch(_){ return prefs.trainDays||[1,2,3,4,5,6]; } })();
   const streak=(()=>{
+    const ov = parseInt(localStorage.getItem('ds.streakOverride')||'0');
+    if(ov>0) return ov;
     let s=0;
     const d=new Date(today);
     const todayKey=today.toISOString().slice(0,10);
@@ -6072,8 +6073,9 @@ const SELOS = [
 ];
 
 function calcStreak(history, prefs) {
+  const ov = parseInt(localStorage.getItem('ds.streakOverride')||'0');
+  if (ov > 0) return ov;
   const today = new Date();
-  // Always read trainDays fresh from localStorage to avoid stale React state
   let trainDays;
   try {
     const stored = JSON.parse(localStorage.getItem('darkset.v3.prefs') || '{}');
@@ -7550,36 +7552,15 @@ const StreakEditor = ({setToast}) => {
   const apply = function() {
     try {
       var days = parseInt(streakDays) || 30;
-      var existing = {};
-      try { existing = JSON.parse(localStorage.getItem('darkset.v3.history') || '{}'); } catch(_) {}
-      var now = new Date();
-      // Fill ALL days in range — preserve existing startTime (keeps early workout entries intact)
-      for (var i = 0; i < days; i++) {
-        var d = new Date(now); d.setDate(now.getDate() - i);
-        var dk = d.toISOString().slice(0, 10);
-        if (existing[dk]) {
-          // Day exists — keep it as-is (preserves 5am entries for "Enquanto o Mundo Dorme")
-          // Just ensure it has entries so streak counts it
-          if (!existing[dk].entries || !existing[dk].entries.length) {
-            existing[dk].entries = [{name:'Supino Reto', sets:[{w:'80', r:'10'}]}];
-          }
-        } else {
-          existing[dk] = {
-            date: dk,
-            startTime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 7, 0).toISOString(),
-            entries: [{name:'Supino Reto', sets:[{w:'80', r:'10'},{w:'85', r:'8'}]}]
-          };
-        }
+      // Salva override — Home e calcStreak leem isso diretamente
+      localStorage.setItem('ds.streakOverride', String(days));
+      // Força re-render da Home via history setter (toca o state sem mudar dados)
+      if (window._DS_SETTERS && window._DS_SETTERS.history) {
+        var existing = {};
+        try { existing = JSON.parse(localStorage.getItem('darkset.v3.history') || '{}'); } catch(_) {}
+        window._DS_SETTERS.history({...existing});
       }
-      // Set trainDays = all 7 so calcStreak doesn't skip any day
-      var prefs = {};
-      try { prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs') || '{}'); } catch(_) {}
-      prefs.trainDays = [0,1,2,3,4,5,6];
-      localStorage.setItem('darkset.v3.prefs', JSON.stringify(prefs));
-      if (window._DS_SETTERS && window._DS_SETTERS.prefs) window._DS_SETTERS.prefs(prefs);
-      localStorage.setItem('darkset.v3.history', JSON.stringify(existing));
-      if (window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(existing);
-      setToast('✅ Streak de ' + days + ' dias aplicado!');
+      setToast('✅ Streak definido para ' + days + ' dias!');
     } catch(e) { setToast('Erro: ' + e.message); }
   };
   return (
