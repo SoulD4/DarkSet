@@ -1529,7 +1529,7 @@ const PreviewBox=({label="Execução do exercício", onClick, disabled})=>{
 // DARKSET ANIMATIONS — cinematic overlays
 // ══════════════════════════════════════════════════════════════════════════════
 const OWNER_UID = '3bZqslCsHxQIugjq9Tfd758hpu12';
-const NOTIF_ICON  = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIiB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiI+CiAgPHJlY3Qgd2lkdGg9IjE5MiIgaGVpZ2h0PSIxOTIiIHJ4PSIzNiIgZmlsbD0iIzBkMGQwZCIvPgogIDx0ZXh0IHg9Ijk2IiB5PSIxNDQiIGZvbnQtZmFtaWx5PSJJbXBhY3QsQXJpYWwgTmFycm93LHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZTMxYjIzIj5EUzwvdGV4dD4KPC9zdmc+';
+const NOTIF_ICON  = './icons/icon-192.png';
 const NOTIF_BADGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiIgd2lkdGg9Ijk2IiBoZWlnaHQ9Ijk2Ij4KICA8dGV4dCB4PSI0OCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJJbXBhY3QsQXJpYWwgTmFycm93LHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iNzIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIj5EUzwvdGV4dD4KPC9zdmc+';
 const isOwner = () => { try { return JSON.parse(localStorage.getItem('darkset.user'))?.uid === OWNER_UID; } catch(_) { return false; } };
 
@@ -3884,7 +3884,7 @@ const Community = ({history, setToast, prefs, onVictory}) => {
       {isOwner() && (
         <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
           <DemoBtn label="Demo check-in" color="#4ade80" onClick={()=>{ if(typeof window._demoCheckin==='function') window._demoCheckin(); }}/>
-          <DemoBtn label="Demo vitória squad" color="#facc15" onClick={()=>{ if(typeof window._demoSelo==='function') window._demoSelo('squad_win_12'); }}/>
+          <DemoBtn label="Demo vitória squad" color="#facc15" onClick={()=>{ if(typeof window._demoVictory==='function') window._demoVictory(12); }}/>
         </div>
       )}
 
@@ -6136,14 +6136,12 @@ function hasPerfectWeek(history, prefs) {
 const catLabel = {assiduidade:'⛓️ Assiduidade', volume:'⚖️ Volume', forca:'💥 Força', diversidade:'🗺️ Diversidade', dedicacao:'📅 Dedicação', squad:'⚔️ Squad', especial:'⚡ Especial'};
 
 const NIVEIS = [
-  {id:'cinza',     label:'Cinza',     icon:'⚪', minSelos:0,  color:'#555',   desc:'Todo ferro começa aqui'},
-  {id:'ferro',     label:'Ferro',     icon:'⬛', minSelos:2,  color:'#777',   desc:'O peso começou a fazer sentido'},
-  {id:'bronze',    label:'Bronze',    icon:'🟤', minSelos:5,  color:'#cd7f32',desc:'Você é consistente'},
-  {id:'prata',     label:'Prata',     icon:'⬜', minSelos:9,  color:'#c0c0c0',desc:'Disciplina acima da média'},
-  {id:'ouro',      label:'Ouro',      icon:'🟡', minSelos:13, color:'#facc15',desc:'Poucos chegam aqui'},
-  {id:'platina',   label:'Platina',   icon:'🔵', minSelos:16, color:'#38bdf8',desc:'Elite'},
-  {id:'obsidiana', label:'Obsidiana', icon:'🖤', minSelos:20, color:'#e31b23',desc:'Você não é humano'},
-  {id:'darkgod',   label:'DarkGod',   icon:'💀', minSelos:24, color:'linear-gradient(90deg,#e31b23,#facc15)',desc:'Lenda viva. Apenas existir é suficiente'},
+  {id:'cinza',     label:'Cinza',     icon:'⚪', minSelos:0,  color:'#555',                                   desc:'Todo ferro começa aqui'},
+  {id:'ferro',     label:'Ferro',     icon:'⬛', minSelos:10, color:'#777',                                   desc:'O peso começou a fazer sentido'},
+  {id:'bronze',    label:'Bronze',    icon:'🟤', minSelos:15, color:'#cd7f32',                                desc:'Você é consistente'},
+  {id:'prata',     label:'Prata',     icon:'⬜', minSelos:20, color:'#c0c0c0',                                desc:'Disciplina acima da média'},
+  {id:'ouro',      label:'Ouro',      icon:'🟡', minSelos:25, color:'#facc15',                                desc:'Poucos chegam aqui'},
+  {id:'darkgod',   label:'DarkGod',   icon:'💀', minSelos:30, color:'linear-gradient(90deg,#e31b23,#facc15)', desc:'Todos os selos. Lenda absoluta'},
 ];
 
 const FEATURED_SELO_KEY = 'ds.featuredSelo';
@@ -7996,6 +7994,49 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
           </div>
 
           <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #1a1a1a',borderRadius:'14px',padding:'1.1rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#ff8844',marginBottom:'.75rem'}}>🔥 Editar Streak</div>
+            <div style={{fontSize:'.72rem',color:'#555',marginBottom:'1rem',lineHeight:1.5}}>
+              Adiciona dias de treino no histórico para forçar o streak que quiser.
+            </div>
+            {(function(){
+              var [streakDays, setStreakDays] = React.useState('30');
+              return (
+                <div style={{display:'flex',gap:'.5rem',alignItems:'center'}}>
+                  <input
+                    type="number" min="1" max="800"
+                    value={streakDays}
+                    onChange={function(e){ setStreakDays(e.target.value); }}
+                    style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,136,68,.3)',borderRadius:'8px',padding:'.6rem .8rem',color:'#fff',fontSize:'1.1rem',fontWeight:700,outline:'none',textAlign:'center'}}
+                  />
+                  <span style={{color:'#555',fontSize:'.75rem',flexShrink:0}}>dias</span>
+                  <button onClick={function(){
+                    try {
+                      var days = parseInt(streakDays)||30;
+                      var existing = {};
+                      try { existing = JSON.parse(localStorage.getItem('darkset.v3.history')||'{}'); } catch(_){}
+                      var now = new Date();
+                      for(var i=0; i<days; i++){
+                        var d = new Date(now); d.setDate(now.getDate()-i);
+                        var dk = d.toISOString().slice(0,10);
+                        if(!existing[dk]) existing[dk] = {
+                          date:dk,
+                          startTime:new Date(d.getFullYear(),d.getMonth(),d.getDate(),7,0).toISOString(),
+                          entries:[{name:'Treino',sets:[{w:'80',r:'10'}]}]
+                        };
+                      }
+                      localStorage.setItem('darkset.v3.history', JSON.stringify(existing));
+                      if(window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(existing);
+                      setToast('✅ Streak de '+days+' dias aplicado!');
+                    } catch(e){ setToast('Erro: '+e.message); }
+                  }} style={{flexShrink:0,background:'linear-gradient(135deg,#ff6600,#cc3300)',border:'none',borderRadius:'8px',padding:'.6rem 1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.04em'}}>
+                    APLICAR
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #1a1a1a',borderRadius:'14px',padding:'1.1rem'}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.75rem'}}>🏅 Demo por Selo Específico</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem',maxHeight:'300px',overflowY:'auto'}}>
               {selos.map(function(s){
@@ -9669,6 +9710,7 @@ function App(){
     window._demoCheckin = ()=>setCheckinAnim({name:'DarkAtleta',avatar:null});
     window._demoPR      = ()=>setPrCelebration({exName:'Supino Reto',weight:'142.5'});
     window._demoGym     = ()=>setGymAnim(true);
+    window._demoVictory = (w)=>setSquadVictoryAnim(w||12);
     return ()=>{ ['_demoSelo','_demoStreak','_demoCheckin','_demoPR','_demoGym'].forEach(k=>delete window[k]); };
   },[]);
   const [showOnboarding,setShowOnboarding]=useState(()=>{
@@ -9771,6 +9813,12 @@ function App(){
         </header>
         <AdminPanel setToast={setToast} demoTriggers={{selo:setSeloAnim,streak:setStreakAnim,checkin:setCheckinAnim,pr:setPrCelebration,gym:setGymAnim,victory:setSquadVictoryAnim}} selos={SELOS} seloImgs={SELO_IMGS}/>
         {toast && <Toast text={toast}/>}
+        {prCelebration    && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
+        {seloAnim         && <SeloUnlockAnim selo={seloAnim}              onClose={()=>setSeloAnim(null)}/>}
+        {streakAnim       && <StreakAnim     days={streakAnim}            onClose={()=>setStreakAnim(null)}/>}
+        {checkinAnim      && <SquadCheckinAnim name={checkinAnim.name} avatar={checkinAnim.avatar} onClose={()=>setCheckinAnim(null)}/>}
+        {gymAnim          && <DarkGymAnim                                onClose={()=>setGymAnim(false)}/>}
+        {squadVictoryAnim && <SquadVictoryAnim wins={squadVictoryAnim}   onClose={()=>setSquadVictoryAnim(null)}/>}
       </div>
     );
   }
