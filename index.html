@@ -2022,20 +2022,20 @@ const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
   const thisWeek=thisWeekEntries.length;
 
   // Streak inteligente — dias de descanso programados não quebram
-  const trainDays = prefs.trainDays || [1,2,3,4,5,6]; // 0=dom,1=seg,...,6=sab
+  // Lê trainDays direto do localStorage para sempre ter valor atualizado
+  const trainDays = (()=>{ try{ return JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}').trainDays || prefs.trainDays || [1,2,3,4,5,6]; }catch(_){ return prefs.trainDays||[1,2,3,4,5,6]; } })();
   const streak=(()=>{
     let s=0;
     const d=new Date(today);
-    // Se hoje é dia de treino e não treinou ainda, começa de ontem
     const todayKey=today.toISOString().slice(0,10);
     const todayIsTrainDay=trainDays.includes(today.getDay());
     if(todayIsTrainDay && !history[todayKey]) d.setDate(d.getDate()-1);
-    for(let tries=0;tries<90;tries++){
+    for(let tries=0;tries<800;tries++){
       const k=d.toISOString().slice(0,10);
       const isTrainDay=trainDays.includes(d.getDay());
-      if(!isTrainDay){ d.setDate(d.getDate()-1); continue; } // pula dia de descanso
+      if(!isTrainDay){ d.setDate(d.getDate()-1); continue; }
       if(history[k]){ s++; d.setDate(d.getDate()-1); }
-      else break; // dia de treino sem registro = streak quebrado
+      else break;
     }
     return s;
   })();
@@ -7553,15 +7553,23 @@ const StreakEditor = ({setToast}) => {
       var existing = {};
       try { existing = JSON.parse(localStorage.getItem('darkset.v3.history') || '{}'); } catch(_) {}
       var now = new Date();
-      // Fill ALL days in range (no gaps = valid streak)
+      // Fill ALL days in range — preserve existing startTime (keeps early workout entries intact)
       for (var i = 0; i < days; i++) {
         var d = new Date(now); d.setDate(now.getDate() - i);
         var dk = d.toISOString().slice(0, 10);
-        existing[dk] = {
-          date: dk,
-          startTime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 7, 0).toISOString(),
-          entries: [{name:'Supino Reto', sets:[{w:'80', r:'10'},{w:'85', r:'8'}]}]
-        };
+        if (existing[dk]) {
+          // Day exists — keep it as-is (preserves 5am entries for "Enquanto o Mundo Dorme")
+          // Just ensure it has entries so streak counts it
+          if (!existing[dk].entries || !existing[dk].entries.length) {
+            existing[dk].entries = [{name:'Supino Reto', sets:[{w:'80', r:'10'}]}];
+          }
+        } else {
+          existing[dk] = {
+            date: dk,
+            startTime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 7, 0).toISOString(),
+            entries: [{name:'Supino Reto', sets:[{w:'80', r:'10'},{w:'85', r:'8'}]}]
+          };
+        }
       }
       // Set trainDays = all 7 so calcStreak doesn't skip any day
       var prefs = {};
