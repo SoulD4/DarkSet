@@ -3024,16 +3024,20 @@ const Community = ({history, setToast, prefs}) => {
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('squad');
     if (inviteCode && !squad && db()) {
+      // Navigate to squad tab immediately so user lands there
+      if (typeof window._gotoSquad === 'function') window._gotoSquad();
       db().collection('squads').doc(inviteCode.toUpperCase()).get().then(doc => {
         if (doc.exists) {
           const data = doc.data();
           doc.ref.collection('members').get().then(membSnap => {
             setJoinPreview({ code: inviteCode.toUpperCase(), name: data.name, memberCount: membSnap.size, pass: data.pass });
+            // Navigate to squad tab after preview is ready
+            if (typeof window._gotoSquad === 'function') window._gotoSquad();
           });
         }
       }).catch(() => {});
     }
-  }, []);
+  }, [squad, db()]);
 
   const waitForDb = () => new Promise((res, rej) => {
     let n = 0;
@@ -3158,6 +3162,7 @@ const Community = ({history, setToast, prefs}) => {
   // Win counter from Firestore: squads/{code}/wins/{uid} → { uid, name, avatar, wins: [] }
   const [winsMap, setWinsMap] = useState({}); // uid → count
   const [winsUnsub, setWinsUnsub] = useState(null);
+  const [featuredSelosMap, setFeaturedSelosMap] = useState({}); // uid → seloId
 
   useEffect(() => {
     if (!squad?.code || !db()) return;
@@ -3172,6 +3177,23 @@ const Community = ({history, setToast, prefs}) => {
       }
     }, () => {});
     setWinsUnsub(() => unsub);
+    // Load featured selos for all members
+    const loadFeaturedSelos = async () => {
+      try {
+        const membSnap = await squadRef(squad.code).collection('members').get();
+        const featMap = {};
+        await Promise.all(membSnap.docs.map(async d => {
+          const membUid = d.data().uid;
+          if (!membUid) return;
+          try {
+            const prof = await window._db.collection('users').doc(membUid).collection('data').doc('profile').get();
+            if (prof.exists && prof.data().featuredSelo) featMap[membUid] = prof.data().featuredSelo;
+          } catch(_) {}
+        }));
+        setFeaturedSelosMap(featMap);
+      } catch(_) {}
+    };
+    loadFeaturedSelos();
     return () => unsub();
   }, [squad?.code]);
 
@@ -3449,6 +3471,11 @@ const Community = ({history, setToast, prefs}) => {
                       <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:isMe?'var(--color-accent)':i===0?'#facc15':'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}{isMe?' ◀':''}</div>
                         {topSelo && <span style={{fontSize:'.7rem',background:'rgba(255,255,255,.06)',border:'1px solid #1e1e1e',borderRadius:'999px',padding:'1px 6px',color:topSelo.color,whiteSpace:'nowrap',flexShrink:0}}>{topSelo.icon} {myWins}×</span>}
+                        {featuredSelosMap[m.uid] && SELO_IMGS[featuredSelosMap[m.uid]] && (
+                          <img src={SELO_IMGS[featuredSelosMap[m.uid]]} width={22} height={22}
+                            title={SELOS.find(s=>s.id===featuredSelosMap[m.uid])?.title||''}
+                            style={{flexShrink:0,filter:'drop-shadow(0 0 3px rgba(255,200,0,.4))'}}/>
+                        )}
                       </div>
                       <div style={{fontSize:'.65rem',color:'#444',marginTop:'1px'}}>
                         <span style={{color:m.workouts>0?'#aaa':'#333',fontWeight:m.workouts>0?700:400}}>{m.workouts} treino{m.workouts!==1?'s':''}</span>
@@ -3517,7 +3544,14 @@ const Community = ({history, setToast, prefs}) => {
             <div key={m.uid||i} style={{display:'flex',alignItems:'center',gap:'.75rem',background:'rgba(255,255,255,.02)',border:m.uid===uid?accentBorder:'1px solid #131313',borderRadius:'12px',padding:'.75rem 1rem'}}>
               <Avatar src={m.avatar} name={m.name} size={38}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:m.uid===uid?'var(--color-accent)':'#fff'}}>{m.name}{m.uid===uid?' (você)':''}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:m.uid===uid?'var(--color-accent)':'#fff'}}>{m.name}{m.uid===uid?' (você)':''}</div>
+                  {featuredSelosMap[m.uid] && SELO_IMGS[featuredSelosMap[m.uid]] && (
+                    <img src={SELO_IMGS[featuredSelosMap[m.uid]]} width={28} height={28}
+                      title={SELOS.find(s=>s.id===featuredSelosMap[m.uid])?.title||''}
+                      style={{flexShrink:0,filter:'drop-shadow(0 0 4px rgba(255,200,0,.4))'}}/>
+                  )}
+                </div>
                 <div style={{fontSize:'.65rem',color:'#444',marginTop:'1px'}}>{m.role==='admin'?'👑 Fundador':'Membro'}</div>
                 {mWins>0&&(
                   <div style={{display:'flex',gap:'.3rem',marginTop:'.35rem',flexWrap:'wrap'}}>
@@ -5590,6 +5624,8 @@ const NIVEIS = [
   {id:'darkgod',   label:'DarkGod',   icon:'💀', minSelos:24, color:'linear-gradient(90deg,#e31b23,#facc15)',desc:'Lenda viva. Apenas existir é suficiente'},
 ];
 
+const FEATURED_SELO_KEY = 'ds.featuredSelo';
+
 const DarkSelos = ({history, prefs, cardioCount}) => {
   const unlocked = useMemo(() => {
     const set = new Set();
@@ -5605,19 +5641,59 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
     ? Math.round((unlocked.size - currentLevel.minSelos) / (nextLevel.minSelos - currentLevel.minSelos) * 100)
     : 100;
 
-  const SeloImg = ({id, size=56, locked}) => {
+  const [featured, setFeatured] = React.useState(() => {
+    try { return localStorage.getItem(FEATURED_SELO_KEY)||null; } catch(_){return null;}
+  });
+  const [pickingFeatured, setPickingFeatured] = React.useState(false);
+
+  const setFeaturedSelo = (id) => {
+    setFeatured(id);
+    try { localStorage.setItem(FEATURED_SELO_KEY, id); } catch(_){}
+    setPickingFeatured(false);
+    // Persist to Firestore profile if logged in
+    try {
+      const uid = window._auth?.currentUser?.uid;
+      if(uid && window._db) window._db.collection('users').doc(uid).collection('data').doc('profile').set({featuredSelo:id},{merge:true});
+    } catch(_){}
+  };
+
+  const SeloImg = ({id, size=80, locked, featured:isFeat}) => {
     const src = SELO_IMGS[id];
-    if (!src) return <div style={{width:size,height:size,borderRadius:'50%',background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',flexShrink:0}}/>;
-    return <img src={src} width={size} height={size}
-      style={{flexShrink:0,filter:locked?'grayscale(100%) brightness(0.3)':'drop-shadow(0 0 6px rgba(255,255,255,.15))',transition:'filter .3s'}}
-      alt={id}/>;
+    if (!src) return (
+      <div style={{width:size,height:size,borderRadius:'50%',background:'rgba(255,255,255,.03)',
+        border:'1px solid #1a1a1a',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{fontSize:size*.28,color:'#222'}}>?</div>
+      </div>
+    );
+    return (
+      <div style={{position:'relative',flexShrink:0,width:size,height:size}}>
+        <img src={src} width={size} height={size}
+          style={{
+            display:'block',
+            filter: locked
+              ? 'grayscale(100%) brightness(0.45) contrast(0.8)'
+              : isFeat
+                ? 'drop-shadow(0 0 12px rgba(255,200,0,.5)) drop-shadow(0 0 4px rgba(255,255,255,.25))'
+                : 'drop-shadow(0 0 6px rgba(255,255,255,.12))',
+            transition:'filter .3s'
+          }}
+          alt={id}/>
+        {isFeat && !locked && (
+          <div style={{position:'absolute',top:-4,right:-4,background:'#facc15',borderRadius:'50%',
+            width:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:10,boxShadow:'0 0 8px rgba(250,204,21,.6)'}}>⭐</div>
+        )}
+      </div>
+    );
   };
 
   const catLabelMap = {
     assiduidade:'⛓️ Assiduidade', volume:'⚖️ Volume',
     forca:'💥 Força', diversidade:'🗺️ Diversidade',
-    dedicacao:'📅 Dedicação', especial:'⚡ Especial'
+    dedicacao:'📅 Dedicação', especial:'⚡ Especial', squad:'⚔️ Squad'
   };
+
+  const featuredSelo = SELOS.find(s=>s.id===featured);
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
@@ -5628,9 +5704,63 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
         <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Conquistas do ferro</div>
       </div>
 
+      {/* Featured selo — destaque */}
+      <div style={{background:'rgba(250,204,21,.04)',border:'1px solid rgba(250,204,21,.12)',borderRadius:'16px',padding:'1.1rem',display:'flex',alignItems:'center',gap:'1rem',position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',right:8,top:8,fontSize:'.55rem',color:'rgba(250,204,21,.4)',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque</div>
+        {featuredSelo && unlocked.has(featuredSelo.id) ? (
+          <>
+            <SeloImg id={featuredSelo.id} size={88} locked={false} featured={true}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.25rem',textTransform:'uppercase',color:'#fff',lineHeight:1.1}}>{featuredSelo.title}</div>
+              <div style={{fontSize:'.7rem',color:'#666',marginTop:'.3rem'}}>{featuredSelo.desc}</div>
+              <button onClick={()=>setPickingFeatured(true)}
+                style={{marginTop:'.6rem',background:'rgba(250,204,21,.08)',border:'1px solid rgba(250,204,21,.15)',borderRadius:'8px',padding:'.3rem .7rem',color:'rgba(250,204,21,.7)',fontSize:'.65rem',letterSpacing:'.05em',cursor:'pointer',textTransform:'uppercase'}}>
+                Trocar destaque
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'.5rem',padding:'.5rem 0'}}>
+            <div style={{fontSize:'2rem',opacity:.3}}>⭐</div>
+            <div style={{fontSize:'.72rem',color:'#444',textAlign:'center'}}>Nenhum selo em destaque</div>
+            {unlocked.size > 0 && (
+              <button onClick={()=>setPickingFeatured(true)}
+                style={{background:'rgba(250,204,21,.07)',border:'1px solid rgba(250,204,21,.12)',borderRadius:'8px',padding:'.35rem .9rem',color:'rgba(250,204,21,.6)',fontSize:'.65rem',letterSpacing:'.05em',cursor:'pointer',textTransform:'uppercase'}}>
+                Escolher destaque
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Pick featured modal */}
+      {pickingFeatured && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:200,display:'flex',flexDirection:'column',overflowY:'auto',padding:'1.5rem 1rem 2rem'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem',flexShrink:0}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase'}}>Escolher destaque</div>
+            <button onClick={()=>setPickingFeatured(false)}
+              style={{background:'#1a1a1a',border:'1px solid #222',borderRadius:'8px',padding:'.4rem .8rem',color:'#888',fontSize:'.8rem',cursor:'pointer'}}>✕</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.6rem'}}>
+            {SELOS.filter(s=>unlocked.has(s.id)).map(s=>(
+              <div key={s.id} onClick={()=>setFeaturedSelo(s.id)}
+                style={{
+                  background: featured===s.id ? 'rgba(250,204,21,.1)' : 'rgba(255,255,255,.02)',
+                  border: featured===s.id ? '1px solid rgba(250,204,21,.35)' : '1px solid #111',
+                  borderRadius:'12px', padding:'.75rem .4rem',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:'.35rem',cursor:'pointer'
+                }}>
+                <SeloImg id={s.id} size={72} locked={false} featured={featured===s.id}/>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.72rem',textTransform:'uppercase',color:'#ccc',textAlign:'center',lineHeight:1.2}}>{s.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Level card */}
       <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1.1rem',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',right:'-15px',top:'-15px',fontSize:'5rem',opacity:.05,lineHeight:1}}>{currentLevel.icon}</div>
+        <div style={{position:'absolute',right:'-15px',top:'-15px',fontSize:'5rem',opacity:.04,lineHeight:1}}>{currentLevel.icon}</div>
         <div style={{display:'flex',alignItems:'center',gap:'.85rem',marginBottom:'.75rem'}}>
           <div style={{fontSize:'2.5rem',lineHeight:1}}>{currentLevel.icon}</div>
           <div>
@@ -5658,22 +5788,7 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
         )}
       </div>
 
-      {/* Unlocked showcase — large emblems */}
-      {unlocked.size > 0 && (
-        <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'14px',padding:'1rem'}}>
-          <div style={{fontSize:'.6rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem'}}>{unlocked.size} selo{unlocked.size!==1?'s':''} desbloqueado{unlocked.size!==1?'s':''}</div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:'.5rem',justifyContent:'center'}}>
-            {SELOS.filter(s=>unlocked.has(s.id)).map(s=>(
-              <div key={s.id} title={s.title} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem'}}>
-                <SeloImg id={s.id} size={52} locked={false}/>
-                <div style={{fontSize:'.5rem',color:'#444',textTransform:'uppercase',letterSpacing:'.04em',maxWidth:'52px',textAlign:'center',lineHeight:1.2}}>{s.title}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Progress bar */}
+      {/* Progress */}
       <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'10px',padding:'.75rem 1rem'}}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.4rem'}}>
           <div style={{fontSize:'.65rem',color:'#444',textTransform:'uppercase'}}>Progresso total</div>
@@ -5684,29 +5799,42 @@ const DarkSelos = ({history, prefs, cardioCount}) => {
         </div>
       </div>
 
-      {/* Categories — grid of emblems */}
+      {/* Categories — grid 2 cols, large emblems */}
       {cats.map(cat=>{
         const catSelos = SELOS.filter(s=>s.cat===cat);
         return (
           <div key={cat}>
-            <div style={{fontSize:'.6rem',color:'#333',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.6rem',padding:'0 .2rem'}}>{catLabelMap[cat]||cat}</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
+            <div style={{fontSize:'.62rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.65rem',padding:'0 .15rem'}}>{catLabelMap[cat]||cat}</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'.55rem'}}>
               {catSelos.map(s=>{
                 const done = unlocked.has(s.id);
+                const isFeat = featured === s.id;
                 return (
-                  <div key={s.id} style={{
-                    background:done?'rgba(227,27,35,.04)':'rgba(255,255,255,.01)',
-                    border:done?'1px solid rgba(227,27,35,.15)':'1px solid #0d0d0d',
-                    borderRadius:'12px',padding:'.75rem .5rem',
-                    display:'flex',flexDirection:'column',alignItems:'center',gap:'.4rem',
-                    opacity:done?1:0.45,transition:'all .3s'
-                  }}>
-                    <SeloImg id={s.id} size={64} locked={!done}/>
-                    <div style={{textAlign:'center'}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',color:done?'#fff':'#333',lineHeight:1.2}}>{s.title}</div>
-                      <div style={{fontSize:'.58rem',color:done?'#555':'#2a2a2a',marginTop:'2px',lineHeight:1.3}}>{s.desc}</div>
+                  <div key={s.id}
+                    onClick={()=>{ if(done) setFeaturedSelo(s.id); }}
+                    style={{
+                      background: isFeat ? 'rgba(250,204,21,.05)' : done ? 'rgba(227,27,35,.04)' : 'rgba(255,255,255,.015)',
+                      border: isFeat ? '1px solid rgba(250,204,21,.2)' : done ? '1px solid rgba(227,27,35,.13)' : '1px solid #111',
+                      borderRadius:'14px', padding:'.9rem .6rem',
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:'.45rem',
+                      cursor: done ? 'pointer' : 'default',
+                      transition:'all .25s'
+                    }}>
+                    <SeloImg id={s.id} size={80} locked={!done} featured={isFeat}/>
+                    <div style={{textAlign:'center',width:'100%'}}>
+                      <div style={{
+                        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',
+                        textTransform:'uppercase',lineHeight:1.2,
+                        color: done ? (isFeat ? '#facc15' : '#fff') : '#555'
+                      }}>{s.title}</div>
+                      <div style={{
+                        fontSize:'.63rem',marginTop:'3px',lineHeight:1.35,
+                        color: done ? '#666' : '#333'
+                      }}>{s.desc}</div>
                     </div>
-                    {done && <div style={{fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800,letterSpacing:'.06em'}}>✓ OBTIDO</div>}
+                    {done && !isFeat && <div style={{fontSize:'.55rem',color:'#444',letterSpacing:'.06em',textTransform:'uppercase'}}>toque p/ destacar</div>}
+                    {isFeat && <div style={{fontSize:'.58rem',color:'rgba(250,204,21,.7)',fontWeight:800,letterSpacing:'.06em'}}>⭐ DESTAQUE</div>}
+                    {!done && <div style={{fontSize:'.58rem',color:'#2a2a2a',letterSpacing:'.04em',textTransform:'uppercase'}}>BLOQUEADO</div>}
                   </div>
                 );
               })}
@@ -8901,6 +9029,8 @@ function App(){
   });
   const [drawerOpen,setDrawerOpen]=useState(false);
   const goto=(s,id=null)=>{ setScreen(s); if(s==='builder' && id) setBuilderPlanId(id); if(s==='viewer' && id) setViewerPlanId(id); };
+  // Expose goto for squad invite deep-link
+  useEffect(()=>{ window._gotoSquad = ()=>{ setScreen('comunidade'); }; return ()=>{ window._gotoSquad=null; }; },[]);
   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),1200); return ()=>clearTimeout(t);} },[toast]);
 
   // Sync theme with prefs — runs whenever prefs.theme changes
