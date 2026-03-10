@@ -1315,14 +1315,20 @@ window.DSSync = {
           if(window._DS_SETTERS && window._DS_SETTERS.squad) window._DS_SETTERS.squad(cloudSquad.value);
         }
       } catch(_) {}
-      if(cloudHistory && window._DS_SETTERS.history) window._DS_SETTERS.history(cloudHistory);
+      // historyLocal: atualiza state + localStorage sem re-escrever no Firestore (evita loop)
+      if(cloudHistory){
+        if(window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(cloudHistory);
+        else if(window._DS_SETTERS.history) window._DS_SETTERS.history(cloudHistory);
+      }
       // Prefs: MERGE cloud into local, never overwrite name/avatar set locally
-      if(cloudPrefs && window._DS_SETTERS.prefs) {
+      if(cloudPrefs) {
         const localPrefs = JSON.parse(localStorage.getItem(LS.prefs)||'{}');
-        // Local name/avatar take priority if set; rest comes from cloud
+        // Cloud base, local name/avatar/trainDays têm prioridade se definidos
         const merged = { ...cloudPrefs, ...localPrefs };
-        window._DS_SETTERS.prefs(merged);
         localStorage.setItem(LS.prefs, JSON.stringify(merged));
+        // prefsLocal: sem re-escrita no Firestore
+        if(window._DS_SETTERS.prefsLocal) window._DS_SETTERS.prefsLocal(merged);
+        else if(window._DS_SETTERS.prefs) window._DS_SETTERS.prefs(merged);
       }
 
       // Pull planData + role from user document (admin-controlled)
@@ -1406,7 +1412,18 @@ function useHistory(){
 }
 function usePrefs(){
   const [prefs,setPrefsState]=useState(()=>load(LS.prefs,{name:"",avatar:"💀",unit:"kg",vibrate:true,weeklyGoal:5,showTimer:true,timerPreset:60,rirDefault:2,chartsPremium:false}));
-  useEffect(()=>{ window._DS_SETTERS.prefs=setPrefs; return ()=>{window._DS_SETTERS.prefs=null;}; },[]);
+  useEffect(()=>{
+    window._DS_SETTERS.prefs=setPrefs;
+    // prefsLocal: atualiza state + localStorage APENAS, sem Firestore (seguro para demo)
+    window._DS_SETTERS.prefsLocal=(v)=>{
+      setPrefsState(prev=>{
+        const next=typeof v==='function'?v(prev):v;
+        save(LS.prefs,next);
+        return next;
+      });
+    };
+    return ()=>{ window._DS_SETTERS.prefs=null; window._DS_SETTERS.prefsLocal=null; };
+  },[]);
   const setPrefs=(v)=>setPrefsState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.prefs,next);
@@ -8044,23 +8061,24 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
                     })
                   };
                 }
-                // trainDays = all 7 days to guarantee hasPerfectWeek
+                // trainDays — só localStorage, NUNCA Firestore
                 var fakePrefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
+                var origTrainDays = fakePrefs.trainDays; // salva original
                 fakePrefs.trainDays = [0,1,2,3,4,5,6];
                 localStorage.setItem('darkset.v3.prefs', JSON.stringify(fakePrefs));
-                if(window._DS_SETTERS && window._DS_SETTERS.prefs) window._DS_SETTERS.prefs(fakePrefs);
-                // Cardio
+                // Usa setter raw (sem fsWrite) para não sobrescrever Firestore
+                if(window._DS_SETTERS && window._DS_SETTERS.prefsLocal) window._DS_SETTERS.prefsLocal(fakePrefs);
+                // Cardio e wins — só localStorage
                 localStorage.setItem('ds.cardioCount','60');
-                // Squad wins
                 localStorage.setItem('ds.squadWins','24');
-                // planData darkgod
+                // planData — só localStorage (não muda Firestore nem planState real)
+                var realPlanData = localStorage.getItem('ds.planData.real') || localStorage.getItem('ds.planData');
+                localStorage.setItem('ds.planData.real', realPlanData); // backup do real
                 localStorage.setItem('ds.planData', JSON.stringify({tier:'darkgod',purchasedAt:Date.now()}));
-                if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData({tier:'darkgod',purchasedAt:Date.now()});
-                // History — save AFTER prefs so calcStreak uses correct trainDays
+                // History — historyLocal (sem Firestore)
                 localStorage.setItem('darkset.v3.history', JSON.stringify(fakeHistory));
-                // Usa historyLocal para NÃO sobrescrever o Firestore com dados falsos
                 if(window._DS_SETTERS && window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(fakeHistory);
-                setToast('✅ Todos os selos desbloqueados! Vai em DarkSelos.');
+                setToast('✅ Selos desbloqueados! Navegue para DarkSelos. Use "Restaurar" para voltar.');
               } catch(e){ setToast('Erro: '+e.message); }
             }} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.06em'}}>
               🔓 DESBLOQUEAR TODOS OS SELOS
@@ -8083,9 +8101,27 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
                   localStorage.removeItem('ds.darkCardio');
                   localStorage.removeItem('ds.squadWins');
                   localStorage.removeItem('ds.streakOverride');
-                  localStorage.removeItem('ds.planData');
+                  // Restaura planData real se tiver backup
+                  var realPD = localStorage.getItem('ds.planData.real');
+                  if(realPD){ localStorage.setItem('ds.planData', realPD); }
+                  else { localStorage.removeItem('ds.planData'); }
+                  localStorage.removeItem('ds.planData.real');
+                  // Restaura prefs originais do Firestore
+                  var prefsSnap = await window._db.collection('users').doc(uid).collection('data').doc('prefs').get();
+                  if(prefsSnap.exists){ 
+                    var realPrefs = prefsSnap.data();
+                    localStorage.setItem('darkset.v3.prefs', JSON.stringify(realPrefs));
+                    if(window._DS_SETTERS && window._DS_SETTERS.prefsLocal) window._DS_SETTERS.prefsLocal(realPrefs);
+                  }
                   // Atualiza React state
-                  if(window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(realHistory);
+                  if(window._DS_SETTERS && window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(realHistory);
+                  // Restaura planData do documento raiz do usuário
+                  var userDoc = await window._db.collection('users').doc(uid).get();
+                  if(userDoc.exists && userDoc.data().planData){
+                    var serverPd = userDoc.data().planData;
+                    localStorage.setItem('ds.planData', JSON.stringify(serverPd));
+                    if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData(serverPd);
+                  }
                   var count = Object.keys(realHistory).length;
                   setToast('✅ ' + count + ' treinos reais restaurados do servidor!');
                 } catch(e){ setToast('Erro: '+e.message); }
@@ -9769,6 +9805,14 @@ function App(){
   useEffect(()=>{window._DS_HIST=history;},[history]);
   const [prefs,setPrefs]=usePrefs();
   const [planState, setPlanState] = useState(getDSPlan);
+  // Expõe setPlanState para DSSync.pull poder atualizar quando chega planData do Firestore
+  React.useEffect(()=>{
+    window._DS_SETTERS.planData = (pd) => {
+      if(pd){ localStorage.setItem('ds.planData', JSON.stringify(pd)); }
+      setPlanState(getDSPlan());
+    };
+    return ()=>{ window._DS_SETTERS.planData = null; };
+  },[]);
   const [isPersonal, setIsPersonal] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('ds.isPersonal')||'false'); }catch(_){ return false; } });
   const ADMIN_UID = '3bZqslCsHxQIugjq9Tfd758hpu12';
   const isAdmin = getUID() === ADMIN_UID;
