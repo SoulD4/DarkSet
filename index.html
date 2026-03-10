@@ -1384,7 +1384,18 @@ function usePlans(){
 }
 function useHistory(){
   const [history,setHistoryState]=useState(()=>load(LS.history,{}));
-  useEffect(()=>{ window._DS_SETTERS.history=setHistory; return ()=>{window._DS_SETTERS.history=null;}; },[]);
+  useEffect(()=>{
+    window._DS_SETTERS.history=setHistory;
+    // historyLocal: updates state + localStorage ONLY, never Firestore (safe for demo/admin)
+    window._DS_SETTERS.historyLocal=(v)=>{
+      setHistoryState(prev=>{
+        const next=typeof v==='function'?v(prev):v;
+        save(LS.history,next);
+        return next;
+      });
+    };
+    return ()=>{window._DS_SETTERS.history=null; window._DS_SETTERS.historyLocal=null;};
+  },[]);
   const setHistory=(v)=>setHistoryState(prev=>{
     const next=typeof v==='function'?v(prev):v;
     save(LS.history,next);
@@ -8047,7 +8058,8 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
                 if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData({tier:'darkgod',purchasedAt:Date.now()});
                 // History — save AFTER prefs so calcStreak uses correct trainDays
                 localStorage.setItem('darkset.v3.history', JSON.stringify(fakeHistory));
-                if(window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(fakeHistory);
+                // Usa historyLocal para NÃO sobrescrever o Firestore com dados falsos
+                if(window._DS_SETTERS && window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(fakeHistory);
                 setToast('✅ Todos os selos desbloqueados! Vai em DarkSelos.');
               } catch(e){ setToast('Erro: '+e.message); }
             }} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.06em'}}>
