@@ -8054,17 +8054,32 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
               🔓 DESBLOQUEAR TODOS OS SELOS
             </button>
             <button onClick={function(){
-              try {
-                localStorage.removeItem('ds.cardioCount');
-                localStorage.removeItem('ds.darkCardio');
-                if(window._DS_SETTERS && window._DS_SETTERS.history){
-                  var real = JSON.parse(localStorage.getItem('darkset.v3.history')||'{}');
-                  window._DS_SETTERS.history(real);
-                }
-                setToast('Resetado. Dados reais restaurados.');
-              } catch(e){ setToast('Erro: '+e.message); }
-            }} style={{width:'100%',background:'rgba(255,255,255,.03)',border:'1px solid #222',borderRadius:'10px',padding:'.6rem',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',marginTop:'.5rem'}}>
-              ↩ Resetar dados reais
+              (async function(){
+                try {
+                  setToast('⏳ Buscando seus dados do servidor...');
+                  var uid = window._auth && window._auth.currentUser && window._auth.currentUser.uid;
+                  if(!uid || !window._db){ setToast('❌ Não autenticado'); return; }
+                  // Busca histórico real direto do Firestore (ignora localStorage corrompido)
+                  var snap = await window._db.collection('users').doc(uid).collection('data').doc('history').get();
+                  var realHistory = snap.exists ? snap.data() : {};
+                  // Remove campos internos do Firestore se houver
+                  delete realHistory._updatedAt;
+                  // Salva de volta no localStorage limpo
+                  localStorage.setItem('darkset.v3.history', JSON.stringify(realHistory));
+                  // Remove overrides de demo
+                  localStorage.removeItem('ds.cardioCount');
+                  localStorage.removeItem('ds.darkCardio');
+                  localStorage.removeItem('ds.squadWins');
+                  localStorage.removeItem('ds.streakOverride');
+                  localStorage.removeItem('ds.planData');
+                  // Atualiza React state
+                  if(window._DS_SETTERS && window._DS_SETTERS.history) window._DS_SETTERS.history(realHistory);
+                  var count = Object.keys(realHistory).length;
+                  setToast('✅ ' + count + ' treinos reais restaurados do servidor!');
+                } catch(e){ setToast('Erro: '+e.message); }
+              })();
+            }} style={{width:'100%',background:'rgba(255,80,80,.08)',border:'1px solid rgba(255,80,80,.2)',borderRadius:'10px',padding:'.7rem',color:'#ff5050',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',marginTop:'.5rem',letterSpacing:'.04em'}}>
+              ↩ RESTAURAR MEUS TREINOS REAIS
             </button>
           </div>
 
