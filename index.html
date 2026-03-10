@@ -3448,8 +3448,8 @@ const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
   };
 
   return (
-    <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
+    <div style={{marginTop:'1rem',display:'grid',gap:'1rem',width:'100%',boxSizing:'border-box',overflow:'hidden'}}>
+      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'.5rem'}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
             DARK<span style={{color:'#1DB954'}}>BEATS</span>
@@ -3478,8 +3478,8 @@ const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
         <div style={{display:'grid',gap:'.5rem'}}>
           <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Suas playlists</div>
           {saved.map((pl, i) => (
-            <div key={i} style={{background:'rgba(29,185,84,.07)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-              <button onClick={() => open(pl.url)} style={{flex:1,background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem',padding:0}}>
+            <div key={i} style={{background:'rgba(29,185,84,.07)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',width:'100%',boxSizing:'border-box',overflow:'hidden'}}>
+              <button onClick={() => open(pl.url)} style={{flex:1,background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem',padding:0,minWidth:0,overflow:'hidden'}}>
                 <span style={{fontSize:'1.4rem'}}>⭐</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--color-text)'}}>{pl.name}</div>
@@ -3496,7 +3496,7 @@ const PlaylistTreino = ({prefs, setPrefs, setToast}) => {
       <div style={{display:'grid',gap:'.5rem'}}>
         <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Playlists sugeridas</div>
         {PLAYLISTS.map((pl, i) => (
-          <button key={i} onClick={() => open(pl.url)} style={{background:'rgba(255,255,255,.03)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+          <button key={i} onClick={() => open(pl.url)} style={{background:'rgba(255,255,255,.03)',border:'1px solid var(--color-border)',borderRadius:'10px',padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',textAlign:'left',width:'100%',boxSizing:'border-box',overflow:'hidden'}}>
             <div style={{width:'38px',height:'38px',borderRadius:'8px',background:'rgba(29,185,84,.12)',border:'1px solid rgba(29,185,84,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>{pl.emoji}</div>
             <div style={{flex:1}}>
               <div style={{fontWeight:700,fontSize:'.85rem',color:'var(--color-text)'}}>{pl.name}</div>
