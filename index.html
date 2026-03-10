@@ -1295,7 +1295,7 @@ window.DSSync = {
       const extKeys = ['diet','measures','cardio','squad','checkins','chat'];
       const extLSMap = {
         diet: 'darkset.v1.diet', measures: 'darkset.measures', cardio: 'darkset.cardio.history',
-        squad: 'darkset.squad.v1', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
+        squad: 'ds.squad', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
       };
       const extResults = await Promise.allSettled(extKeys.map(k=>fsRead(uid,k)));
       extKeys.forEach((k,i) => {
@@ -1307,6 +1307,14 @@ window.DSSync = {
 
       // Push directly into React state if setters are registered
       if(cloudPlans   && window._DS_SETTERS.plans)   window._DS_SETTERS.plans(cloudPlans);
+      // Restore squad from cloud into React state
+      try {
+        const cloudSquad = extResults[extKeys.indexOf('squad')];
+        if(cloudSquad && cloudSquad.status==='fulfilled' && cloudSquad.value) {
+          localStorage.setItem('ds.squad', JSON.stringify(cloudSquad.value));
+          if(window._DS_SETTERS && window._DS_SETTERS.squad) window._DS_SETTERS.squad(cloudSquad.value);
+        }
+      } catch(_) {}
       if(cloudHistory && window._DS_SETTERS.history) window._DS_SETTERS.history(cloudHistory);
       // Prefs: MERGE cloud into local, never overwrite name/avatar set locally
       if(cloudPrefs && window._DS_SETTERS.prefs) {
@@ -1352,7 +1360,7 @@ window.DSSync = {
       const LSkey = {
         plans: 'darkset.v3.plans', history: 'darkset.v3.history', prefs: 'darkset.v3.prefs',
         diet: 'darkset.v1.diet', measures: 'darkset.measures', cardio: 'darkset.cardio.history',
-        squad: 'darkset.squad.v1', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
+        squad: 'ds.squad', checkins: 'darkset.squad.checkins', chat: 'darkset.squad.chat'
       }[key];
       const data = safe(LSkey);
       return data ? fsWrite(uid, key, data) : null;
@@ -2939,6 +2947,12 @@ const Community = ({history, setToast, prefs}) => {
 
   const [tab, setTab]           = useState('feed');
   const [squad, setSquad]       = useState(() => { try { return JSON.parse(localStorage.getItem('ds.squad')) || null; } catch(_) { return null; } });
+  // Register setter so DSSync.pull can restore squad after login
+  useEffect(() => {
+    window._DS_SETTERS = window._DS_SETTERS || {};
+    window._DS_SETTERS.squad = setSquad;
+    return () => { if(window._DS_SETTERS) window._DS_SETTERS.squad = null; };
+  }, []);
   const [loading, setLoading]   = useState(false);
   const [members, setMembers]   = useState([]);
   const [chatLog, setChatLog]   = useState([]);
@@ -3039,6 +3053,7 @@ const Community = ({history, setToast, prefs}) => {
       await fdb.collection('squads').doc(code).set(sq);
       await fdb.collection('squads').doc(code).collection('members').doc(uid).set({ uid, name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'admin' });
       localStorage.setItem('ds.squad', JSON.stringify(sq));
+      if(uid) try { await fsWrite(uid, 'squad', sq); } catch(_) {}
       setSquad(sq); setShowCreate(false);
       setToast('Squad criado! Código: ' + code);
     } catch(e) { setSquadErr('Erro: ' + (e.message || String(e))); }
@@ -3059,6 +3074,7 @@ const Community = ({history, setToast, prefs}) => {
       if (sq.pass && sq.pass.trim() && sq.pass.trim() !== pw.trim()) { setSquadErr('Senha incorreta.'); setLoading(false); return; }
       await fdb.collection('squads').doc(code).collection('members').doc(uid).set({ uid, name: myName, avatar: myAvatar, joinedAt: Date.now(), role: 'member' });
       localStorage.setItem('ds.squad', JSON.stringify(sq));
+      if(uid) try { await fsWrite(uid, 'squad', sq); } catch(_) {}
       setSquad(sq); setShowJoin(false); setJoinPreview(null);
       setToast('Entrou no ' + sq.name + '!');
     } catch(e) { setSquadErr('Erro: ' + (e.message || String(e))); }
@@ -3072,6 +3088,7 @@ const Community = ({history, setToast, prefs}) => {
     }
     stopListeners();
     localStorage.removeItem('ds.squad');
+    if(uid) try { await window._db.collection('users').doc(uid).collection('data').doc('squad').delete(); } catch(_) {}
     setSquad(null); setMembers([]); setChatLog([]); setCheckins([]);
     setToast('Saiu do squad');
   };
@@ -9767,7 +9784,7 @@ root.render(<App/>);
               var clearKeys = [
                 'darkset.v3.plans','darkset.v3.history','darkset.v3.prefs',
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
-                'ds.squad','ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
+                'ds_diet_plans','ds_diet_goals','darkset.progress','ds.planData','ds.isPersonal'
               ];
               // Preserve navigation flags before clearing
               localStorage.setItem('darkset.launched','1');
