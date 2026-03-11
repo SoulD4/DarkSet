@@ -2221,134 +2221,159 @@ const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
   const dayNames=["S","T","Q","Q","S","S","D"];
 
   return (
-    <div className="grid gap-3 mt-3">
-      {/* Hero stats */}
-      <div className="ds-card" style={{padding:'1.1rem',background:'linear-gradient(135deg, #0d0d0d 0%, #111 100%)'}}>
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.8rem',fontWeight:900,lineHeight:1,textTransform:'uppercase'}}>
-              {prefs.name ? `E aí, ${prefs.name.split(' ')[0]}!` : 'Bora Treinar!'}
-            </div>
-            <div style={{fontSize:'.72rem',color:'#555',marginTop:'.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>
-              {today.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
-            </div>
+    <div style={{display:'grid',gap:'1rem',marginTop:'1rem'}}>
+
+      {/* ── TOP BAR: greeting + avatar ── */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1,letterSpacing:'.02em'}}>
+            {prefs.name ? `E aí, ${prefs.name.split(' ')[0]}!` : 'Bora Treinar!'}
           </div>
+          <div style={{fontSize:'.65rem',color:'#444',marginTop:'.2rem',textTransform:'uppercase',letterSpacing:'.06em'}}>
+            {today.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
+          </div>
+        </div>
+        <button onClick={()=>goto('profile')} style={{background:'none',border:'none',padding:0,cursor:'pointer'}}>
           {prefs.avatarUrl
-            ? <img src={prefs.avatarUrl} style={{width:'44px',height:'44px',borderRadius:'50%',border:'2px solid #222',objectFit:'cover'}} alt="avatar"/>
-            : <div style={{width:'44px',height:'44px',borderRadius:'50%',border:'2px solid #222',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#555'}}>{prefs.name?prefs.name.slice(0,2).toUpperCase():'DS'}</div>
+            ? <img src={prefs.avatarUrl} style={{width:'46px',height:'46px',borderRadius:'50%',border:'2px solid #1e1e1e',objectFit:'cover'}} alt="avatar"/>
+            : <div style={{width:'46px',height:'46px',borderRadius:'50%',border:'2px solid #1e1e1e',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#555'}}>{prefs.name?prefs.name.slice(0,2).toUpperCase():'DS'}</div>
           }
+        </button>
+      </div>
+
+      {/* ── STREAK HERO ── */}
+      <div style={{background:'linear-gradient(135deg,#0d0d0d,#111)',border:'1px solid #1a1a1a',borderRadius:'16px',padding:'1.1rem',position:'relative',overflow:'hidden'}}>
+        {/* Background glow */}
+        {streak > 0 && <div style={{position:'absolute',top:'-30px',right:'-30px',width:'120px',height:'120px',borderRadius:'50%',background:'radial-gradient(circle,rgba(227,27,35,.12),transparent 70%)',pointerEvents:'none'}}/>}
+
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+          {/* Streak big number */}
+          <div style={{display:'flex',alignItems:'baseline',gap:'.4rem'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',lineHeight:1,color:streak>0?'var(--color-accent)':'#222'}}>{streak}</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',color:streak>0?'#fff':'#333'}}>dias</div>
+              <div style={{fontSize:'.55rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em'}}>streak</div>
+            </div>
+          </div>
+
+          {/* Week + Volume */}
+          <div style={{display:'flex',gap:'1.2rem'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#fff',lineHeight:1}}>
+                {thisWeek}<span style={{fontSize:'.9rem',color:'#333'}}>/{prefs.weeklyGoal||5}</span>
+              </div>
+              <div style={{fontSize:'.52rem',color:'#444',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>esta semana</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#fff',lineHeight:1}}>
+                {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
+              </div>
+              <div style={{fontSize:'.52rem',color:'#444',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>volume</div>
+            </div>
+          </div>
         </div>
 
-        {/* Stat chips */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="ds-stat">
-            <div className="ds-stat-val" style={{color:'var(--color-accent)'}}>{streak}</div>
-            <div className="ds-stat-label">Streak</div>
-          </div>
-          <div className="ds-stat">
-            <div className="ds-stat-val">{thisWeek}<span style={{fontSize:'.9rem',color:'#444'}}>/{prefs.weeklyGoal}</span></div>
-            <div className="ds-stat-label">Esta semana</div>
-          </div>
-          <div className="ds-stat">
-            <div className="ds-stat-val" style={{fontSize:'1.1rem'}}>{weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}</div>
-            <div className="ds-stat-label">Vol. semanal</div>
-          </div>
+        {/* Week dots */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',padding:'0 .1rem'}}>
+          {weekDotsFull.map(({trained,isTrainDay},i)=>(
+            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem',opacity:isTrainDay?1:0.3}}>
+              <div style={{
+                width:trained?'12px':'8px', height:trained?'12px':'8px',
+                borderRadius:'50%',
+                background: trained?'var(--color-accent)':'rgba(255,255,255,.06)',
+                border: !trained && isTrainDay ? '1px solid #2a2a2a' : 'none',
+                boxShadow: trained?'0 0 8px rgba(227,27,35,.6)':'none',
+                transition:'all .2s',
+              }}/>
+              <div style={{fontSize:'.55rem',color:isTrainDay?'#444':'#1e1e1e',textTransform:'uppercase',letterSpacing:'.03em'}}>{dayNames[i]}</div>
+            </div>
+          ))}
         </div>
 
-        {/* DEMO BTNS — streak & PR, owner only */}
+        {/* Demo btns — owner only */}
         {isOwner() && (
-          <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',marginBottom:'.5rem'}}>
+          <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',marginTop:'.75rem',paddingTop:'.75rem',borderTop:'1px solid #1a1a1a'}}>
             <DemoBtn label="Demo streak 180" color="#ff6600" onClick={()=>{ if(typeof window._demoStreak==='function') window._demoStreak(180); }}/>
             <DemoBtn label="Demo PR batido"  color="#facc15" onClick={()=>{ if(typeof window._demoPR==='function') window._demoPR(); }}/>
           </div>
         )}
+      </div>
 
-        {/* Week dots — só mostra dias de treino */}
-        <div className="flex items-center justify-between" style={{padding:'0 .25rem'}}>
-          {weekDotsFull.map(({trained,isTrainDay},i)=>(
-            <div key={i} style={{textAlign:'center',opacity:isTrainDay?1:0.25}}>
-              <div style={{
-                width:'10px',height:'10px',borderRadius:'50%',margin:'0 auto .3rem',
-                background: trained ? 'var(--color-accent)' : isTrainDay ? '#1a1a1a' : '#111',
-                boxShadow: trained ? '0 0 6px rgba(227,27,35,.5)' : 'none',
-                border: isTrainDay && !trained ? '1px solid #2a2a2a' : 'none'
-              }}></div>
-              <div style={{fontSize:'.6rem',color:isTrainDay?'#444':'#222',textTransform:'uppercase'}}>{dayNames[i]}</div>
-            </div>
-          ))}
+      {/* ── MODO TREINO — big CTA ── */}
+      <button onClick={()=>goto('session')} style={{background:'var(--color-accent)',border:'none',borderRadius:'14px',padding:'1.1rem 1.25rem',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',position:'relative',overflow:'hidden',boxShadow:'0 4px 24px rgba(227,27,35,.25)'}}>
+        <div style={{position:'absolute',right:'-10px',top:'-10px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5.5rem',fontWeight:900,color:'rgba(0,0,0,.12)',lineHeight:1,pointerEvents:'none'}}>▶</div>
+        <div style={{textAlign:'left'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Modo Treino</div>
+          <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.55)',marginTop:'.25rem'}}>
+            {active ? active.name : 'Com ou sem ficha'}
+          </div>
         </div>
-      </div>
+        <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'rgba(0,0,0,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <div style={{width:0,height:0,borderTop:'9px solid transparent',borderBottom:'9px solid transparent',borderLeft:'15px solid #fff',marginLeft:'3px'}}/>
+        </div>
+      </button>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={()=>goto('session')} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
-          <div style={{position:'absolute',right:'-8px',top:'-8px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'4rem',fontWeight:900,color:'rgba(0,0,0,.15)',lineHeight:1}}>▶</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em'}}>Modo Treino</div>
-          <div style={{fontSize:'.7rem',color:'rgba(255,255,255,.6)',marginTop:'.2rem'}}>Com ou sem ficha</div>
-        </button>
-        <button onClick={()=>goto('history')} style={{background:'#0f0f0f',border:'1px solid #1e1e1e',borderRadius:'10px',padding:'1rem',textAlign:'left',cursor:'pointer',position:'relative',overflow:'hidden'}}>
-          <div style={{position:'absolute',right:'-4px',top:'-8px',fontFamily:"'Barlow Condensed',sans-serif",fontSize:'4rem',fontWeight:900,color:'rgba(255,255,255,.04)',lineHeight:1}}>H</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em'}}>Histórico</div>
-          <div style={{fontSize:'.7rem',color:'#444',marginTop:'.2rem'}}>{totalSessions} treinos registrados</div>
-        </button>
-      </div>
-
-      {/* Ficha ativa */}
-      <div className="ds-card ds-card-accent" style={{padding:'1rem 1.1rem'}}>
-        <div style={{fontSize:'.65rem',color:'#555',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Ficha Ativa</div>
-        {active
-          ? <div className="flex items-center justify-between">
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.1rem',fontWeight:700,color:'#fff'}}>{active.name}</div>
-              <Button onClick={()=>goto('builder',active.id)} variant="ghost">Editar</Button>
-            </div>
-          : <div className="flex items-center justify-between">
-              <div style={{color:'#444',fontSize:'.85rem'}}>Nenhuma ficha ativa</div>
-              <Button onClick={()=>goto('plans')} variant="ghost">Criar</Button>
-            </div>
-        }
-      </div>
-
-      {/* Próximo treino */}
+      {/* ── PRÓXIMO TREINO (se tiver ficha) ── */}
       {nextTrainDay && (
-        <div className="ds-card" style={{padding:'1rem 1.1rem',background:'var(--color-card)'}}>
-          <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>
-            Próximo treino · <span style={{color:'var(--color-accent)'}}>{nextTrainDay.day}</span>
+        <div style={{background:'rgba(255,255,255,.025)',border:'1px solid #1a1a1a',borderRadius:'12px',padding:'.85rem 1rem'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+            <div style={{fontSize:'.58rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em'}}>
+              Próximo · <span style={{color:'var(--color-accent)'}}>{nextTrainDay.day}</span>
+            </div>
+            <button onClick={()=>goto('session')} style={{background:'none',border:'none',padding:0,color:'var(--color-accent)',fontSize:'.65rem',fontWeight:700,cursor:'pointer',textTransform:'uppercase',letterSpacing:'.05em'}}>
+              Iniciar →
+            </button>
           </div>
           <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
-            {nextTrainDay.exs.slice(0,6).map((ex,i)=>(
-              <span key={i} style={{fontSize:'.7rem',background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'6px',padding:'.2rem .55rem',color:'#888',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600,textTransform:'uppercase'}}>
+            {nextTrainDay.exs.slice(0,5).map((ex,i)=>(
+              <span key={i} style={{fontSize:'.65rem',background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'5px',padding:'.18rem .5rem',color:'#666',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600,textTransform:'uppercase'}}>
                 {typeof ex==='string'?ex:ex.name||'?'}
               </span>
             ))}
-            {nextTrainDay.exs.length>6 && <span style={{fontSize:'.7rem',color:'#444',padding:'.2rem .3rem'}}>+{nextTrainDay.exs.length-6}</span>}
+            {nextTrainDay.exs.length>5 && <span style={{fontSize:'.65rem',color:'#333',padding:'.18rem .3rem'}}>+{nextTrainDay.exs.length-5}</span>}
           </div>
-          <button onClick={()=>goto('session')} style={{marginTop:'.75rem',background:'none',border:'none',padding:0,color:'var(--color-accent)',fontSize:'.75rem',fontWeight:700,cursor:'pointer',textTransform:'uppercase',letterSpacing:'.04em'}}>
-            Iniciar este treino →
-          </button>
         </div>
       )}
 
-      {/* Atalho Beats */}
+      {/* ── QUICK NAV GRID ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem'}}>
+        {[
+          {icon:'📋',label:'Histórico',   sub:`${totalSessions} treinos`,  screen:'history',  color:'#1a1a1a'},
+          {icon:'🏅',label:'Selos',        sub:'Conquistas',               screen:'selos',    color:'#1a1a1a'},
+          {icon:'🏃',label:'Cardio',       sub:'DarkCardio',               screen:'cardio',   color:'#1a1a1a'},
+          {icon:'📊',label:'Medidas',      sub:'Corpo',                    screen:'measures', color:'#1a1a1a'},
+        ].map(({icon,label,sub,screen,color})=>(
+          <button key={screen} onClick={()=>goto(screen)}
+            style={{background:color,border:'1px solid #1e1e1e',borderRadius:'12px',padding:'.85rem',textAlign:'left',cursor:'pointer',display:'flex',gap:'.65rem',alignItems:'center'}}>
+            <span style={{fontSize:'1.5rem',flexShrink:0}}>{icon}</span>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#fff',letterSpacing:'.03em'}}>{label}</div>
+              <div style={{fontSize:'.6rem',color:'#444',marginTop:'.1rem'}}>{sub}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* ── PLAYLIST ── */}
       {spotifyUrl ? (
-        <button onClick={()=>window.open(spotifyUrl,'_blank')} style={{background:'rgba(29,185,84,.08)',border:'1px solid rgba(29,185,84,.2)',borderRadius:'10px',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
-          <span style={{fontSize:'1.6rem'}}>🎵</span>
+        <button onClick={()=>window.open(spotifyUrl,'_blank')} style={{background:'rgba(29,185,84,.07)',border:'1px solid rgba(29,185,84,.18)',borderRadius:'12px',padding:'.8rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+          <span style={{fontSize:'1.5rem'}}>🎵</span>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#1DB954'}}>Minha Playlist</div>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>Abre no Spotify</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',color:'#1DB954'}}>Minha Playlist</div>
+            <div style={{fontSize:'.62rem',color:'#444',marginTop:'1px'}}>Abre no Spotify</div>
           </div>
-          <span style={{color:'#1DB954',fontSize:'1.3rem'}}>▶</span>
+          <span style={{color:'#1DB954',fontSize:'1.1rem'}}>▶</span>
         </button>
       ) : (
-        <button onClick={()=>goto('beats')} style={{background:'rgba(29,185,84,.05)',border:'1px solid rgba(29,185,84,.12)',borderRadius:'10px',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
-          <span style={{fontSize:'1.6rem'}}>🎵</span>
+        <button onClick={()=>goto('beats')} style={{background:'rgba(29,185,84,.04)',border:'1px solid rgba(29,185,84,.1)',borderRadius:'12px',padding:'.8rem 1rem',display:'flex',alignItems:'center',gap:'.85rem',cursor:'pointer',textAlign:'left',width:'100%'}}>
+          <span style={{fontSize:'1.5rem'}}>🎵</span>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#1DB954'}}>DarkBeats</div>
-            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'1px'}}>Salve sua playlist favorita</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',color:'#1DB954'}}>DarkBeats</div>
+            <div style={{fontSize:'.62rem',color:'#444',marginTop:'1px'}}>Salve sua playlist</div>
           </div>
-          <span style={{color:'#444',fontSize:'1.3rem'}}>▶</span>
+          <span style={{color:'#2a2a2a',fontSize:'1.1rem'}}>▶</span>
         </button>
       )}
-
 
     </div>
   );
@@ -3090,6 +3115,7 @@ const Cardio = ({goto, setToast}) => {
   const [notes, setNotes] = useState('');
   const [splits, setSplits] = useState([]); // [{km, time}]
   const [lastSplitDist, setLastSplitDist] = useState(0);
+  const [newGoal, setNewGoal] = React.useState('');
   const timerRef = useRef(null);
   const cardioStartTsRef = useRef(null);
 
@@ -3402,7 +3428,6 @@ const Cardio = ({goto, setToast}) => {
 
   // ── CHALLENGES VIEW ────────────────────────────────────────────────────────
   if (view === 'challenges') {
-    const [newGoal, setNewGoal] = React.useState('');
     const saveGoal = () => {
       const g = parseInt(newGoal);
       if (!g || g < 1) return;
