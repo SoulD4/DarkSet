@@ -4813,6 +4813,9 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const [sessionGif,setSessionGif]=useState(null);
   const [sessionDetail,setSessionDetail]=useState(null);
   const [showSharePopup,setShowSharePopup]=useState(false);
+  // Stretch states
+  const [stretchPhase, setStretchPhase] = useState('idle'); // idle|prompt|stretching|done
+  const [stretchContext, setStretchContext] = useState('before'); // before|after|separate
   const [sessionElapsed,setSessionElapsed]=useState(0);
   const [sessionStartTime,setSessionStartTime]=useState(null);
   const sessionTimerRef=useRef(null);
@@ -4961,6 +4964,15 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     setFreeStartTime(null);
     if (prefs.vibrate && navigator.vibrate) navigator.vibrate([100, 50, 200]);
     setToast('Treino salvo!');
+    // Trigger post-workout stretch
+    const _sm = prefs.stretchMode || 'off';
+    if (_sm === 'after' && planItems.length > 0) {
+      setTimeout(() => {
+        setStretchContext('after');
+        setStretchPhase('prompt');
+        back(); // volta para pre-start screen onde o overlay vai aparecer
+      }, 700);
+    }
     setTimeout(function(){ setShowSharePopup(true); }, 500);
   };
 
@@ -5006,9 +5018,34 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
                 </select>
               </div>
               <div style={{fontSize:'.75rem',color:'#444'}}>{planItems.length} exercício(s) programado(s)</div>
-              <Button variant="accent" onClick={start} full>Iniciar Treino</Button>
+              <Button variant="accent" onClick={()=>{
+                const sm = prefs.stretchMode || 'off';
+                if (sm === 'before' && planItems.length > 0) {
+                  setStretchContext('before');
+                  setStretchPhase('prompt');
+                } else {
+                  start();
+                }
+              }} full>Iniciar Treino</Button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Separate stretch card */}
+      {(prefs.stretchMode === 'separate') && planItems.length > 0 && stretchPhase === 'idle' && (
+        <div style={{background:'rgba(99,102,241,.07)',border:'1px solid rgba(99,102,241,.25)',borderRadius:'14px',padding:'1rem 1.1rem',display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer'}}
+          onClick={()=>{ setStretchContext('separate'); setStretchPhase('stretching'); }}>
+          <div style={{fontSize:'2rem',flexShrink:0}}>🧘</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#a5b4fc',marginBottom:'.15rem'}}>
+              Fazer Alongamento
+            </div>
+            <div style={{fontSize:'.72rem',color:'#666'}}>
+              Alongamentos específicos para os exercícios de hoje
+            </div>
+          </div>
+          <div style={{color:'#6366f1',fontSize:'1.2rem'}}>›</div>
         </div>
       )}
 
@@ -5172,6 +5209,35 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
       </div>
     );
   })() : null;
+  // Stretch overlays (render over everything in session screen)
+  const stretchExercises = planItems.map(p => p.name);
+
+  if (stretchPhase === 'prompt') {
+    return (
+      <React.Fragment>
+        {preStartScreen}
+        <StretchPrompt
+          onYes={() => { setStretchPhase('stretching'); if (stretchContext === 'before') start(); }}
+          onNo={() => { setStretchPhase('idle'); if (stretchContext === 'before') start(); }}
+        />
+      </React.Fragment>
+    );
+  }
+
+  if (stretchPhase === 'stretching') {
+    return (
+      <React.Fragment>
+        {preStartScreen}
+        <StretchSession
+          exercises={stretchExercises}
+          context={stretchContext}
+          onDone={() => setStretchPhase('done')}
+          onSkip={() => setStretchPhase('done')}
+        />
+      </React.Fragment>
+    );
+  }
+
   if (!started || mode === 'free') return <React.Fragment>{preStartScreen}{sharePopupJSX}</React.Fragment>;
   if (planItems.length === 0) return (
     <div className="ds-card grid gap-3 mt-3" style={{padding:'1rem 1.1rem'}}>
@@ -5696,6 +5762,7 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const [timerPreset,setTimerPreset]=useState(Number(prefs.timerPreset||60));
   const [rir,setRir]=useState(typeof prefs.rirDefault==='number'?prefs.rirDefault:2);
   const [theme,setTheme]=useState(prefs.theme||'dark');
+  const [stretchMode,setStretchMode]=useState(prefs.stretchMode||'off'); // off|before|after|separate
   const [uploading,setUploading]=useState(false);
   const [uploadErr,setUploadErr]=useState(null);
   const [syncMsg,setSyncMsg]=useState('');
@@ -5710,10 +5777,10 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
   const photoRef=useRef(null);
   const fileRef=useRef(null);
 
-  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2))||JSON.stringify(trainDays)!==JSON.stringify(prefs.trainDays||[1,2,3,4,5,6]);
+  const dirty=(name!==prefs.name)||(avatarUrl!==(prefs.avatarUrl||null))||(unit!==prefs.unit)||(vibrate!==(prefs.vibrate!==false))||(showTimer!==(prefs.showTimer!==false))||(Number(timerPreset)!==Number(prefs.timerPreset||60))||(Number(rir)!==Number(typeof prefs.rirDefault==='number'?prefs.rirDefault:2))||JSON.stringify(trainDays)!==JSON.stringify(prefs.trainDays||[1,2,3,4,5,6])||(stretchMode!==(prefs.stretchMode||'off'));
   const _profilePlanState = React.useMemo(()=>{ try{ return getDSPlan(); }catch(_){ return {tier:'free',isTrialActive:false,trialDaysLeft:0}; } }, []);
 
-  const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:trainDays.length,trainDays,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme,goal:prefs.goal,gymMode:prefs.gymMode,gymLocation:prefs.gymLocation,gymWifi:prefs.gymWifi,playlists:prefs.playlists,onboarded:prefs.onboarded});
+  const savePrefs=()=>setPrefs({name,avatarUrl,unit,vibrate,weeklyGoal:trainDays.length,trainDays,showTimer,timerPreset,rirDefault:rir,chartsPremium:!!prefs.chartsPremium,theme,stretchMode,goal:prefs.goal,gymMode:prefs.gymMode,gymLocation:prefs.gymLocation,gymWifi:prefs.gymWifi,playlists:prefs.playlists,onboarded:prefs.onboarded});
 
   const changeTheme=(t)=>{setTheme(t);setPrefs(p=>({...p,theme:t}));};
 
@@ -5852,6 +5919,23 @@ const Profile=({prefs,setPrefs,history,setToast=()=>{}})=>{
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>DarkTimer</div>
             <Switch checked={showTimer} onChange={setShowTimer}/>
+          </div>
+
+          <div>
+            <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>🧘 Alongamento</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.4rem'}}>
+              {[['off','Desativado'],['before','Antes do treino'],['after','Após o treino'],['separate','Separado']].map(([val,label])=>(
+                <button key={val} onClick={()=>setStretchMode(val)}
+                  style={{padding:'.45rem .5rem',borderRadius:'8px',
+                    background:stretchMode===val?'rgba(99,102,241,.25)':'rgba(0,0,0,.2)',
+                    border:stretchMode===val?'1px solid rgba(99,102,241,.6)':'1px solid var(--color-border)',
+                    color:stretchMode===val?'#a5b4fc':'var(--color-text-sub)',
+                    fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',
+                    textTransform:'uppercase',letterSpacing:'.03em',cursor:'pointer',textAlign:'center'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -6057,6 +6141,253 @@ const SELO_IMGS = {
   'vol_50t': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CiAgPGRlZnM+CiAgICA8cmFkaWFsR3JhZGllbnQgaWQ9ImJnIiBjeD0iNTAlIiBjeT0iNDUlIiByPSI1NSUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDAwNjFhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwMDQxMCIvPgogICAgPC9yYWRpYWxHcmFkaWVudD4KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0iYXVyYSIgY3g9IjUwJSIgY3k9IjUwJSIgcj0iNTAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzU1NzdmZiIgc3RvcC1vcGFjaXR5PSIwLjIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI2NSUiIHN0b3AtY29sb3I9IiM1NTc3ZmYiIHN0b3Atb3BhY2l0eT0iMC4wNSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDAiIHN0b3Atb3BhY2l0eT0iMCIvPgogICAgPC9yYWRpYWxHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2hHIiB4MT0iMTUlIiB5MT0iMCUiIHgyPSI4NSUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzAwMDYxYSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDA0MTAiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImVkRyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM1NTc3ZmYiIHN0b3Atb3BhY2l0eT0iMC44NSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcC1jb2xvcj0iIzU1NzdmZiIgc3RvcC1vcGFjaXR5PSIwLjIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNTU3N2ZmIiBzdG9wLW9wYWNpdHk9IjAuNTUiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InR4RyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmZmZmZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iNDUlIiBzdG9wLWNvbG9yPSIjNTU3N2ZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwMDYxYSIgc3RvcC1vcGFjaXR5PSIwLjUiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJnbCIgeD0iLTQwJSIgeT0iLTQwJSIgd2lkdGg9IjE4MCUiIGhlaWdodD0iMTgwJSI+CiAgICAgIDxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjUiIHJlc3VsdD0iYiIvPgogICAgICA8ZmVNZXJnZT48ZmVNZXJnZU5vZGUgaW49ImIiLz48ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz48L2ZlTWVyZ2U+CiAgICA8L2ZpbHRlcj4KICAgIDxmaWx0ZXIgaWQ9InNnIiB4PSItMjUlIiB5PSItMjUlIiB3aWR0aD0iMTUwJSIgaGVpZ2h0PSIxNTAlIj4KICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMy41IiByZXN1bHQ9ImIiLz4KICAgICAgPGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJiIi8+PGZlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9mZU1lcmdlPgogICAgPC9maWx0ZXI+CiAgICA8ZmlsdGVyIGlkPSJ0ZyI+CiAgICAgIDxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjIuNSIgcmVzdWx0PSJiIi8+CiAgICAgIDxmZU1lcmdlPjxmZU1lcmdlTm9kZSBpbj0iYiIvPjxmZU1lcmdlTm9kZSBpbj0iYiIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT4KICAgIDwvZmlsdGVyPgogICAgPGZpbHRlciBpZD0ic2giPgogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iNSIgc3RkRGV2aWF0aW9uPSI3IiBmbG9vZC1jb2xvcj0iIzAwMCIgZmxvb2Qtb3BhY2l0eT0iMC44NSIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxjaXJjbGUgY3g9IjEyOCIgY3k9IjEyOCIgcj0iMTIyIiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxjaXJjbGUgY3g9IjEyOCIgY3k9IjEyOCIgcj0iMTIyIiBmaWxsPSJ1cmwoI2F1cmEpIi8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSIxMTgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzU1NzdmZiIgc3Ryb2tlLXdpZHRoPSIwLjUiIHN0cm9rZS1vcGFjaXR5PSIwLjIyIi8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSIxMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzU1NzdmZiIgc3Ryb2tlLXdpZHRoPSIwLjMiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS1kYXNoYXJyYXk9IjMgOCIvPgogIDxwYXRoIGQ9Ik0xMjggMjAgTDIxMCA1MiBMMjEwIDEzMCBRMjEwIDE5MCAxMjggMjM2IFE0NiAxOTAgNDYgMTMwIEw0NiA1MiBaIgogICAgICAgIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC42IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzLDYpIiBmaWx0ZXI9InVybCgjc2gpIi8+CiAgPHBhdGggZD0iTTEyOCAyMCBMMjA4IDUxIEwyMDggMTMwIFEyMDggMTkwIDEyOCAyMzYgUTQ4IDE5MCA0OCAxMzAgTDQ4IDUxIFoiIGZpbGw9InVybCgjc2hHKSIvPgogIDxwYXRoIGQ9Ik0xMjggMjAgTDIwOCA1MSBMMjA4IDEzMCBRMjA4IDE5MCAxMjggMjM2IFE0OCAxOTAgNDggMTMwIEw0OCA1MSBaIgogICAgICAgIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNlZEcpIiBzdHJva2Utd2lkdGg9IjIuMiIvPgogIDxwYXRoIGQ9Ik0xMjggMzIgTDE5NiA2MCBMMTk2IDEyOCBRMTk2IDE4MCAxMjggMjIyIFE2MCAxODAgNjAgMTI4IEw2MCA2MCBaIgogICAgICAgIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC42OCIvPgogIDxwYXRoIGQ9Ik0xMjggMzIgTDE5NiA2MCBMMTk2IDEyOCBRMTk2IDE4MCAxMjggMjIyIFE2MCAxODAgNjAgMTI4IEw2MCA2MCBaIgogICAgICAgIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzU1NzdmZiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1vcGFjaXR5PSIwLjMyIi8+CiAgPHBhdGggZD0iTTEwOCAzMCBMMTE2IDIwIEwxMjIgMjYgTDEyOCAxOCBMMTM0IDI2IEwxNDAgMjAgTDE0OCAzMCIKICAgICAgICBmaWxsPSJub25lIiBzdHJva2U9IiM1NTc3ZmYiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2Utb3BhY2l0eT0iMC42NSIKICAgICAgICBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8Y2lyY2xlIGN4PSIxMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjciLz4KICA8Y2lyY2xlIGN4PSIxMjgiIGN5PSIxOCIgcj0iMyIgZmlsbD0iIzU1NzdmZiIgZmlsdGVyPSJ1cmwoI3NnKSIvPgogIDxjaXJjbGUgY3g9IjE0MCIgY3k9IjIwIiByPSIyIiBmaWxsPSIjNTU3N2ZmIiBmaWxsLW9wYWNpdHk9IjAuNyIvPgogIDxsaW5lIHgxPSI3MCIgeTE9Ijc4IiB4Mj0iMTg2IiB5Mj0iNzgiIHN0cm9rZT0iIzU1NzdmZiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1vcGFjaXR5PSIwLjI4Ii8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTIwIiByPSI0MCIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjA1IiBmaWx0ZXI9InVybCgjZ2wpIi8+CiAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU3N2ZmIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBmaWx0ZXI9InVybCgjc2cpIj4KICAgIDxwYXRoIGQ9Ik0xMDggODQgTDEwOCAxNDggTTEwOCA5MCBMMTQ4IDkwIEwxNDggMTE4IE0xNDggMTE4IEMxNDggMTE4IDE2MiAxMjQgMTU4IDEzNiBDMTU0IDE0OCAxNDAgMTQ2IDEzNiAxMzggQzEzMiAxMzAgMTQwIDEyMiAxNDggMTE4IiBmaWxsPSIjNTU3N2ZmIiBmaWxsLW9wYWNpdHk9IjAuMTIiLz4KICAgIDxwYXRoIGQ9Ik0xMDggODQgTDEwOCAxNDggTTEwOCA5MCBMMTQ4IDkwIEwxNDggMTE4IE0xNDggMTE4IEMxNDggMTE4IDE2MiAxMjQgMTU4IDEzNiBDMTU0IDE0OCAxNDAgMTQ2IDEzNiAxMzggQzEzMiAxMzAgMTQwIDEyMiAxNDggMTE4Ii8+CiAgPC9nPgogIDxsaW5lIHgxPSI3MCIgeTE9IjE1OCIgeDI9IjE4NiIgeTI9IjE1OCIgc3Ryb2tlPSIjNTU3N2ZmIiBzdHJva2Utd2lkdGg9IjAuNyIgc3Ryb2tlLW9wYWNpdHk9IjAuMjgiLz4KICA8dGV4dCB4PSIxMjgiIHk9IjE3NyIgZm9udC1mYW1pbHk9IidJbXBhY3QnLCdBcmlhbCBOYXJyb3cnLHNhbnMtc2VyaWYiCiAgICBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjEyIiBsZXR0ZXItc3BhY2luZz0iMy41IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIgogICAgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjY1IiBmaWx0ZXI9InVybCgjdGcpIj5DQVJSRUdBRE9SPC90ZXh0PgogIDx0ZXh0IHg9IjEyOCIgeT0iMTk3IiBmb250LWZhbWlseT0iJ0ltcGFjdCcsJ0FyaWFsIE5hcnJvdycsc2Fucy1zZXJpZiIKICAgIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTciIGxldHRlci1zcGFjaW5nPSI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIgogICAgZmlsbD0idXJsKCN0eEcpIiBmaWx0ZXI9InVybCgjdGcpIj41MCBUT05FTEFEQVM8L3RleHQ+CiAgPHBhdGggZD0iTTEyOCAyMjggTDEyMiAyMTggTDEyOCAyMjIgTDEzNCAyMTggWiIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNzZykiLz4KICA8Y2lyY2xlIGN4PSI3NiIgY3k9IjY4IiByPSIyLjIiIGZpbGw9IiM1NTc3ZmYiIGZpbGwtb3BhY2l0eT0iMC4zOCIvPgogIDxjaXJjbGUgY3g9IjE4MCIgY3k9IjY4IiByPSIyLjIiIGZpbGw9IiM1NTc3ZmYiIGZpbGwtb3BhY2l0eT0iMC4zOCIvPgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iMTMwIiByPSIxLjYiIGZpbGw9IiM1NTc3ZmYiIGZpbGwtb3BhY2l0eT0iMC4yOCIvPgogIDxjaXJjbGUgY3g9IjE5MiIgY3k9IjEzMCIgcj0iMS42IiBmaWxsPSIjNTU3N2ZmIiBmaWxsLW9wYWNpdHk9IjAuMjgiLz4KICA8Y2lyY2xlIGN4PSI2OCIgY3k9IjEwMCIgcj0iMSIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjQ1Ii8+CiAgPGNpcmNsZSBjeD0iMTg4IiBjeT0iOTUiIHI9IjAuOSIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjM4Ii8+CiAgPGNpcmNsZSBjeD0iNzAiIGN5PSIxNTYiIHI9IjAuOCIgZmlsbD0iIzU1NzdmZiIgZmlsbC1vcGFjaXR5PSIwLjM1Ii8+CiAgPGNpcmNsZSBjeD0iMTg3IiBjeT0iMTU4IiByPSIxIiBmaWxsPSIjNTU3N2ZmIiBmaWxsLW9wYWNpdHk9IjAuMzgiLz4KPC9zdmc+',
   'vol_5t': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CiAgPGRlZnM+CiAgICA8cmFkaWFsR3JhZGllbnQgaWQ9ImJnIiBjeD0iNTAlIiBjeT0iNDUlIiByPSI1NSUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDAwYTFhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwMDUxMCIvPgogICAgPC9yYWRpYWxHcmFkaWVudD4KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0iYXVyYSIgY3g9IjUwJSIgY3k9IjUwJSIgcj0iNTAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzQ0ODhmZiIgc3RvcC1vcGFjaXR5PSIwLjIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI2NSUiIHN0b3AtY29sb3I9IiM0NDg4ZmYiIHN0b3Atb3BhY2l0eT0iMC4wNSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDAiIHN0b3Atb3BhY2l0eT0iMCIvPgogICAgPC9yYWRpYWxHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2hHIiB4MT0iMTUlIiB5MT0iMCUiIHgyPSI4NSUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzAwMGExYSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDA1MTAiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImVkRyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM0NDg4ZmYiIHN0b3Atb3BhY2l0eT0iMC44NSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcC1jb2xvcj0iIzQ0ODhmZiIgc3RvcC1vcGFjaXR5PSIwLjIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNDQ4OGZmIiBzdG9wLW9wYWNpdHk9IjAuNTUiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InR4RyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmZmZmZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iNDUlIiBzdG9wLWNvbG9yPSIjNDQ4OGZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwMGExYSIgc3RvcC1vcGFjaXR5PSIwLjUiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJnbCIgeD0iLTQwJSIgeT0iLTQwJSIgd2lkdGg9IjE4MCUiIGhlaWdodD0iMTgwJSI+CiAgICAgIDxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjUiIHJlc3VsdD0iYiIvPgogICAgICA8ZmVNZXJnZT48ZmVNZXJnZU5vZGUgaW49ImIiLz48ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz48L2ZlTWVyZ2U+CiAgICA8L2ZpbHRlcj4KICAgIDxmaWx0ZXIgaWQ9InNnIiB4PSItMjUlIiB5PSItMjUlIiB3aWR0aD0iMTUwJSIgaGVpZ2h0PSIxNTAlIj4KICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMy41IiByZXN1bHQ9ImIiLz4KICAgICAgPGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJiIi8+PGZlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9mZU1lcmdlPgogICAgPC9maWx0ZXI+CiAgICA8ZmlsdGVyIGlkPSJ0ZyI+CiAgICAgIDxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjIuNSIgcmVzdWx0PSJiIi8+CiAgICAgIDxmZU1lcmdlPjxmZU1lcmdlTm9kZSBpbj0iYiIvPjxmZU1lcmdlTm9kZSBpbj0iYiIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT4KICAgIDwvZmlsdGVyPgogICAgPGZpbHRlciBpZD0ic2giPgogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iNSIgc3RkRGV2aWF0aW9uPSI3IiBmbG9vZC1jb2xvcj0iIzAwMCIgZmxvb2Qtb3BhY2l0eT0iMC44NSIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxjaXJjbGUgY3g9IjEyOCIgY3k9IjEyOCIgcj0iMTIyIiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxjaXJjbGUgY3g9IjEyOCIgY3k9IjEyOCIgcj0iMTIyIiBmaWxsPSJ1cmwoI2F1cmEpIi8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSIxMTgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQ0ODhmZiIgc3Ryb2tlLXdpZHRoPSIwLjUiIHN0cm9rZS1vcGFjaXR5PSIwLjIyIi8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSIxMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQ0ODhmZiIgc3Ryb2tlLXdpZHRoPSIwLjMiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS1kYXNoYXJyYXk9IjMgOCIvPgogIDxwYXRoIGQ9Ik0xMjggMjAgTDIxMCA1MiBMMjEwIDEzMCBRMjEwIDE5MCAxMjggMjM2IFE0NiAxOTAgNDYgMTMwIEw0NiA1MiBaIgogICAgICAgIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC42IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzLDYpIiBmaWx0ZXI9InVybCgjc2gpIi8+CiAgPHBhdGggZD0iTTEyOCAyMCBMMjA4IDUxIEwyMDggMTMwIFEyMDggMTkwIDEyOCAyMzYgUTQ4IDE5MCA0OCAxMzAgTDQ4IDUxIFoiIGZpbGw9InVybCgjc2hHKSIvPgogIDxwYXRoIGQ9Ik0xMjggMjAgTDIwOCA1MSBMMjA4IDEzMCBRMjA4IDE5MCAxMjggMjM2IFE0OCAxOTAgNDggMTMwIEw0OCA1MSBaIgogICAgICAgIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNlZEcpIiBzdHJva2Utd2lkdGg9IjIuMiIvPgogIDxwYXRoIGQ9Ik0xMjggMzIgTDE5NiA2MCBMMTk2IDEyOCBRMTk2IDE4MCAxMjggMjIyIFE2MCAxODAgNjAgMTI4IEw2MCA2MCBaIgogICAgICAgIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC42OCIvPgogIDxwYXRoIGQ9Ik0xMjggMzIgTDE5NiA2MCBMMTk2IDEyOCBRMTk2IDE4MCAxMjggMjIyIFE2MCAxODAgNjAgMTI4IEw2MCA2MCBaIgogICAgICAgIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQ0ODhmZiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1vcGFjaXR5PSIwLjMyIi8+CiAgPHBhdGggZD0iTTEwOCAzMCBMMTE2IDIwIEwxMjIgMjYgTDEyOCAxOCBMMTM0IDI2IEwxNDAgMjAgTDE0OCAzMCIKICAgICAgICBmaWxsPSJub25lIiBzdHJva2U9IiM0NDg4ZmYiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2Utb3BhY2l0eT0iMC42NSIKICAgICAgICBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8Y2lyY2xlIGN4PSIxMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjciLz4KICA8Y2lyY2xlIGN4PSIxMjgiIGN5PSIxOCIgcj0iMyIgZmlsbD0iIzQ0ODhmZiIgZmlsdGVyPSJ1cmwoI3NnKSIvPgogIDxjaXJjbGUgY3g9IjE0MCIgY3k9IjIwIiByPSIyIiBmaWxsPSIjNDQ4OGZmIiBmaWxsLW9wYWNpdHk9IjAuNyIvPgogIDxsaW5lIHgxPSI3MCIgeTE9Ijc4IiB4Mj0iMTg2IiB5Mj0iNzgiIHN0cm9rZT0iIzQ0ODhmZiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1vcGFjaXR5PSIwLjI4Ii8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTIwIiByPSI0MCIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjA1IiBmaWx0ZXI9InVybCgjZ2wpIi8+CiAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDQ4OGZmIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBmaWx0ZXI9InVybCgjc2cpIj4KICAgIDxwYXRoIGQ9Ik0xMjggOTAgTDEyOCAxNDggTTk2IDEwMCBMMTYwIDEwMCBNODggMTMyIEwxMDggMTMyIEMxMDggMTIwIDEwMCAxMTggMTAwIDEwOCBMMTE4IDEwOCBNMTM4IDEwOCBMMTU2IDEwOCBDMTU2IDExOCAxNDggMTIwIDE0OCAxMzIgTDE2OCAxMzIiIGZpbGw9IiM0NDg4ZmYiIGZpbGwtb3BhY2l0eT0iMC4xMiIvPgogICAgPHBhdGggZD0iTTEyOCA5MCBMMTI4IDE0OCBNOTYgMTAwIEwxNjAgMTAwIE04OCAxMzIgTDEwOCAxMzIgQzEwOCAxMjAgMTAwIDExOCAxMDAgMTA4IEwxMTggMTA4IE0xMzggMTA4IEwxNTYgMTA4IEMxNTYgMTE4IDE0OCAxMjAgMTQ4IDEzMiBMMTY4IDEzMiIvPgogIDwvZz4KICA8bGluZSB4MT0iNzAiIHkxPSIxNTgiIHgyPSIxODYiIHkyPSIxNTgiIHN0cm9rZT0iIzQ0ODhmZiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1vcGFjaXR5PSIwLjI4Ii8+CiAgPHRleHQgeD0iMTI4IiB5PSIxNzciIGZvbnQtZmFtaWx5PSInSW1wYWN0JywnQXJpYWwgTmFycm93JyxzYW5zLXNlcmlmIgogICAgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIxMiIgbGV0dGVyLXNwYWNpbmc9IjMuNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIKICAgIGZpbGw9IiM0NDg4ZmYiIGZpbGwtb3BhY2l0eT0iMC42NSIgZmlsdGVyPSJ1cmwoI3RnKSI+UFJJTUVJUk9TPC90ZXh0PgogIDx0ZXh0IHg9IjEyOCIgeT0iMTk3IiBmb250LWZhbWlseT0iJ0ltcGFjdCcsJ0FyaWFsIE5hcnJvdycsc2Fucy1zZXJpZiIKICAgIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTciIGxldHRlci1zcGFjaW5nPSI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIgogICAgZmlsbD0idXJsKCN0eEcpIiBmaWx0ZXI9InVybCgjdGcpIj5RVUlMT1M8L3RleHQ+CiAgPHBhdGggZD0iTTEyOCAyMjggTDEyMiAyMTggTDEyOCAyMjIgTDEzNCAyMTggWiIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNzZykiLz4KICA8Y2lyY2xlIGN4PSI3NiIgY3k9IjY4IiByPSIyLjIiIGZpbGw9IiM0NDg4ZmYiIGZpbGwtb3BhY2l0eT0iMC4zOCIvPgogIDxjaXJjbGUgY3g9IjE4MCIgY3k9IjY4IiByPSIyLjIiIGZpbGw9IiM0NDg4ZmYiIGZpbGwtb3BhY2l0eT0iMC4zOCIvPgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iMTMwIiByPSIxLjYiIGZpbGw9IiM0NDg4ZmYiIGZpbGwtb3BhY2l0eT0iMC4yOCIvPgogIDxjaXJjbGUgY3g9IjE5MiIgY3k9IjEzMCIgcj0iMS42IiBmaWxsPSIjNDQ4OGZmIiBmaWxsLW9wYWNpdHk9IjAuMjgiLz4KICA8Y2lyY2xlIGN4PSI2OCIgY3k9IjEwMCIgcj0iMSIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjQ1Ii8+CiAgPGNpcmNsZSBjeD0iMTg4IiBjeT0iOTUiIHI9IjAuOSIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjM4Ii8+CiAgPGNpcmNsZSBjeD0iNzAiIGN5PSIxNTYiIHI9IjAuOCIgZmlsbD0iIzQ0ODhmZiIgZmlsbC1vcGFjaXR5PSIwLjM1Ii8+CiAgPGNpcmNsZSBjeD0iMTg3IiBjeT0iMTU4IiByPSIxIiBmaWxsPSIjNDQ4OGZmIiBmaWxsLW9wYWNpdHk9IjAuMzgiLz4KPC9zdmc+',
 };
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// DARKSET STRETCH — Sistema de Alongamento Inteligente
+// ══════════════════════════════════════════════════════════════════════════
+
+// Banco de alongamentos por grupo muscular
+const STRETCH_DB = {
+  "Peito": [
+    { name:"Abertura de peito na parede", desc:"Apoie o antebraço na parede a 90°. Gire o corpo para fora sentindo o alongamento no peitoral.", cue:"Mantenha o ombro abaixo do ouvido." },
+    { name:"Entrelaçar mãos atrás das costas", desc:"Entrelace os dedos atrás do corpo, estenda os cotovelos e eleve os braços levemente.", cue:"Abra o peito, não curve a lombar." },
+  ],
+  "Costas": [
+    { name:"Rotação de coluna sentado", desc:"Sente-se, cruze a perna e gire o tronco apoiando o cotovelo oposto no joelho.", cue:"Expire ao girar, não force a lombar." },
+    { name:"Gato-Camelo", desc:"Em quatro apoios, arque e desarque a coluna alternando lentamente.", cue:"Sincronize com a respiração." },
+    { name:"Criança (Child Pose)", desc:"Sente nos calcanhares e estenda os braços à frente no chão.", cue:"Deixe o peso das costas cair naturalmente." },
+  ],
+  "Ombro": [
+    { name:"Cruzar o braço ao peito", desc:"Leve um braço estendido ao peito, use o outro para pressionar levemente.", cue:"Mantenha o ombro para baixo, não encolha." },
+    { name:"Rotação interna de ombro", desc:"Leve a mão às costas e suba o máximo possível com ajuda da outra mão.", cue:"Não force — aumente a amplitude aos poucos." },
+  ],
+  "Bíceps": [
+    { name:"Extensão de bíceps na parede", desc:"Apoie a palma na parede com o polegar para baixo e gire o corpo suavemente.", cue:"Sinta a tensão da axila ao cotovelo." },
+  ],
+  "Tríceps": [
+    { name:"Tríceps atrás da cabeça", desc:"Leve o cotovelo atrás da cabeça e puxe suavemente com a mão oposta.", cue:"Mantenha a cabeça neutra, não empurre." },
+  ],
+  "Perna": [
+    { name:"Flexor do quadril (fenda)", desc:"Em posição de fenda, desça o quadril em direção ao chão.", cue:"Joelho da frente alinhado com o tornozelo." },
+    { name:"Borboleta (adutor)", desc:"Sente com as plantas dos pés unidas e pressione os joelhos suavemente para baixo.", cue:"Incline levemente o tronco à frente." },
+    { name:"Alongamento de isquiotibial em pé", desc:"Estenda uma perna à frente com o calcanhar no chão e incline o tronco.", cue:"Não curve a lombar — movimento vem do quadril." },
+  ],
+  "Glúteo": [
+    { name:"Pombo deitado (Pigeon Pose)", desc:"Dobre um joelho à frente no chão e estenda a outra perna atrás.", cue:"Mantenha os quadris nivelados." },
+    { name:"Glúteo cruzado sentado", desc:"Sente e cruze um tornozelo sobre o joelho oposto, incline o tronco à frente.", cue:"Sinta o glúteo da perna cruzada." },
+  ],
+  "Quadríceps": [
+    { name:"Quadríceps em pé", desc:"Flexione o joelho e segure o pé atrás com a mão. Mantenha os joelhos juntos.", cue:"Empurre o quadril levemente para frente." },
+  ],
+  "Panturrilha": [
+    { name:"Panturrilha na parede", desc:"Apoie o dedão na parede e incline o corpo mantendo o calcanhar no chão.", cue:"Mantenha o joelho levemente flexionado para o sóleo." },
+  ],
+  "Abdômen": [
+    { name:"Cobra (alongamento abdominal)", desc:"Deite de bruços, apoie as mãos e estenda os cotovelos erguendo o tronco.", cue:"Não bloqueie a lombar — suba só até sentir leve tensão." },
+  ],
+};
+
+// Grupos musculares de cobertura ampla (usados quando grupo não está no DB)
+const STRETCH_FALLBACK = [
+  { name:"Rotação cervical", desc:"Incline a cabeça lateralmente e use a mão para um leve aumento de amplitude.", cue:"Movimento lento, sem impulso." },
+  { name:"Rotação de tronco em pé", desc:"Pés na largura dos ombros, gire o tronco com os braços estendidos.", cue:"Mantenha os quadris estáveis." },
+];
+
+// Retorna lista de alongamentos para uma lista de exercícios do dia
+function getStretchesForExercises(exercises) {
+  const groups = new Set();
+  (exercises || []).forEach(ex => {
+    const found = EXS.find(e => e.name === (typeof ex === 'string' ? ex : ex.name));
+    if (found && found.primary) groups.add(found.primary);
+  });
+
+  const result = [];
+  const seen = new Set();
+  groups.forEach(g => {
+    const list = STRETCH_DB[g] || [];
+    list.forEach(s => {
+      if (!seen.has(s.name)) { seen.add(s.name); result.push({...s, group:g}); }
+    });
+  });
+
+  // Fallback se nenhum grupo mapeado
+  if (result.length === 0) {
+    STRETCH_FALLBACK.forEach(s => { if (!seen.has(s.name)) { seen.add(s.name); result.push({...s, group:'Geral'}); } });
+  }
+
+  // Máximo 6 alongamentos por sessão
+  return result.slice(0, 6);
+}
+
+// ── StretchSession: componente de sessão de alongamento ──────────────────
+const StretchSession = ({ exercises, onDone, onSkip, context }) => {
+  const stretches = React.useMemo(() => getStretchesForExercises(exercises), []);
+  const [idx, setIdx] = React.useState(0);
+  const [secs, setSecs] = React.useState(20);
+  const [running, setRunning] = React.useState(false);
+  const [elapsed, setElapsed] = React.useState(0);
+  const timerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    setElapsed(0);
+    setRunning(false);
+    clearInterval(timerRef.current);
+  }, [idx, secs]);
+
+  React.useEffect(() => {
+    if (running) {
+      timerRef.current = setInterval(() => {
+        setElapsed(e => {
+          if (e + 1 >= secs) {
+            clearInterval(timerRef.current);
+            setRunning(false);
+            return secs;
+          }
+          return e + 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [running, secs]);
+
+  const done = elapsed >= secs;
+  const progress = Math.min(elapsed / secs, 1);
+  const current = stretches[idx];
+  const isLast = idx === stretches.length - 1;
+  const circumference = 2 * Math.PI * 44;
+
+  if (!current) { onDone(); return null; }
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.96)',zIndex:9800,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'1.5rem',overflowY:'auto'}}>
+      {/* Header */}
+      <div style={{width:'100%',maxWidth:'420px',marginBottom:'1.2rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem'}}>
+          <div style={{fontSize:'.58rem',color:'#444',textTransform:'uppercase',letterSpacing:'.1em',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}>
+            🧘 ALONGAMENTO {context === 'before' ? '— PRÉ-TREINO' : context === 'after' ? '— PÓS-TREINO' : ''}
+          </div>
+          <button onClick={onSkip} style={{background:'none',border:'none',color:'#333',fontSize:'.7rem',cursor:'pointer',textTransform:'uppercase',letterSpacing:'.06em',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}>
+            Pular tudo ×
+          </button>
+        </div>
+        {/* Progress dots */}
+        <div style={{display:'flex',gap:'.35rem',justifyContent:'center'}}>
+          {stretches.map((_,i) => (
+            <div key={i} style={{width: i === idx ? '20px' : '6px', height:'6px', borderRadius:'3px',
+              background: i < idx ? '#6366f1' : i === idx ? '#a5b4fc' : '#1e1e1e',
+              transition:'all .3s'}}/>
+          ))}
+        </div>
+      </div>
+
+      {/* Timer ring */}
+      <div style={{position:'relative',marginBottom:'1.5rem'}}>
+        <svg width="100" height="100" style={{transform:'rotate(-90deg)'}}>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#111" strokeWidth="6"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke={done?"#4ade80":"#6366f1"} strokeWidth="6"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - progress)}
+            strokeLinecap="round"
+            style={{transition:'stroke-dashoffset .5s linear, stroke .3s'}}/>
+        </svg>
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:done?'#4ade80':'#fff',lineHeight:1}}>
+            {Math.max(0, secs - elapsed)}
+          </div>
+          <div style={{fontSize:'.5rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em'}}>seg</div>
+        </div>
+      </div>
+
+      {/* Stretch name + desc */}
+      <div style={{width:'100%',maxWidth:'420px',textAlign:'center',marginBottom:'1.5rem'}}>
+        <div style={{display:'inline-block',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.3)',borderRadius:'6px',padding:'.2rem .7rem',fontSize:'.6rem',fontWeight:700,color:'#a5b4fc',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.7rem',fontFamily:"'Barlow Condensed',sans-serif"}}>
+          {current.group}
+        </div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.03em',color:'#fff',marginBottom:'.5rem',lineHeight:1.1}}>
+          {current.name}
+        </div>
+        <div style={{fontSize:'.82rem',color:'#888',lineHeight:1.6,marginBottom:'.4rem'}}>
+          {current.desc}
+        </div>
+        <div style={{fontSize:'.72rem',color:'#6366f1',fontStyle:'italic'}}>
+          💡 {current.cue}
+        </div>
+      </div>
+
+      {/* Timer selector */}
+      <div style={{display:'flex',gap:'.5rem',marginBottom:'1.2rem'}}>
+        {[10,20,30].map(s => (
+          <button key={s} onClick={() => { if(!running){ setSecs(s); setElapsed(0); } }}
+            style={{padding:'.35rem .9rem',borderRadius:'8px',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',
+              background: secs===s ? 'rgba(99,102,241,.25)' : 'rgba(0,0,0,.3)',
+              border: secs===s ? '1px solid rgba(99,102,241,.6)' : '1px solid #1e1e1e',
+              color: secs===s ? '#a5b4fc' : '#444', cursor: running ? 'default' : 'pointer'}}>
+            {s}s
+          </button>
+        ))}
+      </div>
+
+      {/* Action buttons */}
+      <div style={{width:'100%',maxWidth:'420px',display:'grid',gap:'.65rem'}}>
+        {!running && !done && (
+          <button onClick={() => setRunning(true)}
+            style={{background:'linear-gradient(135deg,#6366f1,#4f46e5)',border:'none',borderRadius:'12px',padding:'.9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',boxShadow:'0 4px 20px rgba(99,102,241,.35)'}}>
+            ▶ Iniciar Timer
+          </button>
+        )}
+        {running && (
+          <button onClick={() => setRunning(false)}
+            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'12px',padding:'.9rem',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer'}}>
+            ⏸ Pausar
+          </button>
+        )}
+        <button onClick={() => { if (isLast) onDone(); else setIdx(i => i+1); }}
+          style={{background: done ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'rgba(255,255,255,.04)',
+            border: done ? 'none' : '1px solid #1e1e1e',
+            borderRadius:'12px',padding:'.75rem',color: done ? '#fff' : '#444',
+            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',
+            textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',
+            boxShadow: done ? '0 4px 16px rgba(34,197,94,.3)' : 'none',
+            transition:'all .3s'}}>
+          {isLast ? (done ? '✓ Concluir alongamento' : 'Pular este →') : (done ? '✓ Próximo →' : 'Pular este →')}
+        </button>
+      </div>
+
+      {/* Progress text */}
+      <div style={{marginTop:'1rem',fontSize:'.6rem',color:'#2a2a2a',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:'.06em',textTransform:'uppercase'}}>
+        {idx+1} de {stretches.length}
+      </div>
+    </div>
+  );
+};
+
+// ── StretchPrompt: modal "Deseja fazer alongamento?" ────────────────────
+const StretchPrompt = ({ onYes, onNo }) => (
+  <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.92)',zIndex:9800,display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}}>
+    <div style={{width:'100%',maxWidth:'360px',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'20px',padding:'2rem 1.5rem',textAlign:'center'}}>
+      <div style={{fontSize:'3rem',marginBottom:'1rem'}}>🧘</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#fff',marginBottom:'.5rem'}}>
+        Fazer alongamento?
+      </div>
+      <div style={{fontSize:'.82rem',color:'#666',lineHeight:1.6,marginBottom:'1.5rem'}}>
+        O DarkSet preparou alongamentos com base nos exercícios de hoje. O cronômetro do treino já vai começar!
+      </div>
+      <div style={{display:'grid',gap:'.65rem'}}>
+        <button onClick={onYes}
+          style={{background:'linear-gradient(135deg,#6366f1,#4f46e5)',border:'none',borderRadius:'12px',padding:'.85rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',boxShadow:'0 4px 20px rgba(99,102,241,.3)'}}>
+          Sim, fazer alongamento
+        </button>
+        <button onClick={onNo}
+          style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'12px',padding:'.75rem',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer'}}>
+          Pular desta vez
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 // DARKSET SELOS — Sistema de conquistas com identidade própria
 // ══════════════════════════════════════════════════════════════════════════
@@ -10072,7 +10403,7 @@ function App(){
 
       {authed && screen==="beats" && <PlaylistTreino prefs={prefs} setPrefs={setPrefs} setToast={setToast}/>}
       {authed && screen==="gym"   && <GymMode prefs={prefs} setPrefs={setPrefs} setToast={setToast} goto={goto}/>}
-      <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>
+      {screen !== 'session' && <footer style={{marginTop:'2rem',textAlign:'center',fontSize:'.65rem',color:'#2a2a2a',letterSpacing:'.08em',textTransform:'uppercase'}}>© {new Date().getFullYear()} DARKSET · V5.7.6</footer>}
       {prCelebration && <PRCelebration exName={prCelebration.exName} weight={prCelebration.weight} onClose={()=>setPrCelebration(null)}/>}
       {seloAnim    && <SeloUnlockAnim   selo={seloAnim}                       onClose={()=>setSeloAnim(null)}/>}
       {streakAnim  && <StreakAnim       days={streakAnim}                     onClose={()=>setStreakAnim(null)}/>}
