@@ -2447,27 +2447,64 @@ const Home=({goto,plans,history,prefs,setDrawerOpen})=>{
         </div>
       </button>
 
-      {/* ── PRÓXIMO TREINO (se tiver ficha) ── */}
-      {nextTrainDay && (
-        <div style={{background:'rgba(255,255,255,.025)',border:'1px solid #1a1a1a',borderRadius:'12px',padding:'.85rem 1rem'}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
-            <div style={{fontSize:'.58rem',color:'#444',textTransform:'uppercase',letterSpacing:'.08em'}}>
-              Próximo · <span style={{color:'var(--color-accent)'}}>{nextTrainDay.day}</span>
+      {/* ── RANK + SELO DESTAQUE na home (sempre visível) ── */}
+      {(()=>{
+        const featId = (()=>{ try{ return localStorage.getItem('ds.featuredSelo')||null; }catch(_){return null;} })();
+        const featSelo = featId ? SELOS.find(s=>s.id===featId) : null;
+        const cardioCount = parseInt(localStorage.getItem('ds.cardioCount')||'0');
+        const unlockedSet = new Set();
+        SELOS.forEach(s=>{ try{ if(s.check(history,prefs,cardioCount)) unlockedSet.add(s.id); }catch(_){} });
+        const lvl = [...NIVEIS].reverse().find(n=>unlockedSet.size>=n.minSelos) || NIVEIS[0];
+        const nextLvl = NIVEIS.find(n=>n.minSelos>unlockedSet.size);
+        const lvlPct = nextLvl ? Math.round((unlockedSet.size-lvl.minSelos)/(nextLvl.minSelos-lvl.minSelos)*100) : 100;
+        const hasFeat = featId && featSelo && unlockedSet.has(featId);
+        const accentColor = lvl.color.startsWith('linear') ? '#e31b23' : lvl.color;
+        return (
+          <div onClick={()=>goto('selos')} style={{cursor:'pointer',background:'#080808',border:`1px solid ${accentColor}28`,borderRadius:'18px',overflow:'hidden',position:'relative'}}>
+            <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 0% 50%, ${accentColor}15 0%, transparent 55%)`,pointerEvents:'none'}}/>
+            <div style={{display:'flex',alignItems:'center',gap:'1rem',padding:'.9rem 1.1rem'}}>
+              {/* Rank badge */}
+              <div style={{flexShrink:0}}>
+                {lvl.imgId && SELO_IMGS[lvl.imgId]
+                  ? <img src={SELO_IMGS[lvl.imgId]} width={68} height={68}
+                      style={{display:'block',filter:`drop-shadow(0 0 14px ${accentColor}88)`}}/>
+                  : <span style={{fontSize:'3rem',lineHeight:1}}>{lvl.icon}</span>}
+              </div>
+              {/* Rank info + progress */}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:'.5rem',color:'#333',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Seu rank</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.55rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1,
+                  background:lvl.color.startsWith('linear')?lvl.color:'none',
+                  WebkitBackgroundClip:lvl.color.startsWith('linear')?'text':'unset',
+                  WebkitTextFillColor:lvl.color.startsWith('linear')?'transparent':'unset',
+                  color:lvl.color.startsWith('linear')?'transparent':accentColor
+                }}>{lvl.label}</div>
+                <div style={{marginTop:'.4rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.2rem'}}>
+                    <div style={{fontSize:'.5rem',color:'#2a2a2a',textTransform:'uppercase',letterSpacing:'.05em'}}>
+                      {nextLvl ? `→ ${nextLvl.label}` : '⚡ Máximo'}
+                    </div>
+                    <div style={{fontSize:'.5rem',color:accentColor,fontWeight:800}}>{unlockedSet.size}{nextLvl?`/${nextLvl.minSelos}`:''}</div>
+                  </div>
+                  <div style={{height:'3px',background:'rgba(255,255,255,.04)',borderRadius:'3px',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:lvlPct+'%',background:lvl.color.startsWith('linear')?'linear-gradient(90deg,#e31b23,#facc15)':accentColor,borderRadius:'3px'}}/>
+                  </div>
+                </div>
+              </div>
+              {/* Featured selo or arrow */}
+              {hasFeat && SELO_IMGS[featId] ? (
+                <div style={{flexShrink:0,display:'flex',flexDirection:'column',alignItems:'center',gap:'.2rem'}}>
+                  <img src={SELO_IMGS[featId]} width={54} height={54}
+                    style={{display:'block',filter:'drop-shadow(0 0 10px rgba(250,204,21,.45))'}}/>
+                  <div style={{fontSize:'.45rem',color:'rgba(250,204,21,.4)',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>destaque</div>
+                </div>
+              ) : (
+                <div style={{flexShrink:0,fontSize:'.9rem',color:'#1e1e1e'}}>›</div>
+              )}
             </div>
-            <button onClick={()=>goto('session')} style={{background:'none',border:'none',padding:0,color:'var(--color-accent)',fontSize:'.65rem',fontWeight:700,cursor:'pointer',textTransform:'uppercase',letterSpacing:'.05em'}}>
-              Iniciar →
-            </button>
           </div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
-            {nextTrainDay.exs.slice(0,5).map((ex,i)=>(
-              <span key={i} style={{fontSize:'.65rem',background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'5px',padding:'.18rem .5rem',color:'#666',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600,textTransform:'uppercase'}}>
-                {typeof ex==='string'?ex:ex.name||'?'}
-              </span>
-            ))}
-            {nextTrainDay.exs.length>5 && <span style={{fontSize:'.65rem',color:'#333',padding:'.18rem .3rem'}}>+{nextTrainDay.exs.length-5}</span>}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── QUICK NAV GRID ── */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem'}}>
@@ -6818,107 +6855,150 @@ const SELO_IMGS = {
 // Lógica: mesmo músculo PRIMÁRIO + mesmo padrão (isolação/composto, vetor similar)
 // ══════════════════════════════════════════════════════════════════════════
 const SMART_SWAP_MAP = {
-  // ── PEITO ─────────────────────────────────────────────────────────────────
-  // Supinos: vetor horizontal, composto
-  "Supino reto barra":          ["Supino reto halteres","Supino máquina","Crossover reto"],
-  "Supino reto halteres":       ["Supino reto barra","Supino máquina","Crossover reto"],
-  "Supino máquina":             ["Supino reto halteres","Supino reto barra","Crossover reto"],
-  // Inclinados: vetor ascendente, foco porção superior
-  "Supino inclinado barra":     ["Supino inclinado halteres","Crossover alto","Crucifixo inclinado halteres"],
-  "Supino inclinado halteres":  ["Supino inclinado barra","Crossover alto","Crucifixo inclinado halteres"],
-  "Crucifixo inclinado halteres":["Crossover alto","Supino inclinado halteres","Peck deck inclinado"],
-  // Peck deck / crucifixo: isolação, adução horizontal
-  "Peck deck":                  ["Crucifixo halteres","Crossover reto","Crossover cruzado"],
-  "Crucifixo halteres":         ["Peck deck","Crossover reto","Crossover cruzado"],
-  "Crossover reto":             ["Peck deck","Crucifixo halteres","Crossover cruzado"],
-  "Crossover alto":             ["Crucifixo inclinado halteres","Supino inclinado halteres","Peck deck inclinado"],
-  "Crossover cruzado":          ["Peck deck","Crucifixo halteres","Crossover reto"],
+  // ══ PEITO ════════════════════════════════════════════════════════════════
+  // Supino reto: vetor horizontal, peitoral geral
+  "Supino reto barra":              ["Supino reto halteres","Supino reto máquina"],
+  "Supino reto halteres":           ["Supino reto barra","Supino reto máquina"],
+  "Supino reto máquina":            ["Supino reto halteres","Supino reto barra"],
+  // Supino inclinado: vetor ascendente, porção superior
+  "Supino inclinado barra":         ["Supino inclinado halteres","Supino inclinado máquina"],
+  "Supino inclinado halteres":      ["Supino inclinado barra","Supino inclinado máquina"],
+  "Supino inclinado máquina":       ["Supino inclinado halteres","Supino inclinado barra"],
+  "Supino inclinado Articulado":    ["Supino inclinado halteres","Supino inclinado máquina"],
+  // Supino declinado: vetor descendente, porção inferior
+  "Supino declinado barra":         ["Supino declinado halteres","Supino reto barra"],
+  "Supino declinado halteres":      ["Supino declinado barra","Supino reto halteres"],
+  // Crucifixo reto: isolação horizontal
+  "Crucifixo reto halteres":        ["Crucifixo Máquina","Crossover polia alta"],
+  "Crucifixo Máquina":              ["Crucifixo reto halteres","Crossover polia alta"],
+  "Crossover polia alta":           ["Crucifixo reto halteres","Crucifixo Máquina"],
+  // Crucifixo inclinado: isolação com ênfase superior
+  "Crucifixo inclinado halteres":   ["Supino inclinado halteres","Crossover polia alta"],
+  // Flexão de braço
+  "Flexão de braço":                ["Supino reto halteres","Mergulho no banco"],
+  // Pullover: serrátil/peitoral menor
+  "Pullover halteres":              ["Supino reto halteres","Crucifixo reto halteres"],
 
-  // ── COSTAS ────────────────────────────────────────────────────────────────
-  // Puxadas: vetor vertical, adução escapular, dorsais
-  "Puxada alta polia":          ["Puxada supinada","Puxada triângulo","Pulldown máquina"],
-  "Puxada supinada":            ["Puxada alta polia","Puxada triângulo","Pulldown máquina"],
-  "Puxada triângulo":           ["Puxada supinada","Puxada alta polia","Pulldown máquina"],
-  "Pulldown máquina":           ["Puxada alta polia","Puxada supinada","Puxada triângulo"],
-  "Barra fixa":                 ["Puxada alta polia","Puxada supinada","Graviton"],
-  // Remadas: vetor horizontal, romboides/trapézio médio
-  "Remada curvada barra":       ["Remada curvada halteres","Remada cavalinho","Remada máquina"],
-  "Remada curvada halteres":    ["Remada curvada barra","Remada serrote halteres","Remada máquina"],
-  "Remada serrote halteres":    ["Remada curvada halteres","Remada baixa unilateral","Remada curvada barra"],
-  "Remada baixa unilateral":    ["Remada serrote halteres","Remada curvada halteres","Remada máquina"],
-  "Remada cavalinho":           ["Remada curvada barra","Remada máquina","Remada curvada halteres"],
-  "Remada máquina":             ["Remada curvada barra","Remada cavalinho","Remada curvada halteres"],
+  // ══ COSTAS ═══════════════════════════════════════════════════════════════
+  // Puxadas: vetor vertical, dorsais
+  "Puxada alta aberta":             ["Pulldown","Puxada fechada"],
+  "Puxada fechada":                 ["Puxada triângulo","Pulldown"],
+  "Puxada triângulo":               ["Puxada fechada","Puxada alta aberta"],
+  "Puxada alta unilateral":         ["Puxada fechada","Pulldown"],
+  "Pulldown":                       ["Puxada alta aberta","Puxada fechada"],
+  "Barra fixa":                     ["Puxada alta aberta","Pulldown"],
+  // Remadas horizontais: romboides/trapézio médio
+  "Remada curvada barra":           ["Remada curvada halteres","Remada articulada"],
+  "Remada curvada halteres":        ["Remada curvada barra","Remada serrote halteres"],
+  "Remada serrote halteres":        ["Remada curvada halteres","Remada baixa unilateral"],
+  "Remada baixa polia":             ["Remada articulada","Remada baixa aberta polia"],
+  "Remada baixa aberta polia":      ["Remada baixa polia","Remada curvada barra"],
+  "Remada baixa unilateral":        ["Remada serrote halteres","Remada baixa polia"],
+  "Remada articulada":              ["Remada baixa polia","Remada curvada barra"],
+  "Remada cavalinho":               ["Remada curvada barra","Remada articulada"],
+  // Remada alta: trapézio superior
+  "Remada alta barra":              ["Encolhimento barra","Encolhimento halteres"],
+  // Encolhimento: trapézio superior isolação
+  "Encolhimento barra":             ["Encolhimento halteres","Remada alta barra"],
+  "Encolhimento halteres":          ["Encolhimento barra","Remada alta barra"],
+  // Extensão lombar
+  "Extensão lombar máquina":        ["Levantamento terra","Stiff"],
 
-  // ── OMBRO ─────────────────────────────────────────────────────────────────
-  // Desenvolvimentos: composto, deltoide anterior/medial
-  "Desenvolvimento barra":      ["Desenvolvimento halteres","Desenvolvimento máquina","Arnold press"],
-  "Desenvolvimento halteres":   ["Desenvolvimento barra","Arnold press","Desenvolvimento máquina"],
-  "Desenvolvimento máquina":    ["Desenvolvimento halteres","Desenvolvimento barra","Arnold press"],
-  "Arnold press":               ["Desenvolvimento halteres","Desenvolvimento máquina","Desenvolvimento barra"],
-  // Elevações laterais: isolação, deltoide medial
-  "Elevação lateral halteres":  ["Elevação lateral cabo","Elevação lateral máquina","Levantamento frontal halteres"],
-  "Elevação lateral cabo":      ["Elevação lateral halteres","Elevação lateral máquina"],
-  "Elevação lateral máquina":   ["Elevação lateral halteres","Elevação lateral cabo"],
-  // Frente: deltoide anterior
-  "Levantamento frontal barra": ["Levantamento frontal halteres","Face pull","Elevação lateral halteres"],
-  "Levantamento frontal halteres":["Levantamento frontal barra","Face pull"],
+  // ══ OMBRO ════════════════════════════════════════════════════════════════
+  // Desenvolvimentos: composto
+  "Desenvolvimento barra":          ["Desenvolvimento halteres","Desenvolvimento máquina"],
+  "Desenvolvimento halteres":       ["Desenvolvimento barra","Arnold press halteres"],
+  "Desenvolvimento máquina":        ["Desenvolvimento halteres","Desenvolvimento barra"],
+  "Arnold press halteres":          ["Desenvolvimento halteres","Desenvolvimento máquina"],
+  // Elevação lateral: deltoide medial
+  "Elevação lateral halteres":      ["Elevação lateral polia","Elevação lateral unilateral polia"],
+  "Elevação lateral polia":         ["Elevação lateral halteres","Elevação lateral unilateral polia"],
+  "Elevação lateral unilateral polia":["Elevação lateral halteres","Elevação lateral polia"],
+  // Elevação frontal: deltoide anterior
+  "Elevação frontal barra":         ["Elevação frontal halteres","Desenvolvimento barra"],
+  "Elevação frontal halteres":      ["Elevação frontal barra","Desenvolvimento halteres"],
   // Posterior: deltoide posterior
-  "Crucifixo invertido":        ["Face pull","Peck deck invertido","Remada alta"],
-  "Face pull":                  ["Crucifixo invertido","Peck deck invertido"],
+  "Face Pull (corda)":              ["Crucifixo inverso halteres","Crucifixo inverso polia"],
+  "Crucifixo inverso halteres":     ["Face Pull (corda)","Crucifixo inverso máquina"],
+  "Crucifixo inverso máquina":      ["Crucifixo inverso halteres","Crucifixo inverso polia"],
+  "Crucifixo inverso polia":        ["Face Pull (corda)","Crucifixo inverso halteres"],
 
-  // ── BÍCEPS ────────────────────────────────────────────────────────────────
-  // Rosca direta: bíceps braquial, cotovelo neutro
-  "Rosca direta barra":         ["Rosca direta halteres","Rosca direta polia","Rosca alternada halteres"],
-  "Rosca direta halteres":      ["Rosca direta barra","Rosca alternada halteres","Rosca direta polia"],
-  "Rosca alternada halteres":   ["Rosca direta halteres","Rosca direta barra","Rosca direta polia"],
-  "Rosca direta polia":         ["Rosca direta halteres","Rosca direta barra","Rosca Bayesian cabo"],
-  // Rosca no banco/inclinada: ênfase cabeça longa, pré-estiramento
-  "Rosca 45° halteres":         ["Rosca Bayesian cabo","Rosca inclinada halteres","Rosca concentrada halteres"],
-  "Rosca Bayesian cabo":        ["Rosca 45° halteres","Rosca inclinada halteres","Rosca direta polia"],
-  "Rosca inclinada halteres":   ["Rosca 45° halteres","Rosca Bayesian cabo","Rosca concentrada halteres"],
-  // Scott: isolação, sem momentum
-  "Rosca Scott máquina":        ["Rosca concentrada halteres","Rosca direta barra","Rosca direta halteres"],
-  "Rosca concentrada halteres": ["Rosca Scott máquina","Rosca 45° halteres","Rosca Bayesian cabo"],
-  // Martelo: braquiorradial
-  "Rosca martelo halteres":     ["Rosca martelo corda","Rosca inversa barra"],
-  "Rosca martelo corda":        ["Rosca martelo halteres","Rosca inversa barra"],
+  // ══ BÍCEPS ═══════════════════════════════════════════════════════════════
+  // Rosca direta
+  "Rosca direta barra":             ["Rosca direta halteres","Rosca alternada halteres"],
+  "Rosca direta halteres":          ["Rosca direta barra","Rosca alternada halteres"],
+  "Rosca alternada halteres":       ["Rosca direta halteres","Rosca direta barra"],
+  "Rosca direta polia":             ["Rosca direta halteres","Rosca Bayesian cabo"],
+  // Ênfase cabeça longa (pré-estiramento)
+  "Rosca 45° halteres":             ["Rosca Bayesian cabo","Rosca concentrada halteres"],
+  "Rosca Bayesian cabo":            ["Rosca 45° halteres","Rosca direta polia"],
+  // Scott: isolação sem momentum
+  "Rosca Scott máquina":            ["Rosca concentrada halteres","Rosca direta barra"],
+  "Rosca concentrada halteres":     ["Rosca Scott máquina","Rosca 45° halteres"],
+  // Martelo: braquiorradial/braquial
+  "Rosca martelo halteres":         ["Rosca martelo corda","Rosca inversa barra"],
+  "Rosca martelo corda":            ["Rosca martelo halteres","Rosca inversa barra"],
+  // Inversa
+  "Rosca inversa barra":            ["Rosca martelo halteres","Rosca punho barra"],
+  "Rosca punho barra":              ["Rosca inversa barra","Rosca martelo halteres"],
 
-  // ── TRÍCEPS ───────────────────────────────────────────────────────────────
-  // Pulley / extensões em polia: isolação, cabeça lateral
-  "Tríceps pulley barra reta":  ["Tríceps pulley corda","Tríceps pulley barra V","Kick back tríceps halteres"],
-  "Tríceps pulley corda":       ["Tríceps pulley barra reta","Tríceps pulley barra V","Kick back tríceps halteres"],
-  "Kick back tríceps halteres": ["Tríceps pulley corda","Tríceps pulley barra reta"],
-  // Testa / francês: ênfase cabeça longa
-  "Tríceps testa barra W":      ["Tríceps testa halteres","Tríceps francês halteres","Tríceps francês barra"],
-  "Tríceps testa halteres":     ["Tríceps testa barra W","Tríceps francês halteres","Tríceps francês barra"],
-  "Tríceps francês barra":      ["Tríceps francês halteres","Tríceps testa barra W","Tríceps testa halteres"],
-  "Tríceps francês halteres":   ["Tríceps francês barra","Tríceps testa halteres","Tríceps testa barra W"],
-  // Paralelas / bankdips: composto
-  "Paralelas":                  ["Mergulho no banco","Supino reto barra","Fundos paralelas"],
-  "Mergulho no banco":          ["Paralelas","Tríceps pulley corda"],
+  // ══ TRÍCEPS ══════════════════════════════════════════════════════════════
+  // Pulley: cabeça lateral, topo de amplitude
+  "Tríceps pulley barra reta":      ["Tríceps pulley corda","Kick back tríceps halteres"],
+  "Tríceps pulley corda":           ["Tríceps pulley barra reta","Kick back tríceps halteres"],
+  "Kick back tríceps halteres":     ["Tríceps pulley corda","Tríceps pulley barra reta"],
+  // Testa/francês: cabeça longa (pré-estiramento)
+  "Tríceps testa barra W":          ["Tríceps testa halteres","Tríceps francês halteres"],
+  "Tríceps testa halteres":         ["Tríceps testa barra W","Tríceps francês barra"],
+  "Tríceps francês barra":          ["Tríceps francês halteres","Tríceps testa barra W"],
+  "Tríceps francês halteres":       ["Tríceps francês barra","Tríceps testa halteres"],
+  // Composto
+  "Paralelas":                      ["Mergulho no banco","Supino declinado barra"],
+  "Mergulho no banco":              ["Paralelas","Tríceps pulley corda"],
 
-  // ── QUADRÍCEPS ────────────────────────────────────────────────────────────
-  "Agachamento livre":          ["Agachamento hack máquina","Leg press 45°","Agachamento búlgaro halteres"],
-  "Leg press 45°":              ["Agachamento livre","Agachamento hack máquina","Cadeira extensora"],
-  "Agachamento hack máquina":   ["Leg press 45°","Agachamento livre","Cadeira extensora"],
-  "Agachamento búlgaro halteres":["Afundo com halteres","Afundo com barra","Agachamento livre"],
-  "Afundo com halteres":        ["Afundo com barra","Agachamento búlgaro halteres","Leg press 45°"],
-  "Afundo com barra":           ["Afundo com halteres","Agachamento búlgaro halteres","Agachamento livre"],
-  "Cadeira extensora":          ["Leg press 45°","Agachamento hack máquina"],
+  // ══ QUADRÍCEPS ═══════════════════════════════════════════════════════════
+  "Agachamento livre":              ["Leg press 45°","Agachamento hack máquina"],
+  "Agachamento hack máquina":       ["Leg press 45°","Agachamento livre"],
+  "Leg press 45°":                  ["Agachamento hack máquina","Cadeira extensora"],
+  "Leg press 180° unilateral":      ["Leg press 45°","Cadeira extensora unilateral"],
+  "Cadeira extensora":              ["Leg press 45°","Agachamento hack máquina"],
+  "Cadeira extensora unilateral":   ["Cadeira extensora","Leg press 180° unilateral"],
+  "Agachamento búlgaro halteres":   ["Afundo com halteres","Passada avançada halteres"],
+  "Afundo com halteres":            ["Agachamento búlgaro halteres","Passada avançada halteres"],
+  "Afundo com barra":               ["Afundo com halteres","Agachamento búlgaro halteres"],
+  "Passada avançada halteres":      ["Afundo com halteres","Agachamento búlgaro halteres"],
+  "Agachamento sumô barra":         ["Agachamento sumô halteres","Cadeira adutora"],
+  "Agachamento sumô halteres":      ["Agachamento sumô barra","Cadeira adutora"],
 
-  // ── ISQUIOTIBIAIS / GLÚTEO ────────────────────────────────────────────────
-  "Stiff barra":                ["Stiff halteres","Cadeira flexora","Mesa flexora"],
-  "Stiff halteres":             ["Stiff barra","Cadeira flexora","Mesa flexora"],
-  "Cadeira flexora":            ["Mesa flexora","Stiff barra","Stiff halteres"],
-  "Mesa flexora":               ["Cadeira flexora","Stiff barra","Stiff halteres"],
-  "Hip thrust":                 ["Elevação pélvica","Glúteo cabo"],
-  "Elevação pélvica":           ["Hip thrust","Glúteo cabo"],
-  "Abdução cadeira":            ["Abdução cabo","Agachamento sumo halteres"],
+  // ══ ISQUIOTIBIAIS / GLÚTEO ═══════════════════════════════════════════════
+  "Stiff":                          ["Stiff com halteres","Mesa flexora"],
+  "Stiff com halteres":             ["Stiff","Cadeira flexora"],
+  "Stiff unilateral halteres":      ["Stiff com halteres","Cadeira flexora unilateral"],
+  "Cadeira flexora":                ["Mesa flexora","Stiff com halteres"],
+  "Cadeira flexora unilateral":     ["Cadeira flexora","Mesa flexora"],
+  "Mesa flexora":                   ["Cadeira flexora","Stiff"],
+  "Flexora unilateral em pé":       ["Cadeira flexora unilateral","Stiff unilateral halteres"],
+  "Elevação pélvica com barra":     ["Glúteo 4 apoios cabo","Agachamento sumô halteres"],
+  "Glúteo 4 apoios cabo":           ["Elevação pélvica com barra","Agachamento sumô halteres"],
+  // Abdução/Adução
+  "Cadeira abdutora":               ["Abdução em pé polia","Agachamento sumô halteres"],
+  "Cadeira adutora":                ["Agachamento sumô halteres","Agachamento sumô barra"],
+  "Abdução em pé polia":            ["Cadeira abdutora","Agachamento sumô halteres"],
 
-  // ── PANTURRILHA ───────────────────────────────────────────────────────────
-  "Panturrilha em pé":          ["Panturrilha sentado","Panturrilha leg press","Panturrilha burro máquina"],
-  "Panturrilha sentado":        ["Panturrilha em pé","Panturrilha leg press"],
-  "Panturrilha leg press":      ["Panturrilha em pé","Panturrilha sentado"],
+  // ══ LEVANTAMENTO TERRA ═══════════════════════════════════════════════════
+  "Levantamento terra":             ["Stiff","Extensão lombar máquina"],
+
+  // ══ PANTURRILHA ══════════════════════════════════════════════════════════
+  "Panturrilha em pé barra livre":  ["Panturrilha em pé máquina","Panturrilha sentado máquina"],
+  "Panturrilha em pé máquina":      ["Panturrilha em pé barra livre","Panturrilha sentado máquina"],
+  "Panturrilha sentado máquina":    ["Panturrilha em pé máquina","Panturrilha em pé barra livre"],
+
+  // ══ ABDÔMEN ══════════════════════════════════════════════════════════════
+  "Abdômen supra":                  ["Abdômen supra declinado","Prancha isométrica"],
+  "Abdômen supra declinado":        ["Abdômen supra","Prancha isométrica"],
+  "Abdômen infra":                  ["Abdômen infra na paralela","Prancha isométrica"],
+  "Abdômen infra na paralela":      ["Abdômen infra","Prancha isométrica"],
+  "Prancha isométrica":             ["Abdômen supra","Abdômen infra"],
 };
 
 // Retorna até 2 sugestões inteligentes para um exercício dado
@@ -7378,38 +7458,100 @@ const DarkSelos = ({history, prefs}) => {
 
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>
-            DARK<span style={{color:'var(--color-accent)'}}>SELOS</span>
+
+      {/* ══ RANK HERO — tela cheia, badge gigante ══ */}
+      <div style={{position:'relative',borderRadius:'22px',overflow:'hidden',background:'#050505',border:`1px solid ${currentLevel.color.startsWith('linear')?'rgba(227,27,35,.35)':currentLevel.color+'40'}`}}>
+        {/* Deep glow background */}
+        <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 0%, ${currentLevel.color.startsWith('linear')?'#e31b23':currentLevel.color}22 0%, transparent 60%)`,pointerEvents:'none'}}/>
+        <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 100%, ${currentLevel.color.startsWith('linear')?'#facc15':'#000'}08 0%, transparent 60%)`,pointerEvents:'none'}}/>
+
+        {/* Header row */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'1rem 1.1rem .75rem'}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.7rem',textTransform:'uppercase',lineHeight:1,letterSpacing:'.02em'}}>
+              DARK<span style={{color:'var(--color-accent)'}}>SELOS</span>
+            </div>
+            <div style={{fontSize:'.58rem',color:'#333',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'3px'}}>Conquistas do ferro</div>
           </div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Conquistas do ferro</div>
+          <DemoBtn label="Demo selo" color="#cc44ff" onClick={()=>{ const s=SELOS.find(x=>x.id==='streak_180')||SELOS[0]; if(typeof window._demoSelo==='function') window._demoSelo(s.id); }}/>
         </div>
-        <DemoBtn label="Demo selo" color="#cc44ff" onClick={()=>{ const s=SELOS.find(x=>x.id==='streak_180')||SELOS[0]; if(typeof window._demoSelo==='function') window._demoSelo(s.id); }}/>
+
+        {/* ── BADGE GIGANTE ── */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'.5rem 1rem 1.5rem',gap:'.5rem'}}>
+          {/* Badge */}
+          <div style={{position:'relative',marginBottom:'.25rem'}}>
+            {/* Halo glow behind badge */}
+            <div style={{position:'absolute',inset:'-20px',borderRadius:'50%',background:`radial-gradient(circle, ${currentLevel.color.startsWith('linear')?'#e31b23':currentLevel.color}30 0%, transparent 70%)`,filter:'blur(16px)',pointerEvents:'none'}}/>
+            {currentLevel.imgId && SELO_IMGS[currentLevel.imgId]
+              ? <img src={SELO_IMGS[currentLevel.imgId]} width={200} height={200}
+                  style={{display:'block',position:'relative',
+                    filter:`drop-shadow(0 0 40px ${currentLevel.color.startsWith('linear')?'#e31b23':currentLevel.color}99) drop-shadow(0 0 16px ${currentLevel.color.startsWith('linear')?'#facc15':currentLevel.color}55)`}}/>
+              : <span style={{fontSize:'10rem',lineHeight:1,position:'relative'}}>{currentLevel.icon}</span>}
+          </div>
+
+          {/* Rank name */}
+          <div style={{textAlign:'center'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.8rem',textTransform:'uppercase',letterSpacing:'.08em',lineHeight:.95,
+              background:currentLevel.color.startsWith('linear')?currentLevel.color:'none',
+              WebkitBackgroundClip:currentLevel.color.startsWith('linear')?'text':'unset',
+              WebkitTextFillColor:currentLevel.color.startsWith('linear')?'transparent':'unset',
+              color:currentLevel.color.startsWith('linear')?'transparent':currentLevel.color
+            }}>{currentLevel.label}</div>
+            <div style={{fontSize:'.72rem',color:'#444',marginTop:'.35rem',letterSpacing:'.03em'}}>{currentLevel.desc}</div>
+          </div>
+
+          {/* Selos count pill */}
+          <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #1e1e1e',borderRadius:'20px',padding:'.3rem 1rem',marginTop:'.1rem'}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'var(--color-accent)'}}>{unlocked.size}</span>
+            <span style={{fontSize:'.65rem',color:'#333',fontWeight:600}}> / {SELOS.length} selos</span>
+          </div>
+
+          {/* Progress to next level */}
+          {nextLevel ? (
+            <div style={{width:'100%',maxWidth:280,marginTop:'.2rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.4rem'}}>
+                <div style={{fontSize:'.58rem',color:'#444',textTransform:'uppercase',letterSpacing:'.07em',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                  Próximo:
+                  {nextLevel.imgId && SELO_IMGS[nextLevel.imgId]
+                    ? <img src={SELO_IMGS[nextLevel.imgId]} width={16} height={16} style={{display:'inline-block',verticalAlign:'middle',opacity:.5}}/>
+                    : <span>{nextLevel.icon}</span>}
+                  <span style={{color:'#555'}}>{nextLevel.label}</span>
+                </div>
+                <div style={{fontSize:'.65rem',fontWeight:800,color:'var(--color-accent)'}}>{unlocked.size}/{nextLevel.minSelos}</div>
+              </div>
+              <div style={{height:'5px',background:'rgba(255,255,255,.05)',borderRadius:'5px',overflow:'hidden'}}>
+                <div style={{height:'100%',width:levelPct+'%',background:currentLevel.color.startsWith('linear')?'linear-gradient(90deg,#e31b23,#facc15)':currentLevel.color,borderRadius:'5px',transition:'width .8s ease'}}/>
+              </div>
+            </div>
+          ) : (
+            <div style={{fontSize:'.82rem',color:'#facc15',fontWeight:800,letterSpacing:'.05em',textTransform:'uppercase'}}>⚡ Nível máximo atingido</div>
+          )}
+        </div>
       </div>
 
-      {/* Featured selo — destaque */}
-      <div style={{background:'rgba(250,204,21,.04)',border:'1px solid rgba(250,204,21,.12)',borderRadius:'16px',padding:'1.1rem',display:'flex',alignItems:'center',gap:'1rem',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',right:8,top:8,fontSize:'.55rem',color:'rgba(250,204,21,.4)',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque</div>
+      {/* ══ SELO EM DESTAQUE — picker integrado ══ */}
+      <div style={{background:'rgba(0,0,0,.5)',border:`1px solid ${featuredSelo&&unlocked.has(featuredSelo.id)?'rgba(250,204,21,.18)':'#111'}`,borderRadius:'18px',overflow:'hidden'}}>
         {featuredSelo && unlocked.has(featuredSelo.id) ? (
-          <>
-            <SeloImg id={featuredSelo.id} size={88} locked={false} featured={true}/>
+          <div style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.1rem',position:'relative'}}>
+            <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 15% 50%, rgba(250,204,21,.06) 0%, transparent 65%)',pointerEvents:'none'}}/>
+            <div style={{position:'absolute',top:10,right:12,fontSize:'.52rem',color:'rgba(250,204,21,.35)',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700}}>Destaque</div>
+            <SeloImg id={featuredSelo.id} size={96} locked={false} featured={true}/>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.25rem',textTransform:'uppercase',color:'#fff',lineHeight:1.1}}>{featuredSelo.title}</div>
-              <div style={{fontSize:'.7rem',color:'#666',marginTop:'.3rem'}}>{featuredSelo.desc}</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#fff',lineHeight:1.1,letterSpacing:'.02em'}}>{featuredSelo.title}</div>
+              <div style={{fontSize:'.65rem',color:'#555',marginTop:'.3rem',lineHeight:1.4}}>{featuredSelo.desc}</div>
               <button onClick={()=>setPickingFeatured(true)}
-                style={{marginTop:'.6rem',background:'rgba(250,204,21,.08)',border:'1px solid rgba(250,204,21,.15)',borderRadius:'8px',padding:'.3rem .7rem',color:'rgba(250,204,21,.7)',fontSize:'.65rem',letterSpacing:'.05em',cursor:'pointer',textTransform:'uppercase'}}>
+                style={{marginTop:'.65rem',background:'rgba(250,204,21,.06)',border:'1px solid rgba(250,204,21,.18)',borderRadius:'8px',padding:'.32rem .75rem',color:'rgba(250,204,21,.65)',fontSize:'.62rem',letterSpacing:'.06em',cursor:'pointer',textTransform:'uppercase',fontWeight:800}}>
                 Trocar destaque
               </button>
             </div>
-          </>
+          </div>
         ) : (
-          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'.5rem',padding:'.5rem 0'}}>
-            <div style={{fontSize:'2rem',opacity:.3}}>⭐</div>
-            <div style={{fontSize:'.72rem',color:'#444',textAlign:'center'}}>Nenhum selo em destaque</div>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.6rem',padding:'1.25rem 1rem'}}>
+            <div style={{fontSize:'2.2rem',opacity:.2}}>⭐</div>
+            <div style={{fontSize:'.73rem',color:'#333',textAlign:'center',letterSpacing:'.03em'}}>Nenhum selo em destaque</div>
             {unlocked.size > 0 && (
               <button onClick={()=>setPickingFeatured(true)}
-                style={{background:'rgba(250,204,21,.07)',border:'1px solid rgba(250,204,21,.12)',borderRadius:'8px',padding:'.35rem .9rem',color:'rgba(250,204,21,.6)',fontSize:'.65rem',letterSpacing:'.05em',cursor:'pointer',textTransform:'uppercase'}}>
+                style={{background:'rgba(250,204,21,.06)',border:'1px solid rgba(250,204,21,.14)',borderRadius:'10px',padding:'.4rem 1.1rem',color:'rgba(250,204,21,.55)',fontSize:'.65rem',letterSpacing:'.06em',cursor:'pointer',textTransform:'uppercase',fontWeight:800}}>
                 Escolher destaque
               </button>
             )}
@@ -7441,51 +7583,6 @@ const DarkSelos = ({history, prefs}) => {
           </div>
         </div>
       )}
-
-      {/* Level card */}
-      <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'14px',padding:'1.1rem',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',right:'-10px',top:'-10px',width:'80px',height:'80px',opacity:.06}}>
-          {currentLevel.imgId && SELO_IMGS[currentLevel.imgId]
-            ? <img src={SELO_IMGS[currentLevel.imgId]} width={80} height={80} style={{display:'block'}}/>
-            : <span style={{fontSize:'5rem',lineHeight:1}}>{currentLevel.icon}</span>}
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:'.85rem',marginBottom:'.75rem'}}>
-          <div style={{width:64,height:64,flexShrink:0}}>
-            {currentLevel.imgId && SELO_IMGS[currentLevel.imgId]
-              ? <img src={SELO_IMGS[currentLevel.imgId]} width={64} height={64} style={{display:'block',filter:'drop-shadow(0 0 12px '+currentLevel.color.slice(0,7)+'66)'}}/>
-              : <span style={{fontSize:'2.5rem',lineHeight:1}}>{currentLevel.icon}</span>}
-          </div>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',
-              background:currentLevel.color.startsWith('linear')?currentLevel.color:'none',
-              WebkitBackgroundClip:currentLevel.color.startsWith('linear')?'text':'unset',
-              WebkitTextFillColor:currentLevel.color.startsWith('linear')?'transparent':'unset',
-              color:currentLevel.color.startsWith('linear')?'transparent':currentLevel.color
-            }}>{currentLevel.label}</div>
-            <div style={{fontSize:'.7rem',color:'var(--color-text-sub)'}}>{currentLevel.desc}</div>
-          </div>
-        </div>
-        {nextLevel ? (
-          <>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.35rem'}}>
-              <div style={{fontSize:'.62rem',color:'#555',textTransform:'uppercase',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                Próximo:
-                {nextLevel.imgId && SELO_IMGS[nextLevel.imgId]
-                  ? <img src={SELO_IMGS[nextLevel.imgId]} width={16} height={16} style={{display:'inline-block',verticalAlign:'middle'}}/>
-                  : <span>{nextLevel.icon}</span>
-                }
-                <span style={{color:'var(--color-text-sub)'}}>{nextLevel.label}</span>
-              </div>
-              <div style={{fontSize:'.62rem',color:'var(--color-accent)',fontWeight:700}}>{unlocked.size}/{nextLevel.minSelos}</div>
-            </div>
-            <div style={{height:'5px',background:'rgba(255,255,255,.06)',borderRadius:'4px',overflow:'hidden'}}>
-              <div style={{height:'100%',width:levelPct+'%',background:currentLevel.color.startsWith('linear')?'#e31b23':currentLevel.color,borderRadius:'4px',transition:'width .6s'}}/>
-            </div>
-          </>
-        ) : (
-          <div style={{fontSize:'.75rem',color:'#facc15',fontWeight:700}}>⚡ Nível máximo atingido</div>
-        )}
-      </div>
 
       {/* Progress */}
       <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'10px',padding:'.75rem 1rem'}}>
