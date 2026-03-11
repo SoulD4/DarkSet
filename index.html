@@ -468,6 +468,7 @@ const EXS=[
   E("Remada curvada halteres","Costas","Romboides/Trapézio Médio","Halteres"),
   E("Remada serrote halteres","Costas","Romboides/Trapézio Médio","Halteres","iniciante"),
   // ── BÍCEPS ────────────────────────────────────────────────────────────────
+  E("Rosca Bayesian cabo","Bíceps","Bíceps Braquial (Cabeça Longa)","Cabo/Crossover"),
   E("Rosca 45° halteres","Bíceps","Bíceps Braquial","Halteres"),
   E("Rosca alternada halteres","Bíceps","Bíceps Braquial","Halteres"),
   E("Rosca concentrada halteres","Bíceps","Bíceps Braquial","Halteres","iniciante"),
@@ -5319,6 +5320,10 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const resolvedPlan = allPlansForSelect.find(p=>p.id===resolvedPlanId) || activePlan || null;
   const isPersonalPlan = resolvedPlan?.fromPersonal === true;
   const planItems = resolvedPlan?.byDay?.[day] || [];
+  // Session-only swaps applied in-memory — never touches the saved plan
+  const planItemsWithSwaps = planItems.map((item, idx) =>
+    sessionSwaps[idx] ? {...item, name: sessionSwaps[idx], exId: (EXS.find(e=>e.name===sessionSwaps[idx])?.id || item.exId)} : item
+  );
   // allSets: mapa de índice → {sets, rir} — persiste enquanto sessão ativa
   const [allSets, setAllSets] = useState({});
   // sets/rir do exercício atual (derivados de allSets)
@@ -5367,7 +5372,9 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   });
   const [freeSearch, setFreeSearch] = useState('');
   const [showFreeSearch, setShowFreeSearch] = useState(false);
-  const [showSwap, setShowSwap] = useState(false);  // trocar exercício
+  const [showSwap, setShowSwap] = useState(false);  // trocar exercício (lista completa)
+  const [showQuickSwap, setShowQuickSwap] = useState(false); // sugestão rápida elite
+  const [sessionSwaps, setSessionSwaps] = useState({}); // {cursor: newExName} — só na sessão
   const [swapSearch, setSwapSearch] = useState('');
   const rirDefault = (typeof prefs.rirDefault === 'number') ? (prefs.rirDefault === 0 ? 'Falha' : String(prefs.rirDefault)) : '--';
 
@@ -5379,7 +5386,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   // ── PLAN MODE: inicializa sets do exercício atual se ainda não preenchido ──
   useEffect(() => {
     if (!started || mode !== 'plan') return;
-    const planned = planItems[cursor]?.setsPlanned || 3;
+    const planned = planItemsWithSwaps?.[cursor]?.setsPlanned ?? planItems[cursor]?.setsPlanned ?? 3;
     setAllSets(prev => {
       if (prev[cursor] && prev[cursor].sets.length > 0) return prev; // já tem dados
       const _def = rirDefault;
@@ -5398,7 +5405,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
 
 
   const lastPerf = (() => {
-    const ex = planItems[cursor]; if (!ex) return null;
+    const ex = planItemsWithSwaps?.[cursor] ?? planItems[cursor]; if (!ex) return null;
     const entries = Object.entries(history).sort((a, b) => a[0] > b[0] ? -1 : 1);
     for (const [, obj] of entries) {
       const f = obj.entries.find(e => e.name === ex.name);
@@ -5808,8 +5815,8 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
     </div>
   );
 
-  const current = planItems[cursor];
-  const exMeta = EXS.find(e => e.id === current?.exId);
+  const current = planItemsWithSwaps[cursor];
+  const exMeta = EXS.find(e => e.id === current?.exId || e.name === current?.name);
   const progress = ((cursor + 1) / planItems.length) * 100;
 
   return (
@@ -5845,6 +5852,11 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
               <button onClick={function(){ var _p=getDSPlan(); if(!_p.perms.swap){ window._showPaywall&&window._showPaywall('Trocar exercício durante o treino'); return; } setSwapSearch('');setShowSwap(true);}} style={{flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2a2a2a',borderRadius:'7px',padding:'.28rem .6rem',cursor:'pointer',lineHeight:1}}>
                 <span style={{fontSize:'.65rem',fontWeight:800,color:'#aaa',textTransform:'uppercase',letterSpacing:'.05em'}}>↕ Trocar</span>
               </button>
+              {(()=>{ const _p=getDSPlan(); return _p.perms.swap && getSmartSwaps(current?.name).length>0; })() && (
+                <button onClick={()=>setShowQuickSwap(true)} style={{flexShrink:0,background:'rgba(251,191,36,.08)',border:'1px solid rgba(251,191,36,.25)',borderRadius:'7px',padding:'.28rem .6rem',cursor:'pointer',lineHeight:1}}>
+                  <span style={{fontSize:'.65rem',fontWeight:800,color:'#fbbf24',textTransform:'uppercase',letterSpacing:'.05em'}}>⚡ Sugerir</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -5882,16 +5894,10 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
               const all = swapSearch ? [...sameMuscle, ...others] : sameMuscle;
               return all.slice(0,20).map((ex,i) => (
                 <button key={i} onClick={()=>{
-                  // Swap the current exercise in the plan
-                  setPlans(prev => {
-                    const copy = JSON.parse(JSON.stringify(prev));
-                    const dayArr = copy.list.find(p=>p.id===activePlanId)?.byDay?.[day];
-                    if(dayArr && dayArr[cursor]) {
-                      dayArr[cursor] = {...dayArr[cursor], name: ex.name, exId: ex.id};
-                    }
-                    return copy;
-                  });
+                  // Session-only swap — does NOT modify the plan
+                  setSessionSwaps(prev => ({...prev, [cursor]: ex.name}));
                   setShowSwap(false);
+                  setToast(`↕ ${ex.name} — só nessa sessão`);
                 }} style={{display:'flex',alignItems:'center',gap:'.6rem',background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .75rem',cursor:'pointer',textAlign:'left'}}>
                   <ExGifThumb exName={ex.name} onClick={()=>{}}/>
                   <div style={{flex:1,minWidth:0}}>
@@ -5905,6 +5911,54 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
           </div>
         </Modal>
       )}
+
+      {/* Modal: Sugestão Rápida (Elite/God) */}
+      {showQuickSwap && (() => {
+        const suggestions = getSmartSwaps(current?.name);
+        const curEx = EXS.find(e=>e.name===current?.name);
+        return (
+          <Modal onClose={()=>setShowQuickSwap(false)}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',marginBottom:'.3rem',color:'#fbbf24',letterSpacing:'.05em'}}>
+              ⚡ Sugestão Rápida
+            </div>
+            <div style={{fontSize:'.72rem',color:'var(--color-text-sub)',marginBottom:'.9rem',lineHeight:1.4}}>
+              Aparelho ocupado? Aqui estão as melhores trocas para <strong style={{color:'var(--color-text)'}}>{current?.name}</strong> — mesmo estímulo, diferente equipamento.
+            </div>
+            {suggestions.length === 0 ? (
+              <div style={{fontSize:'.8rem',color:'#555',textAlign:'center',padding:'1rem 0'}}>Sem sugestões para esse exercício.</div>
+            ) : suggestions.map((exName, i) => {
+              const ex = EXS.find(e=>e.name===exName);
+              const isSwapped = sessionSwaps[cursor] === exName;
+              return (
+                <button key={i} onClick={()=>{
+                  setSessionSwaps(prev=>({...prev,[cursor]:exName}));
+                  setShowQuickSwap(false);
+                  setToast(`⚡ ${exName} — só nessa sessão`);
+                }} style={{display:'flex',alignItems:'center',gap:'.75rem',width:'100%',background: isSwapped ? 'rgba(251,191,36,.12)' : 'rgba(255,255,255,.04)',border:`1px solid ${isSwapped ? 'rgba(251,191,36,.4)' : 'rgba(255,255,255,.08)'}`,borderRadius:'10px',padding:'.7rem .85rem',cursor:'pointer',marginBottom:'.4rem',textAlign:'left'}}>
+                  <ExGifThumb exName={exName} onClick={()=>{}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:'.9rem',fontWeight:800,color: isSwapped ? '#fbbf24' : 'var(--color-text)',fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase',letterSpacing:'.02em'}}>{exName}</div>
+                    <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginTop:'.1rem'}}>{ex?.primary || curEx?.primary} · {ex?.equipment}</div>
+                  </div>
+                  <div style={{flexShrink:0,textAlign:'right'}}>
+                    <div style={{fontSize:'.6rem',fontWeight:800,color:'#4ade80',textTransform:'uppercase',letterSpacing:'.04em'}}>mesmo estímulo</div>
+                    {isSwapped && <div style={{fontSize:'.55rem',color:'#fbbf24',marginTop:'2px'}}>✓ ativo</div>}
+                  </div>
+                </button>
+              );
+            })}
+            {sessionSwaps[cursor] && (
+              <button onClick={()=>{
+                setSessionSwaps(prev=>{const n={...prev};delete n[cursor];return n;});
+                setShowQuickSwap(false);
+                setToast('↩ Exercício original restaurado');
+              }} style={{width:'100%',marginTop:'.3rem',background:'transparent',border:'1px solid #333',borderRadius:'8px',padding:'.45rem',cursor:'pointer',fontSize:'.7rem',color:'#666',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em'}}>
+                ↩ Voltar ao original
+              </button>
+            )}
+          </Modal>
+        );
+      })()}
 
       {/* Sets */}
       <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
@@ -5935,7 +5989,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
           <Button variant="ghost" onClick={() => setCursor(i => Math.max(0, i-1))} disabled={cursor===0}>← Anterior</Button>
           <div className="flex gap-2">
             {cursor < planItems.length-1
-              ? <Button variant="accent" onClick={() => { triggerSmartRest(planItems[cursor]?.name, prefs); setCursor(i => i+1); }}>Próximo →</Button>
+              ? <Button variant="accent" onClick={() => { triggerSmartRest((planItemsWithSwaps?.[cursor] ?? planItems[cursor])?.name, prefs); setCursor(i => i+1); }}>Próximo →</Button>
               : (prefs.stretchMode === 'after'
                   ? <div style={{display:'flex',gap:'.5rem'}}>
                       <button onClick={()=>{
@@ -6758,6 +6812,123 @@ const SELO_IMGS = {
 // ══════════════════════════════════════════════════════════════════════════
 
 // Banco de alongamentos por grupo muscular
+// ══════════════════════════════════════════════════════════════════════════
+// SMART SWAP — Substituições precisas por grupo muscular + padrão de movimento
+// Lógica: mesmo músculo PRIMÁRIO + mesmo padrão (isolação/composto, vetor similar)
+// ══════════════════════════════════════════════════════════════════════════
+const SMART_SWAP_MAP = {
+  // ── PEITO ─────────────────────────────────────────────────────────────────
+  // Supinos: vetor horizontal, composto
+  "Supino reto barra":          ["Supino reto halteres","Supino máquina","Crossover reto"],
+  "Supino reto halteres":       ["Supino reto barra","Supino máquina","Crossover reto"],
+  "Supino máquina":             ["Supino reto halteres","Supino reto barra","Crossover reto"],
+  // Inclinados: vetor ascendente, foco porção superior
+  "Supino inclinado barra":     ["Supino inclinado halteres","Crossover alto","Crucifixo inclinado halteres"],
+  "Supino inclinado halteres":  ["Supino inclinado barra","Crossover alto","Crucifixo inclinado halteres"],
+  "Crucifixo inclinado halteres":["Crossover alto","Supino inclinado halteres","Peck deck inclinado"],
+  // Peck deck / crucifixo: isolação, adução horizontal
+  "Peck deck":                  ["Crucifixo halteres","Crossover reto","Crossover cruzado"],
+  "Crucifixo halteres":         ["Peck deck","Crossover reto","Crossover cruzado"],
+  "Crossover reto":             ["Peck deck","Crucifixo halteres","Crossover cruzado"],
+  "Crossover alto":             ["Crucifixo inclinado halteres","Supino inclinado halteres","Peck deck inclinado"],
+  "Crossover cruzado":          ["Peck deck","Crucifixo halteres","Crossover reto"],
+
+  // ── COSTAS ────────────────────────────────────────────────────────────────
+  // Puxadas: vetor vertical, adução escapular, dorsais
+  "Puxada alta polia":          ["Puxada supinada","Puxada triângulo","Pulldown máquina"],
+  "Puxada supinada":            ["Puxada alta polia","Puxada triângulo","Pulldown máquina"],
+  "Puxada triângulo":           ["Puxada supinada","Puxada alta polia","Pulldown máquina"],
+  "Pulldown máquina":           ["Puxada alta polia","Puxada supinada","Puxada triângulo"],
+  "Barra fixa":                 ["Puxada alta polia","Puxada supinada","Graviton"],
+  // Remadas: vetor horizontal, romboides/trapézio médio
+  "Remada curvada barra":       ["Remada curvada halteres","Remada cavalinho","Remada máquina"],
+  "Remada curvada halteres":    ["Remada curvada barra","Remada serrote halteres","Remada máquina"],
+  "Remada serrote halteres":    ["Remada curvada halteres","Remada baixa unilateral","Remada curvada barra"],
+  "Remada baixa unilateral":    ["Remada serrote halteres","Remada curvada halteres","Remada máquina"],
+  "Remada cavalinho":           ["Remada curvada barra","Remada máquina","Remada curvada halteres"],
+  "Remada máquina":             ["Remada curvada barra","Remada cavalinho","Remada curvada halteres"],
+
+  // ── OMBRO ─────────────────────────────────────────────────────────────────
+  // Desenvolvimentos: composto, deltoide anterior/medial
+  "Desenvolvimento barra":      ["Desenvolvimento halteres","Desenvolvimento máquina","Arnold press"],
+  "Desenvolvimento halteres":   ["Desenvolvimento barra","Arnold press","Desenvolvimento máquina"],
+  "Desenvolvimento máquina":    ["Desenvolvimento halteres","Desenvolvimento barra","Arnold press"],
+  "Arnold press":               ["Desenvolvimento halteres","Desenvolvimento máquina","Desenvolvimento barra"],
+  // Elevações laterais: isolação, deltoide medial
+  "Elevação lateral halteres":  ["Elevação lateral cabo","Elevação lateral máquina","Levantamento frontal halteres"],
+  "Elevação lateral cabo":      ["Elevação lateral halteres","Elevação lateral máquina"],
+  "Elevação lateral máquina":   ["Elevação lateral halteres","Elevação lateral cabo"],
+  // Frente: deltoide anterior
+  "Levantamento frontal barra": ["Levantamento frontal halteres","Face pull","Elevação lateral halteres"],
+  "Levantamento frontal halteres":["Levantamento frontal barra","Face pull"],
+  // Posterior: deltoide posterior
+  "Crucifixo invertido":        ["Face pull","Peck deck invertido","Remada alta"],
+  "Face pull":                  ["Crucifixo invertido","Peck deck invertido"],
+
+  // ── BÍCEPS ────────────────────────────────────────────────────────────────
+  // Rosca direta: bíceps braquial, cotovelo neutro
+  "Rosca direta barra":         ["Rosca direta halteres","Rosca direta polia","Rosca alternada halteres"],
+  "Rosca direta halteres":      ["Rosca direta barra","Rosca alternada halteres","Rosca direta polia"],
+  "Rosca alternada halteres":   ["Rosca direta halteres","Rosca direta barra","Rosca direta polia"],
+  "Rosca direta polia":         ["Rosca direta halteres","Rosca direta barra","Rosca Bayesian cabo"],
+  // Rosca no banco/inclinada: ênfase cabeça longa, pré-estiramento
+  "Rosca 45° halteres":         ["Rosca Bayesian cabo","Rosca inclinada halteres","Rosca concentrada halteres"],
+  "Rosca Bayesian cabo":        ["Rosca 45° halteres","Rosca inclinada halteres","Rosca direta polia"],
+  "Rosca inclinada halteres":   ["Rosca 45° halteres","Rosca Bayesian cabo","Rosca concentrada halteres"],
+  // Scott: isolação, sem momentum
+  "Rosca Scott máquina":        ["Rosca concentrada halteres","Rosca direta barra","Rosca direta halteres"],
+  "Rosca concentrada halteres": ["Rosca Scott máquina","Rosca 45° halteres","Rosca Bayesian cabo"],
+  // Martelo: braquiorradial
+  "Rosca martelo halteres":     ["Rosca martelo corda","Rosca inversa barra"],
+  "Rosca martelo corda":        ["Rosca martelo halteres","Rosca inversa barra"],
+
+  // ── TRÍCEPS ───────────────────────────────────────────────────────────────
+  // Pulley / extensões em polia: isolação, cabeça lateral
+  "Tríceps pulley barra reta":  ["Tríceps pulley corda","Tríceps pulley barra V","Kick back tríceps halteres"],
+  "Tríceps pulley corda":       ["Tríceps pulley barra reta","Tríceps pulley barra V","Kick back tríceps halteres"],
+  "Kick back tríceps halteres": ["Tríceps pulley corda","Tríceps pulley barra reta"],
+  // Testa / francês: ênfase cabeça longa
+  "Tríceps testa barra W":      ["Tríceps testa halteres","Tríceps francês halteres","Tríceps francês barra"],
+  "Tríceps testa halteres":     ["Tríceps testa barra W","Tríceps francês halteres","Tríceps francês barra"],
+  "Tríceps francês barra":      ["Tríceps francês halteres","Tríceps testa barra W","Tríceps testa halteres"],
+  "Tríceps francês halteres":   ["Tríceps francês barra","Tríceps testa halteres","Tríceps testa barra W"],
+  // Paralelas / bankdips: composto
+  "Paralelas":                  ["Mergulho no banco","Supino reto barra","Fundos paralelas"],
+  "Mergulho no banco":          ["Paralelas","Tríceps pulley corda"],
+
+  // ── QUADRÍCEPS ────────────────────────────────────────────────────────────
+  "Agachamento livre":          ["Agachamento hack máquina","Leg press 45°","Agachamento búlgaro halteres"],
+  "Leg press 45°":              ["Agachamento livre","Agachamento hack máquina","Cadeira extensora"],
+  "Agachamento hack máquina":   ["Leg press 45°","Agachamento livre","Cadeira extensora"],
+  "Agachamento búlgaro halteres":["Afundo com halteres","Afundo com barra","Agachamento livre"],
+  "Afundo com halteres":        ["Afundo com barra","Agachamento búlgaro halteres","Leg press 45°"],
+  "Afundo com barra":           ["Afundo com halteres","Agachamento búlgaro halteres","Agachamento livre"],
+  "Cadeira extensora":          ["Leg press 45°","Agachamento hack máquina"],
+
+  // ── ISQUIOTIBIAIS / GLÚTEO ────────────────────────────────────────────────
+  "Stiff barra":                ["Stiff halteres","Cadeira flexora","Mesa flexora"],
+  "Stiff halteres":             ["Stiff barra","Cadeira flexora","Mesa flexora"],
+  "Cadeira flexora":            ["Mesa flexora","Stiff barra","Stiff halteres"],
+  "Mesa flexora":               ["Cadeira flexora","Stiff barra","Stiff halteres"],
+  "Hip thrust":                 ["Elevação pélvica","Glúteo cabo"],
+  "Elevação pélvica":           ["Hip thrust","Glúteo cabo"],
+  "Abdução cadeira":            ["Abdução cabo","Agachamento sumo halteres"],
+
+  // ── PANTURRILHA ───────────────────────────────────────────────────────────
+  "Panturrilha em pé":          ["Panturrilha sentado","Panturrilha leg press","Panturrilha burro máquina"],
+  "Panturrilha sentado":        ["Panturrilha em pé","Panturrilha leg press"],
+  "Panturrilha leg press":      ["Panturrilha em pé","Panturrilha sentado"],
+};
+
+// Retorna até 2 sugestões inteligentes para um exercício dado
+const getSmartSwaps = (exName) => {
+  const swaps = SMART_SWAP_MAP[exName];
+  if (!swaps || swaps.length === 0) return [];
+  // Filtra só os que existem em EXS
+  const valid = swaps.filter(s => EXS.some(e => e.name === s));
+  return valid.slice(0, 2);
+};
+
 const STRETCH_DB = {
   "Peito": [
     { name:"Abertura de peito na parede", desc:"Apoie o antebraço na parede a 90°. Gire o corpo para fora sentindo o alongamento no peitoral.", cue:"Mantenha o ombro abaixo do ouvido." },
