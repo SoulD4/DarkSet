@@ -5320,10 +5320,6 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   const resolvedPlan = allPlansForSelect.find(p=>p.id===resolvedPlanId) || activePlan || null;
   const isPersonalPlan = resolvedPlan?.fromPersonal === true;
   const planItems = resolvedPlan?.byDay?.[day] || [];
-  // Session-only swaps applied in-memory — never touches the saved plan
-  const planItemsWithSwaps = planItems.map((item, idx) =>
-    sessionSwaps[idx] ? {...item, name: sessionSwaps[idx], exId: (EXS.find(e=>e.name===sessionSwaps[idx])?.id || item.exId)} : item
-  );
   // allSets: mapa de índice → {sets, rir} — persiste enquanto sessão ativa
   const [allSets, setAllSets] = useState({});
   // sets/rir do exercício atual (derivados de allSets)
@@ -5382,6 +5378,11 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
   useEffect(() => {
     try { localStorage.setItem(DRAFT_FREE_KEY, JSON.stringify(freeExercises)); } catch(_) {}
   }, [freeExercises]);
+
+  // planItemsWithSwaps must be here, after all useState declarations
+  const planItemsWithSwaps = planItems.map((item, idx) =>
+    sessionSwaps[idx] ? {...item, name: sessionSwaps[idx], exId: (EXS.find(e=>e.name===sessionSwaps[idx])?.id || item.exId)} : item
+  );
 
   // ── PLAN MODE: inicializa sets do exercício atual se ainda não preenchido ──
   useEffect(() => {
@@ -12015,9 +12016,13 @@ root.render(<App/>);
         auth: auth
       };
 
+      var _lastAuthUid = null;
       auth.onAuthStateChanged(async function(user){
         try{
           if(user){
+            // Guard: Firebase sometimes fires onAuthStateChanged twice for same user
+            if(_lastAuthUid === user.uid) return;
+            _lastAuthUid = user.uid;
             var info = { uid: user.uid, email: user.email||null, displayName: user.displayName||null, photoURL: user.photoURL||null, lastLogin: Date.now() };
             localStorage.setItem('darkset.user', JSON.stringify(info));
             try{ if(db) await db.collection('users').doc(user.uid).set({ email: info.email, name: info.displayName, photoURL: info.photoURL, updatedAt: Date.now() }, { merge: true }); }catch(_){}
@@ -12035,7 +12040,9 @@ root.render(<App/>);
             }catch(_){}
             // ── Pull cloud data — wait for React to be ready ──
             if(window.DSSync){
-              // Clear local data before pulling - ensures switching accounts is clean
+              // Clear localStorage before pulling (account switch safety)
+              // NOTE: do NOT clear React state here — that causes the flicker (empty→data flash)
+              // React state will be updated directly by DSSync.pull when data arrives
               var clearKeys = [
                 'darkset.v3.plans','darkset.v3.history','darkset.v3.prefs',
                 'darkset.v1.diet','darkset.measures','darkset.cardio.history',
@@ -12046,8 +12053,7 @@ root.render(<App/>);
               localStorage.setItem('darkset.onboarded','1');
               clearKeys.forEach(function(k){ localStorage.removeItem(k); });
               if(window._DS_SETTERS){
-                if(window._DS_SETTERS.plans)   window._DS_SETTERS.plans({list:[],activeId:null});
-                if(window._DS_SETTERS.history) window._DS_SETTERS.history({});
+                // Only clear non-plan state — plans will be set by pull() when it arrives
                 if(window._DS_SETTERS.isPersonal) window._DS_SETTERS.isPersonal(false);
                 if(window._DS_SETTERS.showOnboarding) window._DS_SETTERS.showOnboarding(false);
                 if(window._DS_SETTERS.showSplash) window._DS_SETTERS.showSplash(false);
@@ -12082,6 +12088,7 @@ root.render(<App/>);
             };
             trySplash();
           } else {
+            _lastAuthUid = null; // reset so next login triggers full pull
             // Clear all user data on logout
             var keysToRemove = [
               'darkset.user',
