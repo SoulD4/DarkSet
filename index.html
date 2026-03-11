@@ -5817,42 +5817,84 @@ const History=({history,setHistory,prefs})=>{
       )}
 
       {detail&&(
-        <Modal onClose={()=>setDetail(null)}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1rem'}}>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.2rem',textTransform:'uppercase',lineHeight:1}}>{toBR(detail.date)}</div>
-              <div style={{fontSize:'.72rem',color:'#555',marginTop:'2px'}}>{detail.obj.day} · {detail.obj.planName||'Treino Livre'}</div>
+        <div style={{position:'fixed',inset:0,zIndex:1200,background:'rgba(0,0,0,.88)',display:'flex',flexDirection:'column'}} onClick={()=>setDetail(null)}>
+          <div style={{flex:1,overflowY:'auto',padding:'1rem',paddingTop:'env(safe-area-inset-top,1rem)'}} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.2rem',paddingBottom:'.85rem',borderBottom:'1px solid #1a1a1a'}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',color:'#fff',lineHeight:1,letterSpacing:'.02em'}}>{toBR(detail.date)}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginTop:'.3rem'}}>
+                  {detail.obj.planName&&<span style={{fontSize:'.68rem',color:'#555',textTransform:'uppercase',letterSpacing:'.05em'}}>{detail.obj.planName}</span>}
+                  {detail.obj.day&&<><span style={{color:'#2a2a2a'}}>·</span><span style={{fontSize:'.68rem',color:'#444',textTransform:'uppercase',letterSpacing:'.04em'}}>{detail.obj.day}</span></>}
+                  {(detail.obj.startTime||detail.obj.endTime)&&<><span style={{color:'#2a2a2a'}}>·</span><span style={{fontSize:'.65rem',color:'#333'}}>
+                    {detail.obj.startTime&&detail.obj.endTime?`${detail.obj.startTime} → ${detail.obj.endTime}`:detail.obj.startTime||detail.obj.endTime}
+                  </span></>}
+                </div>
+              </div>
+              <button onClick={()=>setDetail(null)}
+                style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(255,255,255,.06)',border:'1px solid #222',color:'#666',fontSize:'1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                ×
+              </button>
             </div>
-            <button onClick={()=>setDetail(null)} style={{background:'rgba(255,255,255,.04)',border:'1px solid #222',borderRadius:'6px',padding:'.3rem .65rem',color:'#777',fontSize:'.75rem',cursor:'pointer'}}>Fechar</button>
-          </div>
-          <div style={{display:'grid',gap:'.5rem',maxHeight:'60vh',overflowY:'auto',paddingRight:'2px'}}>
-            {detail.obj.entries.map((en,i)=>{
-              const isPR=(en.sets||[]).some(s=>{
-                const w=parseNum(s.w),r=parseNum(s.r);
-                if(!w||!r) return false;
-                return Math.abs(w*(1+r/30)-(prMap[en.name]||0))<0.01;
-              });
-              return (
-                <div key={i} style={{background:'rgba(0,0,0,.3)',border:isPR?'1px solid rgba(227,27,35,.25)':'1px solid #1a1a1a',borderRadius:'8px',padding:'.65rem .85rem'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.4rem'}}>
-                    <div style={{fontWeight:600,fontSize:'.88rem'}}>{en.name}</div>
-                    <div style={{display:'flex',gap:'.4rem',alignItems:'center'}}>
-                      {isPR&&<span style={{background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'4px',padding:'1px 6px',fontSize:'.6rem',color:'var(--color-accent)',fontWeight:800}}>PR</span>}
-                      <span style={{fontSize:'.65rem',color:'#333'}}>{Math.round(volSets(en.sets))}kg</span>
+
+            {/* Stats bar */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.5rem',marginBottom:'1.2rem'}}>
+              {[
+                ['Volume',`${(()=>{const v=detail.obj.entries.reduce((s,e)=>s+volSets(e.sets),0);return v>=1000?(v/1000).toFixed(1)+'t':Math.round(v)+'kg';})()}`,'📦'],
+                ['Exercícios',`${detail.obj.entries.length}`,'🏋️'],
+                ['Séries',`${detail.obj.entries.reduce((s,e)=>s+(e.sets||[]).filter(x=>x.r).length,0)}`,'🔁'],
+              ].map(([label,val,icon])=>(
+                <div key={label} style={{background:'rgba(255,255,255,.03)',border:'1px solid #1a1a1a',borderRadius:'10px',padding:'.6rem .7rem',textAlign:'center'}}>
+                  <div style={{fontSize:'.9rem',marginBottom:'.15rem'}}>{icon}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#fff',lineHeight:1}}>{val}</div>
+                  <div style={{fontSize:'.55rem',color:'#444',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'.15rem'}}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Exercise list */}
+            <div style={{display:'grid',gap:'.7rem'}}>
+              {detail.obj.entries.map((en,i)=>{
+                const isPR=(en.sets||[]).some(s=>{
+                  const w=parseNum(s.w),r=parseNum(s.r);
+                  if(!w||!r) return false;
+                  return Math.abs(w*(1+r/30)-(prMap[en.name]||0))<0.01;
+                });
+                const validSets=(en.sets||[]).filter(s=>s.r||s.w);
+                const exVol=Math.round(volSets(en.sets));
+                return (
+                  <div key={i} style={{borderRadius:'12px',overflow:'hidden',border:isPR?'1px solid rgba(227,27,35,.2)':'1px solid #141414'}}>
+                    {/* Exercise header */}
+                    <div style={{background:isPR?'rgba(227,27,35,.07)':'rgba(255,255,255,.025)',padding:'.6rem .9rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                        {isPR&&<span style={{background:'#e31b23',borderRadius:'4px',padding:'1px 6px',fontSize:'.58rem',color:'#fff',fontWeight:900,letterSpacing:'.04em',flexShrink:0}}>PR</span>}
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.02em',color:'#e8e8e8'}}>{en.name}</span>
+                      </div>
+                      <span style={{fontSize:'.68rem',color:'#333',fontWeight:600}}>{exVol>=1000?(exVol/1000).toFixed(1)+'t':exVol+'kg'}</span>
+                    </div>
+                    {/* Sets table */}
+                    <div style={{background:'rgba(0,0,0,.25)',padding:'.5rem .9rem .7rem'}}>
+                      <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(validSets.length,3)},1fr)`,gap:'.4rem'}}>
+                        {validSets.map((s,ix)=>(
+                          <div key={ix} style={{background:'rgba(255,255,255,.04)',borderRadius:'7px',padding:'.45rem .5rem',textAlign:'center'}}>
+                            <div style={{fontSize:'.52rem',color:'#333',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.15rem'}}>S{ix+1}</div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'#ccc',lineHeight:1}}>
+                              {s.w?`${s.w}${prefs.unit==='kg'?'kg':'lb'}`:'—'}
+                            </div>
+                            <div style={{fontSize:'.72rem',color:'#555',fontWeight:600}}>{s.r?`× ${s.r}`:'—'}</div>
+                            {s.rir&&<div style={{fontSize:'.52rem',color:'#333',marginTop:'.1rem'}}>RIR {s.rir}</div>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:'.3rem'}}>
-                    {en.sets.map((s,ix)=>(
-                      <span key={ix} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1a1a1a',borderRadius:'5px',padding:'3px 8px',fontSize:'.72rem',color:'#aaa'}}>
-                        S{ix+1}: {s.w||'-'}{prefs.unit==='kg'?'kg':'lb'} x {s.r||'-'}{s.rir?' RIR'+s.rir:''}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            <div style={{height:'2rem'}}/>
           </div>
-        </Modal>
+        </div>
       )}
     </div>
   );
