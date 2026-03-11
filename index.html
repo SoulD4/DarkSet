@@ -5138,7 +5138,7 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
                   }
                 }, 2900);
               }} full>Iniciar Treino</Button>
-              {showStartAnim && <WorkoutStartAnim planName={resolvedPlan?.name} onDone={()=>setShowStartAnim(false)}/>}
+
             </div>
           )}
         </div>
@@ -5321,6 +5321,16 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
       </div>
     );
   })() : null;
+  // WorkoutStartAnim — only triggered by Iniciar Treino button
+  if (showStartAnim) {
+    return (
+      <React.Fragment>
+        {preStartScreen}
+        <WorkoutStartAnim planName={resolvedPlan?.name} onDone={()=>setShowStartAnim(false)}/>
+      </React.Fragment>
+    );
+  }
+
   // Stretch overlays (render over everything in session screen)
   const stretchExercises = planItems.map(p => p.name);
 
@@ -5492,15 +5502,11 @@ const Session = ({plans, setPlans, history, setHistory, prefs, goto, setToast, o
               ? <Button variant="accent" onClick={() => { triggerSmartRest(planItems[cursor]?.name, prefs); setCursor(i => i+1); }}>Próximo →</Button>
               : (prefs.stretchMode === 'after'
                   ? <div style={{display:'flex',gap:'.5rem'}}>
-                      <button onClick={()=>{ saveAll(); }}
-                        style={{padding:'.45rem .85rem',borderRadius:'9px',background:'rgba(255,255,255,.05)',border:'1px solid #222',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer'}}>
-                        Pular e Salvar
-                      </button>
                       <button onClick={()=>{
                         saveAll();
                         setTimeout(()=>{ setStretchContext('after'); setStretchPhase('prompt'); }, 400);
                       }}
-                        style={{padding:'.45rem 1rem',borderRadius:'9px',background:'linear-gradient(135deg,#312e81,#1e1b4b)',border:'1px solid rgba(99,102,241,.5)',color:'#a5b4fc',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.85rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',boxShadow:'0 3px 14px rgba(99,102,241,.25)'}}>
+                        style={{padding:'.45rem 1.1rem',borderRadius:'9px',background:'linear-gradient(135deg,#312e81,#1e1b4b)',border:'1px solid rgba(99,102,241,.5)',color:'#a5b4fc',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',boxShadow:'0 3px 14px rgba(99,102,241,.25)'}}>
                         🧘 Alongamento
                       </button>
                     </div>
