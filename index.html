@@ -3078,7 +3078,7 @@ const saveCardioHistory = (data) => {
 };
 
 const Cardio = ({goto, setToast}) => {
-  const [view, setView] = useState('home'); // 'home' | 'session' | 'history'
+  const [view, setView] = useState('home'); // 'home'|'session'|'history'|'prs'|'challenges'
   const [selectedType, setSelectedType] = useState(null);
   const [history, setHistory] = useState(loadCardioHistory);
 
@@ -3086,69 +3086,144 @@ const Cardio = ({goto, setToast}) => {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [startTs, setStartTs] = useState(null);
-  const [metrics, setMetrics] = useState({distancia:'', calorias:'', rounds:'', andares:'', pace:'', velocidade:''});
+  const [metrics, setMetrics] = useState({distancia:'',calorias:'',rounds:'',andares:'',pace:'',velocidade:''});
   const [notes, setNotes] = useState('');
+  const [splits, setSplits] = useState([]); // [{km, time}]
+  const [lastSplitDist, setLastSplitDist] = useState(0);
   const timerRef = useRef(null);
   const cardioStartTsRef = useRef(null);
 
-  useEffect(()=>{
-    if(running){
-      if(!cardioStartTsRef.current) cardioStartTsRef.current = Date.now() - (elapsed * 1000);
-      timerRef.current = setInterval(()=>{
+  // Cardio streak
+  const cardioStreak = React.useMemo(() => {
+    if (!history.length) return 0;
+    const days = [...new Set(history.map(h => h.date.slice(0,10)))].sort().reverse();
+    let streak = 0;
+    const today = new Date().toISOString().slice(0,10);
+    let expect = today;
+    for (const d of days) {
+      if (d === expect) { streak++; expect = new Date(new Date(d) - 86400000).toISOString().slice(0,10); }
+      else if (d < expect) break;
+    }
+    return streak;
+  }, [history]);
+
+  // PR de pace (melhor pace por distância referência)
+  const pacePRs = React.useMemo(() => {
+    const refs = [{label:'5km',dist:5},{label:'10km',dist:10},{label:'21km',dist:21.1}];
+    return refs.map(({label,dist}) => {
+      let best = null;
+      history.forEach(h => {
+        const d = parseFloat(h.metrics.distancia||0);
+        const t = h.tempo||0;
+        if (d >= dist && t > 0) {
+          const pace = (t/60) / d; // min/km
+          if (!best || pace < best.pace) best = {pace, date: h.date.slice(0,10), time: t, dist: d};
+        }
+      });
+      if (!best) return {label, pr: null};
+      const mins = Math.floor(best.pace); const secs = Math.round((best.pace - mins)*60);
+      return {label, pr: `${mins}:${String(secs).padStart(2,'0')}/km`, date: best.date};
+    });
+  }, [history]);
+
+  // Desafio mensal de distância
+  const monthlyChallenge = React.useMemo(() => {
+    const goal = parseInt(localStorage.getItem('ds.cardio.challenge.goal')||'0');
+    if (!goal) return null;
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const done = history
+      .filter(h => h.date.slice(0,7) === monthKey && (h.metrics.distancia||0) > 0)
+      .reduce((s,h) => s + parseFloat(h.metrics.distancia||0), 0);
+    return {goal, done: Math.round(done*10)/10, monthKey};
+  }, [history]);
+
+  useEffect(() => {
+    if (running) {
+      if (!cardioStartTsRef.current) cardioStartTsRef.current = Date.now() - (elapsed * 1000);
+      timerRef.current = setInterval(() => {
         setElapsed(Math.floor((Date.now() - cardioStartTsRef.current) / 1000));
-      },1000);
+      }, 1000);
     } else {
       clearInterval(timerRef.current);
-      if(!running) cardioStartTsRef.current = null;
+      if (!running) cardioStartTsRef.current = null;
     }
-    return ()=>clearInterval(timerRef.current);
-  },[running]);
+    return () => clearInterval(timerRef.current);
+  }, [running]);
+
+  // Auto-split: quando distância avança 1km
+  useEffect(() => {
+    const dist = parseFloat(metrics.distancia||0);
+    if (dist > 0 && Math.floor(dist) > lastSplitDist && selectedType && ['corrida','bike','caminhada','natacao'].includes(selectedType.id)) {
+      const km = Math.floor(dist);
+      setSplits(prev => [...prev, {km, time: elapsed}]);
+      setLastSplitDist(km);
+    }
+  }, [metrics.distancia, elapsed]);
 
   const startSession = (type) => {
-    setSelectedType(type);
-    setElapsed(0); setRunning(false); setMetrics({distancia:'',calorias:'',rounds:'',andares:'',pace:'',velocidade:''});
+    setSelectedType(type); setElapsed(0); setRunning(false);
+    setMetrics({distancia:'',calorias:'',rounds:'',andares:'',pace:'',velocidade:''});
     setNotes(''); setStartTs(new Date().toISOString());
+    setSplits([]); setLastSplitDist(0);
     setView('session');
   };
 
-  const toggleTimer = () => setRunning(r=>!r);
+  const toggleTimer = () => setRunning(r => !r);
+  const resetTimer = () => { setRunning(false); setElapsed(0); cardioStartTsRef.current = null; };
 
-  const resetTimer = () => { setRunning(false); setElapsed(0); };
+  // Auto-calc pace and calories
+  const autoPace = React.useMemo(() => {
+    const dist = parseFloat(metrics.distancia||0);
+    if (!dist || !elapsed) return '';
+    const pace = (elapsed/60) / dist;
+    const mins = Math.floor(pace); const secs = Math.round((pace - mins)*60);
+    return `${mins}:${String(secs).padStart(2,'0')}/km`;
+  }, [metrics.distancia, elapsed]);
+
+  const autoCalories = React.useMemo(() => {
+    if (!elapsed) return '';
+    try {
+      const prefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
+      const weight = parseFloat(prefs.peso||70);
+      const dist = parseFloat(metrics.distancia||0);
+      if (dist > 0) return String(Math.round(dist * weight * 0.72));
+      return String(Math.round((elapsed/3600) * weight * 7));
+    } catch(_) { return ''; }
+  }, [metrics.distancia, elapsed]);
 
   const saveSession = () => {
+    const cal = metrics.calorias || autoCalories;
     const entry = {
-      id: Date.now(),
-      date: startTs||new Date().toISOString(),
-      type: selectedType.id,
-      typeName: selectedType.name,
-      typeIcon: selectedType.icon,
-      tempo: elapsed,
-      metrics: {...metrics},
-      notes,
+      id: Date.now(), date: startTs||new Date().toISOString(),
+      type: selectedType.id, typeName: selectedType.name, typeIcon: selectedType.icon,
+      tempo: elapsed, metrics: {...metrics, calorias: cal, pace: autoPace||metrics.pace},
+      notes, splits,
     };
     const updated = [entry, ...history];
-    setHistory(updated);
-    saveCardioHistory(updated);
-    setToast('Cardio salvo! 🏃');
-    setView('home');
+    setHistory(updated); saveCardioHistory(updated);
+    localStorage.setItem('ds.cardioCount', String(updated.length));
+    setToast('Cardio salvo! 🏃'); setView('home');
     setRunning(false); setElapsed(0);
   };
 
   const deleteEntry = (id) => {
-    const updated = history.filter(h=>h.id!==id);
-    setHistory(updated);
-    saveCardioHistory(updated);
+    const updated = history.filter(h => h.id !== id);
+    setHistory(updated); saveCardioHistory(updated);
+    localStorage.setItem('ds.cardioCount', String(updated.length));
   };
 
   const fmt = (s) => {
     const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
     return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   };
-
+  const fmtSplit = (s, prev) => { const d=s-(prev||0); return fmt(d); };
   const toDate = (iso) => { try{ const d=new Date(iso); return d.toLocaleDateString('pt-BR'); }catch(_){return '';} };
 
-  if(view==='session' && selectedType){
+  // ── SESSION VIEW ──────────────────────────────────────────────────────────
+  if (view === 'session' && selectedType) {
     const hasMetric = (m) => selectedType.metrics.includes(m);
+    const hasDist = hasMetric('distancia');
     return (
       <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
         <div className="ds-card" style={{padding:'1rem 1.1rem'}}>
@@ -3160,12 +3235,26 @@ const Cardio = ({goto, setToast}) => {
           </div>
 
           {/* Big timer */}
-          <div style={{textAlign:'center',padding:'1.5rem 0'}}>
+          <div style={{textAlign:'center',padding:'1.2rem 0 .8rem'}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'4.5rem',letterSpacing:'.04em',lineHeight:1,color:running?'var(--color-accent)':'var(--color-text)'}}>{fmt(elapsed)}</div>
             <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.1em',marginTop:'.25rem'}}>tempo</div>
           </div>
 
-          <div style={{display:'flex',gap:'.75rem',justifyContent:'center',marginBottom:'1rem'}}>
+          {/* Live stats */}
+          {(hasDist && metrics.distancia) && (
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem',marginBottom:'.8rem'}}>
+              <div style={{background:'rgba(255,255,255,.03)',border:'1px solid #1a1a1a',borderRadius:'8px',padding:'.5rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.3rem',color:'#fff'}}>{autoPace||'—'}</div>
+                <div style={{fontSize:'.52rem',color:'#444',textTransform:'uppercase',letterSpacing:'.06em'}}>pace médio</div>
+              </div>
+              <div style={{background:'rgba(255,255,255,.03)',border:'1px solid #1a1a1a',borderRadius:'8px',padding:'.5rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.3rem',color:'#fff'}}>{autoCalories||'—'}</div>
+                <div style={{fontSize:'.52rem',color:'#444',textTransform:'uppercase',letterSpacing:'.06em'}}>kcal est.</div>
+              </div>
+            </div>
+          )}
+
+          <div style={{display:'flex',gap:'.75rem',justifyContent:'center'}}>
             <button onClick={toggleTimer} style={{flex:1,background:running?'rgba(227,27,35,.15)':'var(--color-accent)',border:running?'1px solid rgba(227,27,35,.3)':'none',borderRadius:'10px',padding:'.85rem',color:running?'var(--color-accent)':'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer'}}>
               {running?'⏸ Pausar':'▶ Iniciar'}
             </button>
@@ -3177,35 +3266,52 @@ const Cardio = ({goto, setToast}) => {
         <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.75rem'}}>
           <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>Dados do treino</div>
 
-          {hasMetric('distancia')&&(
+          {hasDist && (
             <div>
               <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Distância (km)</div>
               <input type="number" step="0.1" placeholder="0.0" value={metrics.distancia} onChange={e=>setMetrics(m=>({...m,distancia:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
             </div>
           )}
-          {hasMetric('calorias')&&(
+          {hasMetric('calorias') && (
             <div>
-              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Calorias (kcal)</div>
-              <input type="number" placeholder="0" value={metrics.calorias} onChange={e=>setMetrics(m=>({...m,calorias:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Calorias {autoCalories?`(estimativa: ${autoCalories} kcal)`:''}</div>
+              <input type="number" placeholder={autoCalories||'0'} value={metrics.calorias} onChange={e=>setMetrics(m=>({...m,calorias:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
             </div>
           )}
-          {hasMetric('rounds')&&(
+          {hasMetric('rounds') && (
             <div>
               <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Rounds</div>
               <input type="number" placeholder="0" value={metrics.rounds} onChange={e=>setMetrics(m=>({...m,rounds:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
             </div>
           )}
-          {hasMetric('andares')&&(
+          {hasMetric('andares') && (
             <div>
               <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Andares</div>
               <input type="number" placeholder="0" value={metrics.andares} onChange={e=>setMetrics(m=>({...m,andares:e.target.value}))} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'1.1rem',color:'var(--color-text)',fontWeight:600}}/>
             </div>
           )}
 
+          {/* Notes */}
           <div>
-            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Observações</div>
-            <textarea placeholder="Como foi o treino?" value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.85rem',color:'var(--color-text)',resize:'none'}}/>
+            <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',marginBottom:'.3rem'}}>Como foi? (opcional)</div>
+            <textarea placeholder="Sensação, condições, observações..." value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{width:'100%',background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.55rem .85rem',fontSize:'.85rem',color:'var(--color-text)',resize:'none'}}/>
           </div>
+
+          {/* Splits preview */}
+          {splits.length > 0 && (
+            <div>
+              <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.4rem'}}>Splits</div>
+              <div style={{display:'grid',gap:'.25rem'}}>
+                {splits.map((s,i) => (
+                  <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'rgba(255,255,255,.03)',borderRadius:'6px',padding:'.3rem .6rem'}}>
+                    <span style={{fontSize:'.72rem',color:'#555',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}>KM {s.km}</span>
+                    <span style={{fontSize:'.8rem',color:'#aaa',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700}}>{fmtSplit(s.time, splits[i-1]?.time)}</span>
+                    <span style={{fontSize:'.65rem',color:'#333'}}>({fmt(s.time)} total)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button onClick={saveSession} style={{background:'var(--color-accent)',border:'none',borderRadius:'10px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 0 16px rgba(227,27,35,.3)'}}>
             Salvar Cardio ✓
@@ -3215,20 +3321,21 @@ const Cardio = ({goto, setToast}) => {
     );
   }
 
-  if(view==='history'){
+  // ── HISTORY VIEW ──────────────────────────────────────────────────────────
+  if (view === 'history') {
     return (
       <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase'}}>Histórico Cardio</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase'}}>Histórico</div>
           <button onClick={()=>setView('home')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.35rem .85rem',color:'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
         </div>
-        {history.length===0&&(
+        {history.length === 0 && (
           <div style={{textAlign:'center',padding:'3rem',color:'var(--color-text-sub)'}}>
             <div style={{fontSize:'3rem',marginBottom:'.5rem'}}>🏃</div>
             <div>Nenhum cardio registrado ainda</div>
           </div>
         )}
-        {history.map(h=>(
+        {history.map(h => (
           <div key={h.id} className="ds-card" style={{padding:'.85rem 1.1rem'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
               <div>
@@ -3243,10 +3350,20 @@ const Cardio = ({goto, setToast}) => {
                 <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>tempo</div>
               </div>
               {h.metrics.distancia&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.distancia}km</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>distância</div></div>}
+              {h.metrics.pace&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.pace}</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>pace</div></div>}
               {h.metrics.calorias&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.calorias}</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>kcal</div></div>}
               {h.metrics.rounds&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.rounds}x</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>rounds</div></div>}
               {h.metrics.andares&&<div style={{textAlign:'center'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem'}}>{h.metrics.andares}</div><div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase'}}>andares</div></div>}
             </div>
+            {h.splits && h.splits.length > 0 && (
+              <div style={{marginTop:'.6rem',display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
+                {h.splits.map((s,i)=>(
+                  <span key={i} style={{background:'rgba(255,255,255,.04)',border:'1px solid #1a1a1a',borderRadius:'5px',padding:'2px 7px',fontSize:'.65rem',color:'#555'}}>
+                    K{s.km} {fmtSplit(s.time, h.splits[i-1]?.time)}
+                  </span>
+                ))}
+              </div>
+            )}
             {h.notes&&<div style={{marginTop:'.5rem',fontSize:'.75rem',color:'var(--color-text-sub)',fontStyle:'italic'}}>"{h.notes}"</div>}
           </div>
         ))}
@@ -3254,21 +3371,144 @@ const Cardio = ({goto, setToast}) => {
     );
   }
 
-  // Home view
+  // ── PRS VIEW ──────────────────────────────────────────────────────────────
+  if (view === 'prs') {
+    return (
+      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase'}}>🏆 PRs de Pace</div>
+          <button onClick={()=>setView('home')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.35rem .85rem',color:'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
+        </div>
+        <div style={{display:'grid',gap:'.65rem'}}>
+          {pacePRs.map(({label,pr,date}) => (
+            <div key={label} style={{background:'var(--color-card)',border:pr?'1px solid rgba(227,27,35,.2)':'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#fff'}}>{label}</div>
+                {date && <div style={{fontSize:'.62rem',color:'#444',marginTop:'2px'}}>{toDate(date)}</div>}
+              </div>
+              <div style={{textAlign:'right'}}>
+                {pr
+                  ? <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'var(--color-accent)'}}>{pr}</div>
+                  : <div style={{fontSize:'.75rem',color:'#333'}}>Sem registro</div>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:'.68rem',color:'#333',textAlign:'center'}}>PRs calculados automaticamente com base no histórico</div>
+      </div>
+    );
+  }
+
+  // ── CHALLENGES VIEW ────────────────────────────────────────────────────────
+  if (view === 'challenges') {
+    const [newGoal, setNewGoal] = React.useState('');
+    const saveGoal = () => {
+      const g = parseInt(newGoal);
+      if (!g || g < 1) return;
+      localStorage.setItem('ds.cardio.challenge.goal', String(g));
+      setNewGoal('');
+      setView('home');
+      setToast(`Desafio: ${g}km este mês! 💪`);
+    };
+    const clearGoal = () => { localStorage.removeItem('ds.cardio.challenge.goal'); setView('home'); };
+    return (
+      <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase'}}>🎯 Desafio Mensal</div>
+          <button onClick={()=>setView('home')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.35rem .85rem',color:'var(--color-text-sub)',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
+        </div>
+        {monthlyChallenge && (
+          <div style={{background:'var(--color-card)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'14px',padding:'1.2rem 1.1rem'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.8rem'}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff'}}>Meta este mês</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',color:'var(--color-accent)',lineHeight:1}}>{monthlyChallenge.done}<span style={{fontSize:'1rem',color:'#555'}}>/{monthlyChallenge.goal}km</span></div>
+              </div>
+              {monthlyChallenge.done >= monthlyChallenge.goal && <span style={{fontSize:'2rem'}}>🏅</span>}
+            </div>
+            <div style={{background:'rgba(0,0,0,.3)',borderRadius:'6px',height:'8px',overflow:'hidden'}}>
+              <div style={{height:'100%',background:'linear-gradient(90deg,#e31b23,#ff4444)',borderRadius:'6px',width:`${Math.min(100,(monthlyChallenge.done/monthlyChallenge.goal)*100)}%`,transition:'width .5s'}}/>
+            </div>
+            <div style={{fontSize:'.65rem',color:'#444',marginTop:'.4rem'}}>{Math.max(0, monthlyChallenge.goal - monthlyChallenge.done).toFixed(1)}km restantes</div>
+            <button onClick={clearGoal} style={{marginTop:'.8rem',background:'none',border:'1px solid #1e1e1e',borderRadius:'7px',padding:'.3rem .75rem',color:'#333',fontSize:'.7rem',cursor:'pointer'}}>Cancelar desafio</button>
+          </div>
+        )}
+        <div className="ds-card" style={{padding:'1rem 1.1rem',display:'grid',gap:'.75rem'}}>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em'}}>{monthlyChallenge ? 'Alterar meta' : 'Definir meta de distância'}</div>
+          <div style={{fontSize:'.78rem',color:'#555'}}>Quantos km você quer correr/pedalar este mês?</div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            {[50,100,150,200].map(g => (
+              <button key={g} onClick={()=>setNewGoal(String(g))} style={{flex:1,padding:'.45rem 0',borderRadius:'8px',background:newGoal===String(g)?'rgba(227,27,35,.2)':'rgba(0,0,0,.2)',border:newGoal===String(g)?'1px solid rgba(227,27,35,.4)':'1px solid var(--color-border)',color:newGoal===String(g)?'var(--color-accent)':'var(--color-text-sub)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',cursor:'pointer'}}>{g}km</button>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:'.5rem'}}>
+            <input type="number" placeholder="Personalizado (km)" value={newGoal} onChange={e=>setNewGoal(e.target.value)} style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid var(--color-border)',borderRadius:'8px',padding:'.5rem .85rem',fontSize:'1rem',color:'var(--color-text)'}}/>
+            <button onClick={saveGoal} style={{background:'var(--color-accent)',border:'none',borderRadius:'8px',padding:'.5rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',cursor:'pointer'}}>Salvar</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── HOME VIEW ─────────────────────────────────────────────────────────────
   return (
     <div style={{marginTop:'1rem',display:'grid',gap:'1rem'}}>
+      {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',lineHeight:1}}>DARK<span style={{color:'var(--color-accent)'}}>CARDIO</span></div>
           <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',letterSpacing:'.08em',textTransform:'uppercase',marginTop:'2px'}}>Registre seu cardio</div>
         </div>
-        {history.length>0&&(
-          <button onClick={()=>setView('history')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>Histórico ({history.length})</button>
-        )}
+        <button onClick={()=>setView('history')} style={{background:'rgba(255,255,255,.04)',border:'1px solid var(--color-border)',borderRadius:'7px',padding:'.4rem .85rem',color:'var(--color-text-sub)',fontSize:'.75rem',fontWeight:700,textTransform:'uppercase',cursor:'pointer'}}>
+          Histórico{history.length>0?` (${history.length})`:''}
+        </button>
       </div>
 
+      {/* Stats row: streak + challenge */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem'}}>
+        <div style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'.75rem',textAlign:'center'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:cardioStreak>0?'#f97316':'#333',lineHeight:1}}>{cardioStreak}</div>
+          <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.2rem'}}>🔥 streak cardio</div>
+        </div>
+        <button onClick={()=>setView('challenges')} style={{background:'var(--color-card)',border:monthlyChallenge?'1px solid rgba(227,27,35,.25)':'1px solid var(--color-border)',borderRadius:'12px',padding:'.75rem',textAlign:'center',cursor:'pointer'}}>
+          {monthlyChallenge ? (
+            <>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'var(--color-accent)',lineHeight:1}}>{monthlyChallenge.done}<span style={{fontSize:'.8rem',color:'#555'}}>/{monthlyChallenge.goal}</span></div>
+              <div style={{fontSize:'.55rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.2rem'}}>🎯 km este mês</div>
+              <div style={{background:'rgba(0,0,0,.3)',borderRadius:'4px',height:'4px',overflow:'hidden',marginTop:'.4rem'}}>
+                <div style={{height:'100%',background:'var(--color-accent)',width:`${Math.min(100,(monthlyChallenge.done/monthlyChallenge.goal)*100)}%`}}/>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{fontSize:'1.3rem',marginBottom:'.1rem'}}>🎯</div>
+              <div style={{fontSize:'.62rem',color:'#444',textTransform:'uppercase',letterSpacing:'.05em'}}>Desafio mensal</div>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* PR quick link */}
+      <button onClick={()=>setView('prs')} style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'12px',padding:'.7rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'.6rem'}}>
+          <span style={{fontSize:'1.3rem'}}>🏆</span>
+          <div style={{textAlign:'left'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#fff'}}>PRs de Pace</div>
+            <div style={{fontSize:'.62rem',color:'#555'}}>5km · 10km · Meia maratona</div>
+          </div>
+        </div>
+        {pacePRs.find(p=>p.pr) && (
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'var(--color-accent)'}}>
+            {pacePRs.find(p=>p.pr)?.pr}
+          </div>
+        )}
+        <span style={{color:'#333',fontSize:'1rem'}}>›</span>
+      </button>
+
+      {/* Cardio type grid */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.6rem'}}>
-        {CARDIO_TYPES.map(type=>(
+        {CARDIO_TYPES.map(type => (
           <button key={type.id} onClick={()=>startSession(type)} style={{background:'var(--color-card)',border:'1px solid var(--color-border)',borderRadius:'12px',padding:'1rem .5rem',display:'flex',flexDirection:'column',alignItems:'center',gap:'.4rem',cursor:'pointer',transition:'all .15s'}}>
             <span style={{fontSize:'1.8rem'}}>{type.icon}</span>
             <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',letterSpacing:'.04em',color:'var(--color-text)'}}>{type.name}</span>
@@ -3277,20 +3517,24 @@ const Cardio = ({goto, setToast}) => {
       </div>
 
       {/* Last cardio */}
-      {history.length>0&&(
+      {history.length > 0 && (
         <div className="ds-card" style={{padding:'.85rem 1.1rem'}}>
           <div style={{fontSize:'.62rem',color:'var(--color-text-sub)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Último Cardio</div>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase'}}>{history[0].typeIcon} {history[0].typeName}</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',color:'var(--color-accent)'}}>{fmt(history[0].tempo||0)}</div>
           </div>
-          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>{toDate(history[0].date)}{history[0].metrics.distancia?' · '+history[0].metrics.distancia+'km':''}</div>
+          <div style={{fontSize:'.65rem',color:'var(--color-text-sub)',marginTop:'2px'}}>
+            {toDate(history[0].date)}
+            {history[0].metrics.distancia?` · ${history[0].metrics.distancia}km`:''}
+            {history[0].metrics.pace?` · ${history[0].metrics.pace}`:''}
+          </div>
+          {history[0].notes && <div style={{marginTop:'.4rem',fontSize:'.72rem',color:'#444',fontStyle:'italic'}}>"{history[0].notes}"</div>}
         </div>
       )}
     </div>
   );
 };
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MEDIDAS CORPORAIS
