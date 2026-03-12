@@ -484,10 +484,13 @@ const EXS=[
   E("Paralelas","Tríceps","Geral","Peso corporal","avançado"),
   E("Tríceps francês barra","Tríceps","Cabeça Longa","Barra"),
   E("Tríceps francês halteres","Tríceps","Cabeça Longa","Halteres"),
+  E("Tríceps francês polia","Tríceps","Cabeça Longa","Cabo/Crossover"),
   E("Tríceps pulley barra reta","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
   E("Tríceps pulley corda","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
+  E("Tríceps pulley unilateral","Tríceps","Cabeça Lateral","Cabo/Crossover","iniciante"),
   E("Tríceps testa barra W","Tríceps","Cabeça Longa","Barra"),
   E("Tríceps testa halteres","Tríceps","Cabeça Longa","Halteres"),
+  E("Tríceps coice halteres","Tríceps","Cabeça Longa","Halteres"),
   // ── ANTEBRAÇO ─────────────────────────────────────────────────────────────
   E("Rosca inversa barra","Antebraço","Extensores","Barra","iniciante"),
   E("Rosca punho barra","Antebraço","Flexores","Barra","iniciante"),
@@ -518,7 +521,9 @@ const EXS=[
   // ── GLÚTEO ────────────────────────────────────────────────────────────────
   E("Abdução em pé polia","Glúteo","Glúteo Médio","Cabo/Crossover","iniciante"),
   E("Elevação pélvica com barra","Glúteo","Glúteo Máximo","Barra"),
+  E("Elevação pélvica com halteres","Glúteo","Glúteo Máximo","Halteres","iniciante"),
   E("Glúteo 4 apoios cabo","Glúteo","Glúteo Máximo","Cabo/Crossover","iniciante"),
+  E("Hip thrust máquina","Glúteo","Glúteo Máximo","Máquina","iniciante"),
   // ── ABDUTORES / ADUTORES ──────────────────────────────────────────────────
   E("Cadeira abdutora","Abdutores","Geral","Máquina","iniciante"),
   E("Cadeira adutora","Adutores","Geral","Máquina","iniciante"),
@@ -6953,6 +6958,9 @@ const SMART_SWAP_MAP = {
   "Tríceps testa halteres":         ["Tríceps testa barra W","Tríceps francês barra"],
   "Tríceps francês barra":          ["Tríceps francês halteres","Tríceps testa barra W"],
   "Tríceps francês halteres":       ["Tríceps francês barra","Tríceps testa halteres"],
+  "Tríceps francês polia":          ["Tríceps francês halteres","Tríceps francês barra"],
+  "Tríceps pulley unilateral":      ["Tríceps pulley corda","Tríceps pulley barra reta"],
+  "Tríceps coice halteres":         ["Kick back tríceps halteres","Tríceps pulley unilateral"],
   // Composto
   "Paralelas":                      ["Mergulho no banco","Supino declinado barra"],
   "Mergulho no banco":              ["Paralelas","Tríceps pulley corda"],
@@ -6980,6 +6988,8 @@ const SMART_SWAP_MAP = {
   "Mesa flexora":                   ["Cadeira flexora","Stiff"],
   "Flexora unilateral em pé":       ["Cadeira flexora unilateral","Stiff unilateral halteres"],
   "Elevação pélvica com barra":     ["Glúteo 4 apoios cabo","Agachamento sumô halteres"],
+  "Elevação pélvica com halteres":  ["Elevação pélvica com barra","Glúteo 4 apoios cabo"],
+  "Hip thrust máquina":             ["Elevação pélvica com barra","Elevação pélvica com halteres"],
   "Glúteo 4 apoios cabo":           ["Elevação pélvica com barra","Agachamento sumô halteres"],
   // Abdução/Adução
   "Cadeira abdutora":               ["Abdução em pé polia","Agachamento sumô halteres"],
@@ -7386,15 +7396,16 @@ const NIVEIS = [
 const FEATURED_SELO_KEY = 'ds.featuredSelo';
 
 const DarkSelos = ({history, prefs}) => {
-  // Read cardioCount from localStorage reactively (updates when history changes)
+  const [demoUnlocked, setDemoUnlocked] = React.useState(false);
   const cardioCount = React.useMemo(() => {
     return parseInt(localStorage.getItem('ds.cardioCount') || '0');
-  }, [history]); // re-read whenever history changes (unlock button sets both)
+  }, [history]);
   const unlocked = useMemo(() => {
+    if(demoUnlocked) { const set = new Set(); SELOS.forEach(s => set.add(s.id)); return set; }
     const set = new Set();
     SELOS.forEach(s => { if(s.check(history, prefs, cardioCount)) set.add(s.id); });
     return set;
-  }, [history, prefs, cardioCount]);
+  }, [history, prefs, cardioCount, demoUnlocked]);
 
   const pct = Math.round(unlocked.size / SELOS.length * 100);
   const cats = [...new Set(SELOS.map(s=>s.cat))];
@@ -7475,7 +7486,7 @@ const DarkSelos = ({history, prefs}) => {
             </div>
             <div style={{fontSize:'.58rem',color:'#333',letterSpacing:'.1em',textTransform:'uppercase',marginTop:'3px'}}>Conquistas do ferro</div>
           </div>
-          <DemoBtn label="Demo selo" color="#cc44ff" onClick={()=>{ const s=SELOS.find(x=>x.id==='streak_180')||SELOS[0]; if(typeof window._demoSelo==='function') window._demoSelo(s.id); }}/>
+          <DemoBtn label={demoUnlocked?"🔒 Resetar":"🔓 Desbloquear"} color="#cc44ff" onClick={()=>{ setDemoUnlocked(v=>!v); }}/>
         </div>
 
         {/* ── BADGE GIGANTE ── */}
@@ -8904,7 +8915,7 @@ const AdminPlanosPanel = ({users, setToast}) => {
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.4rem'}}>
           {[
             {id:'elite',   label:'⚡ Elite',    desc:'Todos os recursos'},
-            {id:'zeus', label:'👑 DarkGod',  desc:'Sem limites'},
+            {id:'darkgod', label:'👑 DarkGod',  desc:'Sem limites'},
             {id:'free',    label:'🆓 Gratuito', desc:'Remover acesso'},
           ].map(function(p){ return (
             <button key={p.id} onClick={function(){ setPlanTier(p.id); }}
@@ -9219,130 +9230,6 @@ const AdminPanel = ({setToast, demoTriggers={}, selos=[], seloImgs={}}) => {
       {/* ── DEMO ── unlock all selos + fire animations */}
       {!loading && tab==='demo' && (
         <div style={{display:'grid',gap:'1rem'}}>
-          <div style={{background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'14px',padding:'1.1rem'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#e31b23',marginBottom:'.75rem'}}>🔓 Desbloquear Selos</div>
-            <div style={{fontSize:'.72rem',color:'#555',marginBottom:'1rem',lineHeight:1.5}}>
-              Salva no Firestore que você possui todos os selos. Usado para gravação de tela / demonstração.
-            </div>
-            <button onClick={function(){
-              try {
-                var now = new Date();
-                var fakeHistory = {};
-                // 30 distinct exercise names for countUniqueEx >= 80... we need 80 unique
-                var exNames = [
-                  'Supino Reto','Supino Inclinado','Supino Declinado','Crucifixo','Peck Deck',
-                  'Agachamento','Leg Press','Hack Squat','Cadeira Extensora','Cadeira Flexora',
-                  'Levantamento Terra','Stiff','Mesa Flexora','Glúteo Máquina','Abdução',
-                  'Desenvolvimento','Elevação Lateral','Elevação Frontal','Encolhimento','Remada Curvada',
-                  'Remada Unilateral','Puxada Frontal','Puxada Pegada Fechada','Serrátil','Pull Over',
-                  'Rosca Direta','Rosca Scott','Rosca Alternada','Rosca Concentrada','Rosca Martelo',
-                  'Tríceps Corda','Tríceps Testa','Tríceps Mergulho','Tríceps Francês','Tríceps Polia',
-                  'Panturrilha Em Pé','Panturrilha Sentado','Abdominais','Prancha','Oblíquo',
-                  'Agachamento Búlgaro','Avanço','Afundo','Glúteo Quatro Apoios','Hiperextensão',
-                  'Rosca Inversa','Barra Fixa','Paralela','Flexão','Burpee',
-                  'Kettlebell Swing','Clean','Push Press','Snatch','Thruster',
-                  'Face Pull','Voador','Crucifixo Inverso','Rotação Externa','Band Pull Apart',
-                  'Farmer Walk','Carregada','Argola','TRX Remada','Corda Battle',
-                  'Polichinelo','Mountain Climber','Jump Squat','Box Jump','Step Up',
-                  'Barra Guiada Supino','Barra Guiada Agachamento','Smith Desenvolvimento','Polia Alta','Polia Baixa',
-                  'Hack Machine','Prensa 45','Cadeira Adutora','Mesa Extensora','Leg Curl Deitado',
-                  'Plank com Rotação','Russian Twist','Bicycle Crunch','Hollow Body','Dragon Flag',
-                ];
-                // Build 800 days of history
-                // Strategy: each exercise gets a new PR every 2 days → 8 exs × 400 cycles = 3200 PRs
-                // Early workouts: first 10 days at 5am
-                for(var i=0; i<800; i++){
-                  var d=new Date(now); d.setDate(now.getDate()-i);
-                  var dk=d.toISOString().slice(0,10);
-                  var hour = i < 10 ? 5 : 7;
-                  var dayExs = [];
-                  for(var e=0;e<8;e++) dayExs.push(exNames[(i*8+e) % exNames.length]);
-                  var prog = 800 - i; // i=0=today=highest weight, i=799=oldest=lowest → PRs accumulate forward in time
-                  fakeHistory[dk] = {
-                    date: dk,
-                    startTime: new Date(d.getFullYear(),d.getMonth(),d.getDate(),hour,0).toISOString(),
-                    entries: dayExs.map(function(name, ei){
-                      var base = 40 + ei*5;
-                      var w1 = base + prog * 0.5;
-                      var w2 = w1 + 0.5;
-                      return {name:name, sets:[
-                        {w:String(w1.toFixed(1)),r:'10'},
-                        {w:String(w2.toFixed(1)),r:'8'},
-                        {w:String((w2+0.5).toFixed(1)),r:'6'}
-                      ]};
-                    })
-                  };
-                }
-                // trainDays — só localStorage, NUNCA Firestore
-                var fakePrefs = JSON.parse(localStorage.getItem('darkset.v3.prefs')||'{}');
-                var origTrainDays = fakePrefs.trainDays; // salva original
-                fakePrefs.trainDays = [0,1,2,3,4,5,6];
-                localStorage.setItem('darkset.v3.prefs', JSON.stringify(fakePrefs));
-                // Usa setter raw (sem fsWrite) para não sobrescrever Firestore
-                if(window._DS_SETTERS && window._DS_SETTERS.prefsLocal) window._DS_SETTERS.prefsLocal(fakePrefs);
-                // Cardio e wins — só localStorage
-                localStorage.setItem('ds.cardioCount','60');
-                localStorage.setItem('ds.squadWins','24');
-                // planData — só localStorage (não muda Firestore nem planState real)
-                var realPlanData = localStorage.getItem('ds.planData.real') || localStorage.getItem('ds.planData');
-                localStorage.setItem('ds.planData.real', realPlanData); // backup do real
-                localStorage.setItem('ds.planData', JSON.stringify({tier:'darkgod',purchasedAt:Date.now()}));
-                // History — historyLocal (sem Firestore)
-                localStorage.setItem('darkset.v3.history', JSON.stringify(fakeHistory));
-                if(window._DS_SETTERS && window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(fakeHistory);
-                setToast('✅ Selos desbloqueados! Navegue para DarkSelos. Use "Restaurar" para voltar.');
-              } catch(e){ setToast('Erro: '+e.message); }
-            }} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',letterSpacing:'.06em'}}>
-              🔓 DESBLOQUEAR TODOS OS SELOS
-            </button>
-            <button onClick={function(){
-              (async function(){
-                try {
-                  setToast('⏳ Buscando seus dados do servidor...');
-                  var uid = window._auth && window._auth.currentUser && window._auth.currentUser.uid;
-                  if(!uid || !window._db){ setToast('❌ Não autenticado'); return; }
-                  // Busca histórico real direto do Firestore (ignora localStorage corrompido)
-                  var snap = await window._db.collection('users').doc(uid).collection('data').doc('history').get();
-                  var realHistory = snap.exists ? snap.data() : {};
-                  // Remove campos internos do Firestore se houver
-                  delete realHistory._updatedAt;
-                  // Salva de volta no localStorage limpo
-                  localStorage.setItem('darkset.v3.history', JSON.stringify(realHistory));
-                  // Remove overrides de demo
-                  localStorage.removeItem('ds.cardioCount');
-                  localStorage.removeItem('ds.darkCardio');
-                  localStorage.removeItem('ds.squadWins');
-                  localStorage.removeItem('ds.streakOverride');
-                  // Restaura planData real se tiver backup
-                  var realPD = localStorage.getItem('ds.planData.real');
-                  if(realPD){ localStorage.setItem('ds.planData', realPD); }
-                  else { localStorage.removeItem('ds.planData'); }
-                  localStorage.removeItem('ds.planData.real');
-                  // Restaura prefs originais do Firestore
-                  var prefsSnap = await window._db.collection('users').doc(uid).collection('data').doc('prefs').get();
-                  if(prefsSnap.exists){ 
-                    var realPrefs = prefsSnap.data();
-                    localStorage.setItem('darkset.v3.prefs', JSON.stringify(realPrefs));
-                    if(window._DS_SETTERS && window._DS_SETTERS.prefsLocal) window._DS_SETTERS.prefsLocal(realPrefs);
-                  }
-                  // Atualiza React state
-                  if(window._DS_SETTERS && window._DS_SETTERS.historyLocal) window._DS_SETTERS.historyLocal(realHistory);
-                  // Restaura planData do documento raiz do usuário
-                  var userDoc = await window._db.collection('users').doc(uid).get();
-                  if(userDoc.exists && userDoc.data().planData){
-                    var serverPd = userDoc.data().planData;
-                    localStorage.setItem('ds.planData', JSON.stringify(serverPd));
-                    if(window._DS_SETTERS && window._DS_SETTERS.planData) window._DS_SETTERS.planData(serverPd);
-                  }
-                  var count = Object.keys(realHistory).length;
-                  setToast('✅ ' + count + ' treinos reais restaurados do servidor!');
-                } catch(e){ setToast('Erro: '+e.message); }
-              })();
-            }} style={{width:'100%',background:'rgba(255,80,80,.08)',border:'1px solid rgba(255,80,80,.2)',borderRadius:'10px',padding:'.7rem',color:'#ff5050',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',marginTop:'.5rem',letterSpacing:'.04em'}}>
-              ↩ RESTAURAR MEUS TREINOS REAIS
-            </button>
-          </div>
-
           <div style={{background:'rgba(255,255,255,.02)',border:'1px solid #1a1a1a',borderRadius:'14px',padding:'1.1rem'}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#fff',marginBottom:'.75rem'}}>🎬 Testar Animações</div>
             <div style={{display:'grid',gap:'.5rem'}}>
