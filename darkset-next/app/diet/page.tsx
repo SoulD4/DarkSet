@@ -69,7 +69,7 @@ export default function DietPage() {
   const setDiet  = (next: DietLog) => { setDietState(next);  save(LS_DIET,  next); };
   const setGoals = (next: Goals)   => { setGoalsState(next); save(LS_GOALS, next); };
 
-  const dayMeals: Meal[] = diet[viewDate] ?? [];
+  const dayMeals = useMemo(() => diet[viewDate] ?? [], [diet, viewDate]);
 
   const totals = useMemo(() => dayMeals.reduce(
     (acc, m) => ({ calories: acc.calories+num(m.calories), protein: acc.protein+num(m.protein), carbs: acc.carbs+num(m.carbs), fat: acc.fat+num(m.fat) }),
