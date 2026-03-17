@@ -35,7 +35,7 @@ export default function CardioPage() {
   const [gpsAtivo, setGpsAtivo] = useState(false);
   const [gpsErro, setGpsErro] = useState('');
   const [distGPS, setDistGPS] = useState(0);
-  const timerRef = useRef(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tsRef = useRef<number | null>(null);
   const watchRef = useRef(null);
   const lastRef = useRef(null);
