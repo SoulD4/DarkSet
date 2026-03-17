@@ -1,4 +1,3 @@
-cat > app/diet/page.tsx << 'EOF'
 'use client';
 import { useState, useMemo } from 'react';
 import PageShell from '@/components/layout/PageShell';
