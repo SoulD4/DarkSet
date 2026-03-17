@@ -18,7 +18,7 @@ const fmt = (s: number): string => {
   return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
 };
 
-const calcPace = (distKm, secs) => {
+const calcPace = (distKm: number, secs: number): string => {
   if (!distKm || !secs) return '--:--';
   const p = (secs/60)/distKm;
   return Math.floor(p)+':'+String(Math.round((p%1)*60)).padStart(2,'0')+'/km';
