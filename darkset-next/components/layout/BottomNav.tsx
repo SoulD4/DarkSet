@@ -2,11 +2,11 @@
 import { usePathname, useRouter } from 'next/navigation';
 
 const TABS = [
-  { href: '/',          label: 'Início',    icon: '🏠' },
-  { href: '/treino',    label: 'Treino',    icon: '🏋️' },
-  { href: '/historico', label: 'Histórico', icon: '📋' },
-  { href: '/evolucao',  label: 'Evolução',  icon: '📈' },
-  { href: '/perfil',    label: 'Perfil',    icon: '👤' },
+  { href: '/',          label: 'Início',  icon: '🏠' },
+  { href: '/treino',    label: 'Treino',  icon: '🏋️' },
+  { href: '/cardio',    label: 'Cardio',  icon: '🏃' },
+  { href: '/evolucao',  label: 'Evolução',icon: '📈' },
+  { href: '/perfil',    label: 'Perfil',  icon: '👤' },
 ];
 
 export default function BottomNav() {
