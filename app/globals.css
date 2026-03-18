@@ -61,3 +61,12 @@ html, body {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Override shadcn card borders */
+.border-border {
+  border-color: #2e2e38 !important;
+}
+[data-slot="card"] {
+  background: #1e1e24;
+  border-color: #2e2e38;
+}

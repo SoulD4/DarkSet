@@ -5,7 +5,6 @@ import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -182,12 +181,7 @@ export default function HomePage() {
             {nome.split(' ')[0] ? `E aí, ${nome.split(' ')[0]}!` : 'Bora Treinar!'}
           </h1>
         </div>
-        <Avatar className="w-11 h-11 border-2 border-border cursor-pointer" onClick={()=>router.push('/perfil')}>
-          <AvatarImage src={prefs.photoURL} alt={nome}/>
-          <AvatarFallback className="bg-red-700 text-white font-bold font-condensed text-base">
-            {nome.slice(0,2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+
       </div>
 
       {/* ── Streak Hero ───────────────────────────────────── */}
