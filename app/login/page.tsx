@@ -127,19 +127,26 @@ export default function LoginPage() {
         overflow:'hidden',
         background:'#0a0a0e',
       }}>
-        {/* Foto de fundo */}
-        <img
-          src={BG} alt="" onLoad={()=>setImgLoaded(true)} onError={e=>{(e.target as HTMLImageElement).src=BG_FALLBACK;setImgLoaded(true);}}
-          style={{
-            position:'absolute', inset:0, width:'100%', height:'100%',
-            objectFit:'cover', objectPosition:'center',
-            opacity: imgLoaded ? 1 : 0, transition:'opacity .8s',
-          }}
-        />
+        {/* Background escuro base */}
+        <div style={{position:'absolute',inset:0,background:'#080810'}}/>
 
-        {/* Gradientes sobre a foto */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(0,0,0,.75) 0%,rgba(0,0,0,.55) 35%,rgba(0,0,0,.88) 70%,rgba(6,6,8,1) 100%)'}}/>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 30%,rgba(227,27,35,.12) 0%,transparent 60%)'}}/>
+        {/* Foto de fundo */}
+        {imgLoaded !== false && (
+          <div style={{
+            position:'absolute',inset:0,
+            backgroundImage:`url(${BG})`,
+            backgroundSize:'cover',backgroundPosition:'center',
+            opacity: imgLoaded ? 0.35 : 0,
+            transition:'opacity 1s',
+          }}/>
+        )}
+        <img src={BG} alt="" style={{display:'none'}}
+          onLoad={()=>setImgLoaded(true)}
+          onError={()=>setImgLoaded(false)}/>
+
+        {/* Gradiente forte para legibilidade */}
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.6) 0%,rgba(8,8,16,.3) 30%,rgba(8,8,16,.7) 65%,rgba(8,8,16,1) 90%)'}}/>
+        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 40%,rgba(227,27,35,.1) 0%,transparent 55%)'}}/>
 
         {/* Conteúdo */}
         <div style={{
