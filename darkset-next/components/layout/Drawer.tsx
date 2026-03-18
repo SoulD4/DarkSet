@@ -174,7 +174,6 @@ export default function Drawer() {
                     borderLeft:`3px solid ${active?'#e31b23':'transparent'}`,
                     cursor:'pointer',textAlign:'left',
                     transition:'all .12s',
-                    background: active?'rgba(227,27,35,.07)':'transparent',
                   }}>
                     <span style={{fontSize:'1.1rem',width:24,textAlign:'center',flexShrink:0}}>{item.icon}</span>
                     <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.04em',color:active?'#fff':'#9898a8'}}>
