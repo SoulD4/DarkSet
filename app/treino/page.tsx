@@ -4,6 +4,7 @@ import PageShell from '@/components/layout/PageShell';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getGifUrls } from '@/lib/exerciseGifs';
 
 const DAYS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const GROUP_ORDER = ['Peito','Ombro','Trapézio','Costas','Bíceps','Tríceps','Antebraço','Lombar','Quadríceps','Posterior de Coxa','Glúteo','Panturrilha','Abdômen'];
@@ -201,32 +202,30 @@ const PRESET_PLANS:Preset[] = [
   },
 ];
 
-function ExerciseGif({name, size=80}:{name:string; size?:number}) {
-  const [gifUrl, setGifUrl] = useState('');
-  const [loading, setLoading] = useState(true);
+function ExerciseGif({name, size=80}:{name:string;size?:number}) {
+  const urls = getGifUrls(name);
+  const [frame, setFrame] = useState(0);
+  const [img1Ok, setImg1Ok] = useState(true);
 
   useEffect(()=>{
-    const query = encodeURIComponent(name.toLowerCase());
-    fetch(`https://exercisedb.p.rapidapi.com/exercises/name/${query}?limit=1`, {
-      headers: {
-        'X-RapidAPI-Key': process.env.NEXT_PUBLIC_EXERCISEDB_KEY || '',
-        'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
-      }
-    })
-    .then(r=>r.json())
-    .then(data=>{ if(data?.[0]?.gifUrl) setGifUrl(data[0].gifUrl); })
-    .catch(()=>{})
-    .finally(()=>setLoading(false));
+    setFrame(0); setImg1Ok(true);
+    if(!urls) return;
+    const t = setInterval(()=>setFrame(f=>f===0?1:0), 900);
+    return ()=>clearInterval(t);
   },[name]);
 
-  if(loading) return (
-    <div style={{width:size,height:size,borderRadius:8,background:'rgba(255,255,255,.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/>
-  );
-  if(!gifUrl) return (
+  if(!urls) return (
     <div style={{width:size,height:size,borderRadius:8,flexShrink:0,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>60?'1.5rem':'1rem'}}>🏋️</div>
   );
+
+  const src = frame===0 ? urls.url0 : (img1Ok ? urls.url1 : urls.url0);
   return (
-    <img src={gifUrl} alt={name} style={{width:size,height:size,borderRadius:8,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}/>
+    <img
+      src={src}
+      alt={name}
+      onError={()=>{ if(frame===1) setImg1Ok(false); }}
+      style={{width:size,height:size,borderRadius:8,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}
+    />
   );
 }
 
