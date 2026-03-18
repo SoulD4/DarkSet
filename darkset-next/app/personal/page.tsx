@@ -28,7 +28,7 @@ const EXERCICIOS = [
 ];
 
 const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-const GRUPOS = [...new Set(EXERCICIOS.map(e=>e.grupo))];
+const GRUPOS = Array.from(new Set(EXERCICIOS.map(e=>e.grupo)));
 
 type ExFicha = {nome:string; series:number; reps:string};
 type Ficha = {id:string; nome:string; byDay:Record<string,ExFicha[]>};
