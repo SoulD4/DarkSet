@@ -212,16 +212,19 @@ function Builder({plan, onSave, onBack}:{plan:Plan; onSave:(p:Plan)=>void; onBac
 
       {/* Tabs */}
       <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
-        {[['ficha',`📋 ${day.slice(0,3)} (${dayItems.length})`],['buscar','🔍 Adicionar']] as const}.map(([t,lbl])=>(
-          <button key={t} onClick={()=>setTab(t)} style={{
-            flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',
-            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',
-            textTransform:'uppercase',letterSpacing:'.04em',
-            background:tab===t?'rgba(227,27,35,.15)':'transparent',
-            color:tab===t?'#e31b23':'#7a7a8a',
-            boxShadow:tab===t?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',
-          }}>{lbl}</button>
-        ))}
+        {['ficha','buscar'].map((t)=>{
+          const lbl = t==='ficha' ? ('Ficha '+day.slice(0,3)+' ('+dayItems.length+')') : '+ Adicionar';
+          return (
+            <button key={t} onClick={()=>setTab(t)} style={{
+              flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',
+              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',
+              textTransform:'uppercase',letterSpacing:'.04em',
+              background:tab===t?'rgba(227,27,35,.15)':'transparent',
+              color:tab===t?'#e31b23':'#7a7a8a',
+              boxShadow:tab===t?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',
+            }}>{lbl}</button>
+          );
+        })}
       </div>
 
       {/* TAB FICHA */}
