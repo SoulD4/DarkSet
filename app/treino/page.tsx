@@ -468,7 +468,9 @@ export default function TreinoPage() {
 
       {/* Tabs */}
       <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
-        {[['minhas','Minhas Fichas'],['prontas','Fichas Prontas']] as const}.map(([t,lbl])=>(
+        {(['minhas','prontas'] as const).map((t)=>{
+          const lbl = t==='minhas' ? 'Minhas Fichas' : 'Fichas Prontas';
+          return (
           <button key={t} onClick={()=>setTab(t)} style={{
             flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',
             fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',
