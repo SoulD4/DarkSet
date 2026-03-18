@@ -5,7 +5,7 @@ import PageShell from '@/components/layout/PageShell';
 // ── Dados mock ────────────────────────────────────────────────────────────
 const FICHAS_MOCK = [
   {
-    id:'1', nome:'Treino A — Peito', dia:'Segunda',
+    id:'1', nome:'Treino A - Peito', dia:'Segunda',
     exercicios:[
       {nome:'Supino Reto',     series:4, reps:'8-12', cargaAnterior:'77.5'},
       {nome:'Crucifixo',       series:3, reps:'12',   cargaAnterior:'14'},
@@ -14,7 +14,7 @@ const FICHAS_MOCK = [
     ],
   },
   {
-    id:'2', nome:'Treino B — Costas', dia:'Quarta',
+    id:'2', nome:'Treino B - Costas', dia:'Quarta',
     exercicios:[
       {nome:'Puxada Frontal', series:4, reps:'10', cargaAnterior:'60'},
       {nome:'Remada Curvada', series:3, reps:'10', cargaAnterior:'68'},
@@ -22,7 +22,7 @@ const FICHAS_MOCK = [
     ],
   },
   {
-    id:'3', nome:'Treino C — Pernas', dia:'Sexta',
+    id:'3', nome:'Treino C - Pernas', dia:'Sexta',
     exercicios:[
       {nome:'Agachamento',       series:5, reps:'8',  cargaAnterior:'95'},
       {nome:'Leg Press',         series:4, reps:'12', cargaAnterior:'150'},
