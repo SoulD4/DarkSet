@@ -505,7 +505,7 @@ export default function ModoTreinoPage() {
           <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #202028',borderRadius:'16px',marginBottom:'.75rem'}}>
             <div style={{fontSize:'2.5rem',marginBottom:'.75rem'}}>💪</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Adicione o primeiro exercício</div>
-            <div style={{fontSize:'.8rem',color:'#5a5a6a'}}>Toque em "+ Add" acima para buscar e adicionar exercícios</div>
+            <div style={{fontSize:'.8rem',color:'#5a5a6a'}}>Toque em &quot;+ Add&quot; acima para buscar e adicionar exercícios</div>
           </div>
         )}
 
