@@ -192,13 +192,12 @@ export default function HomePage() {
         )}
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-baseline gap-2">
-              <span className="font-condensed font-black text-6xl leading-none"
-                style={{color: streak>0?'#e31b23':'#484858'}}>{streak}</span>
-              <div>
-                <p className="font-condensed font-bold text-base uppercase text-foreground/80">dias</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">streak</p>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-end gap-2">
+                <span className="font-condensed font-black leading-none" style={{fontSize:'4rem',color:streak>0?'#e31b23':'#484858'}}>{streak}</span>
+                <span className="font-condensed font-bold text-lg uppercase leading-none mb-1" style={{color:streak>0?'#f0f0f2':'#484858'}}>dias</span>
               </div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">🔥 Streak</p>
             </div>
             <div className="flex gap-5">
               <div className="text-center">
