@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 
 const BG = 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80&auto=format&fit=crop';
+const BG_FALLBACK = 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&q=80&auto=format&fit=crop';
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
@@ -124,10 +125,11 @@ export default function LoginPage() {
         position:'fixed', inset:0,
         display:'flex', flexDirection:'column',
         overflow:'hidden',
+        background:'#0a0a0e',
       }}>
         {/* Foto de fundo */}
         <img
-          src={BG} alt="" onLoad={()=>setImgLoaded(true)}
+          src={BG} alt="" onLoad={()=>setImgLoaded(true)} onError={e=>{(e.target as HTMLImageElement).src=BG_FALLBACK;setImgLoaded(true);}}
           style={{
             position:'absolute', inset:0, width:'100%', height:'100%',
             objectFit:'cover', objectPosition:'center',
@@ -136,7 +138,7 @@ export default function LoginPage() {
         />
 
         {/* Gradientes sobre a foto */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.2) 40%,rgba(0,0,0,.85) 75%,rgba(6,6,8,.98) 100%)'}}/>
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(0,0,0,.75) 0%,rgba(0,0,0,.55) 35%,rgba(0,0,0,.88) 70%,rgba(6,6,8,1) 100%)'}}/>
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 30%,rgba(227,27,35,.12) 0%,transparent 60%)'}}/>
 
         {/* Conteúdo */}
