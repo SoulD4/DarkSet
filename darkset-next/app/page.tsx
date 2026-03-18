@@ -10,90 +10,63 @@ export default function HomePage() {
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem'}}>
         <div>
-          <p className="text-xs uppercase tracking-widest" style={{ color: '#5a5a6a' }}>
-            Bem-vindo de volta
-          </p>
-          <h1 className="font-condensed font-black text-3xl uppercase tracking-wide leading-none mt-0.5"
-            style={{ color: '#f0f0f2' }}>
-            DarkSet
-          </h1>
+          <p style={{fontSize:'.68rem',textTransform:'uppercase',letterSpacing:'.12em',color:'#5a5a6a',margin:0}}>Bem-vindo de volta</p>
+          <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#f0f0f2',margin:0,lineHeight:1}}>DarkSet</h1>
         </div>
-        <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg"
-          style={{ background: 'linear-gradient(135deg,#e31b23,#6b0a0e)', color: '#fff' }}>
-          DS
-        </div>
+        <div style={{width:42,height:42,borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#6b0a0e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#fff'}}>DS</div>
       </div>
 
-      {/* Streak + Semana */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="ds-card p-4 text-center">
-          <div className="font-condensed font-black text-4xl leading-none"
-            style={{ color: streak > 0 ? '#f97316' : '#323240' }}>
-            {streak}
-          </div>
-          <div className="text-xs uppercase tracking-widest mt-1" style={{ color: '#9898a8' }}>
-            🔥 Streak dias
-          </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginBottom:'1rem'}}>
+        <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'12px',padding:'1rem',textAlign:'center'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.5rem',color:streak>0?'#f97316':'#323240',lineHeight:1}}>{streak}</div>
+          <div style={{fontSize:'.65rem',color:'#9898a8',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.25rem'}}>🔥 Streak dias</div>
         </div>
-        <div className="ds-card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase tracking-widest" style={{ color: '#9898a8' }}>Semana</span>
-            <span className="font-condensed font-black text-lg" style={{ color: '#e31b23' }}>
-              {weekDone}/{weekGoal}
-            </span>
+        <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'12px',padding:'1rem'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.5rem'}}>
+            <span style={{fontSize:'.65rem',color:'#9898a8',textTransform:'uppercase',letterSpacing:'.07em'}}>Semana</span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#e31b23'}}>{weekDone}/{weekGoal}</span>
           </div>
-          <div className="flex gap-1 justify-between">
-            {weekDays.map((d, i) => (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <div className="w-5 h-5 rounded-full transition-all"
-                  style={{
-                    background: trainedDays.includes(i) ? '#e31b23' : 'rgba(255,255,255,.06)',
-                    boxShadow: trainedDays.includes(i) ? '0 0 8px rgba(227,27,35,.5)' : 'none',
-                  }} />
-                <span className="text-xs" style={{ color: '#323240' }}>{d}</span>
+          <div style={{display:'flex',gap:'.3rem',justifyContent:'space-between'}}>
+            {weekDays.map((d,i)=>(
+              <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
+                <div style={{width:18,height:18,borderRadius:'50%',background:trainedDays.includes(i)?'#e31b23':'rgba(255,255,255,.06)',boxShadow:trainedDays.includes(i)?'0 0 8px rgba(227,27,35,.5)':'none'}}/>
+                <span style={{fontSize:'9px',color:'#323240'}}>{d}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Treino de hoje */}
-      <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#5a5a6a' }}>Hoje</p>
-      <div className="ds-card p-4 mb-4" style={{ borderLeft: '2px solid #e31b23' }}>
-        <div className="flex items-center justify-between">
+      <p style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#5a5a6a',marginBottom:'.5rem'}}>Hoje</p>
+      <div style={{background:'#0e0e11',border:'1px solid #202028',borderLeft:'2px solid #e31b23',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div className="font-condensed font-black text-xl uppercase tracking-wide" style={{ color: '#f0f0f2' }}>
-              Treino A — Peito
-            </div>
-            <div className="text-xs mt-0.5" style={{ color: '#9898a8' }}>8 exercícios · ~55 min</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>Treino A — Peito</div>
+            <div style={{fontSize:'.72rem',color:'#9898a8',marginTop:'3px'}}>8 exercícios · ~55 min</div>
           </div>
-          <button className="ds-btn-primary px-5 py-2.5 text-sm">Iniciar</button>
+          <button style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'.6rem 1.1rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>Iniciar</button>
         </div>
-        <div className="mt-3">
-          <div className="ds-progress-track">
-            <div className="ds-progress-fill" style={{ width: '0%' }} />
-          </div>
-          <p className="text-xs mt-1" style={{ color: '#5a5a6a' }}>0 de 8 exercícios</p>
+        <div style={{marginTop:'.75rem',background:'#16161c',borderRadius:'3px',height:'3px'}}>
+          <div style={{height:'100%',borderRadius:'3px',background:'#e31b23',width:'0%'}}/>
         </div>
+        <div style={{fontSize:'.62rem',color:'#5a5a6a',marginTop:'4px'}}>0 de 8 exercícios</div>
       </div>
 
-      {/* Últimos treinos */}
-      <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#5a5a6a' }}>Últimos treinos</p>
-      <div className="grid gap-2">
+      <p style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#5a5a6a',marginBottom:'.5rem'}}>Últimos treinos</p>
+      <div style={{display:'grid',gap:'.5rem'}}>
         {[
-          { date: 'Ontem',        plan: 'Treino B — Costas', dur: '48 min' },
-          { date: 'Quinta-feira', plan: 'Treino A — Peito',  dur: '52 min' },
-          { date: 'Terça-feira',  plan: 'Treino C — Pernas', dur: '61 min' },
-        ].map((t, i) => (
-          <div key={i} className="ds-card p-3 flex items-center justify-between cursor-pointer">
+          {date:'Ontem',      plan:'Treino B — Costas', dur:'48 min'},
+          {date:'Quinta-feira',plan:'Treino A — Peito',  dur:'52 min'},
+          {date:'Terça-feira', plan:'Treino C — Pernas', dur:'61 min'},
+        ].map((t,i)=>(
+          <div key={i} style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'12px',padding:'.85rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div>
-              <div className="text-xs uppercase tracking-wide font-bold" style={{ color: '#5a5a6a' }}>{t.date}</div>
-              <div className="font-semibold text-sm mt-0.5" style={{ color: '#f0f0f2' }}>{t.plan}</div>
+              <div style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#5a5a6a',marginBottom:'2px'}}>{t.date}</div>
+              <div style={{fontWeight:600,fontSize:'.9rem',color:'#f0f0f2'}}>{t.plan}</div>
             </div>
-            <div className="font-condensed font-bold text-lg" style={{ color: '#e31b23' }}>{t.dur}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#e31b23'}}>{t.dur}</div>
           </div>
         ))}
       </div>
