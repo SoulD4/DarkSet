@@ -142,7 +142,7 @@ export default function CardioPage() {
             textTransform:'uppercase',letterSpacing:'.06em',
             boxShadow:running?'none':`0 4px 24px ${tipo.cor}44`,
             transition:'all .2s',
-            border:running?`1px solid ${tipo.cor}44`:'none',
+            outline:running?`1px solid ${tipo.cor}44`:'none',
           }}>
             {running?'⏸ Pausar':elapsed>0?'▶ Retomar':'▶ Iniciar'}
           </button>
