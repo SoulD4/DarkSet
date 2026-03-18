@@ -138,7 +138,7 @@ export default function LoginPage() {
         }}/>
 
         {/* Gradiente forte para legibilidade */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.65) 0%,rgba(8,8,16,.35) 30%,rgba(8,8,16,.75) 65%,rgba(8,8,16,1) 90%)'}}/>
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.82) 0%,rgba(8,8,16,.65) 30%,rgba(8,8,16,.88) 65%,rgba(8,8,16,1) 88%)'}}/>
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 40%,rgba(227,27,35,.1) 0%,transparent 55%)'}}/>
 
         {/* Conteúdo */}
