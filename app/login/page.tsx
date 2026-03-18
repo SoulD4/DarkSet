@@ -127,25 +127,18 @@ export default function LoginPage() {
         overflow:'hidden',
         background:'#0a0a0e',
       }}>
-        {/* Background escuro base */}
-        <div style={{position:'absolute',inset:0,background:'#080810'}}/>
-
-        {/* Foto de fundo */}
-        {imgLoaded !== false && (
-          <div style={{
-            position:'absolute',inset:0,
-            backgroundImage:`url(${BG})`,
-            backgroundSize:'cover',backgroundPosition:'center',
-            opacity: imgLoaded ? 0.35 : 0,
-            transition:'opacity 1s',
-          }}/>
-        )}
-        <img src={BG} alt="" style={{display:'none'}}
-          onLoad={()=>setImgLoaded(true)}
-          onError={()=>setImgLoaded(false)}/>
+        {/* Background com foto sempre visível via CSS */}
+        <div style={{
+          position:'absolute',inset:0,
+          backgroundImage:`url(${BG})`,
+          backgroundSize:'cover',
+          backgroundPosition:'center',
+          backgroundRepeat:'no-repeat',
+          backgroundAttachment:'scroll',
+        }}/>
 
         {/* Gradiente forte para legibilidade */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.6) 0%,rgba(8,8,16,.3) 30%,rgba(8,8,16,.7) 65%,rgba(8,8,16,1) 90%)'}}/>
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.65) 0%,rgba(8,8,16,.35) 30%,rgba(8,8,16,.75) 65%,rgba(8,8,16,1) 90%)'}}/>
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 40%,rgba(227,27,35,.1) 0%,transparent 55%)'}}/>
 
         {/* Conteúdo */}
