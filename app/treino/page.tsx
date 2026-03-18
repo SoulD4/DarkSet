@@ -433,7 +433,7 @@ export default function TreinoPage() {
     </PageShell>
   );
 
-  const cardStyle = {background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px'} as const;
+  const cardStyle = {background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px'};
 
   return (
     <PageShell>
