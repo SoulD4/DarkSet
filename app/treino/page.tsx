@@ -321,15 +321,18 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
             </div>
           ) : (
             <div style={{padding:'.65rem'}}>
-              <div style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',padding:'.2rem .3rem .4rem',marginBottom:'.1rem'}}>
-                {['#','EXERCÍCIO','SÉR','REPS','',''].map((h,i)=>(
+              <div style={{display:'grid',gridTemplateColumns:'52px 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',padding:'.2rem .3rem .4rem',marginBottom:'.1rem'}}>
+                {['','EXERCÍCIO','SÉR','REPS','',''].map((h,i)=>(
                   <div key={i} style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</div>
                 ))}
               </div>
               {dayItems.map((it,i)=>(
-                <div key={i} style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',alignItems:'center',background:'rgba(0,0,0,.25)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.5rem .4rem',marginBottom:'.35rem',animation:'fadeUp .2s ease'}}>
-                  <button onClick={()=>setShowGif(it.name)} style={{background:'none',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'#484858',textAlign:'center',padding:0,lineHeight:1}} title="Ver GIF">
-                    {i+1}
+                <div key={i} style={{display:'grid',gridTemplateColumns:'52px 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',alignItems:'center',background:'rgba(0,0,0,.25)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.5rem .4rem',marginBottom:'.35rem',animation:'fadeUp .2s ease'}}>
+                  <button onClick={()=>setShowGif(it.name)} style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:8,overflow:'hidden',flexShrink:0,position:'relative'}} title="Ver execução">
+                    <ExerciseGif name={it.name} size={48}/>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.0)',borderRadius:8}}>
+                      <span style={{position:'absolute',bottom:1,right:2,fontSize:'.5rem',color:'rgba(255,255,255,.5)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,lineHeight:1}}>{i+1}</span>
+                    </div>
                   </button>
                   <div style={{minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:'.82rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</div>
