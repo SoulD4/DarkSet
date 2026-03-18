@@ -1,28 +1,22 @@
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: 'DarkSet — Seu Treino, Sua Evolução',
-  description: 'Monte fichas de treino, registre séries e acompanhe sua evolução.',
-  manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'DarkSet' },
-};
-export const viewport: Viewport = {
-  width: 'device-width', initialScale: 1,
-  viewportFit: 'cover', themeColor: '#080808',
+  title: 'DarkSet',
+  description: 'Treine. Evolua. Domine.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-br" className={cn("font-sans", geist.variable)}>
+    <html lang="pt-BR">
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com"/>
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous"/>
+        <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       </head>
-      <body>{children}</body>
+      <body style={{fontFamily:"Inter,sans-serif",background:'#0f0f13',color:'#f0f0f2',margin:0}}>
+        {children}
+      </body>
     </html>
   );
 }
