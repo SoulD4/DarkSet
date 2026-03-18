@@ -2,44 +2,44 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/layout/PageShell';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
-
-// ── Tipos ─────────────────────────────────────────────────────────────────
-type UserData = { name: string; photoURL: string | null; weeklyGoal: number; trainDays: number[]; };
-type HistoryEntry = { date: string; entries: {sets:{w:string;r:string}[]}[]; };
-type Ficha = { id: string; name: string; byDay: Record<string, {name:string}[]>; };
+import { doc, getDoc } from 'firebase/firestore';
 
 const DIAS_NOME = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const DIAS_LABEL = ['S','T','Q','Q','S','S','D'];
 
 const RANK_NIVEIS = [
-  {label:'MORTAL',     minSelos:0,  cor:'#7a7a8a', icon:'💀'},
-  {label:'GUERREIRO',  minSelos:3,  cor:'#cd7f32', icon:'⚔️'},
-  {label:'POSEIDON',   minSelos:8,  cor:'#60a5fa', icon:'🔱'},
-  {label:'HADES',      minSelos:15, cor:'#a78bfa', icon:'💀'},
-  {label:'CRONOS',     minSelos:25, cor:'#facc15', icon:'⏳'},
-  {label:'DARKGOD',    minSelos:40, cor:'#e31b23', icon:'👑'},
+  {label:'MORTAL',    minSelos:0,  cor:'#7a7a8a', icon:'💀'},
+  {label:'GUERREIRO', minSelos:3,  cor:'#cd7f32', icon:'⚔️'},
+  {label:'POSEIDON',  minSelos:8,  cor:'#60a5fa', icon:'🔱'},
+  {label:'HADES',     minSelos:15, cor:'#a78bfa', icon:'💀'},
+  {label:'CRONOS',    minSelos:25, cor:'#facc15', icon:'⏳'},
+  {label:'DARKGOD',   minSelos:40, cor:'#e31b23', icon:'👑'},
 ];
 
 const ATALHOS = [
-  {icon:'📋', label:'Histórico',  href:'/historico'},
-  {icon:'🏅', label:'Selos',      href:'/darkselos'},
-  {icon:'🏃', label:'Cardio',     href:'/cardio'},
-  {icon:'🥗', label:'DarkDiet',   href:'/darkdiet'},
-  {icon:'⚔️', label:'Squad',      href:'/darksquad'},
-  {icon:'🧘', label:'DarkZen',    href:'/darkzen'},
+  {icon:'📋', label:'Histórico', href:'/historico'},
+  {icon:'🏅', label:'Selos',     href:'/darkselos'},
+  {icon:'🏃', label:'Cardio',    href:'/cardio'},
+  {icon:'🥗', label:'DarkDiet',  href:'/darkdiet'},
+  {icon:'⚔️', label:'Squad',     href:'/darksquad'},
+  {icon:'🧘', label:'DarkZen',   href:'/darkzen'},
 ];
 
-function calcStreak(history: Record<string, HistoryEntry>, trainDays: number[]): number {
+function calcStreak(history: Record<string,any>, trainDays: number[]) {
   let streak = 0;
   const today = new Date();
   const todayKey = today.toISOString().slice(0,10);
-  const todayIsTrainDay = trainDays.includes(today.getDay());
   const d = new Date(today);
-  if (todayIsTrainDay && !history[todayKey]) d.setDate(d.getDate()-1);
-  for (let tries = 0; tries < 800; tries++) {
+  if (trainDays.includes(today.getDay()) && !history[todayKey])
+    d.setDate(d.getDate()-1);
+  for (let i=0; i<800; i++) {
     const k = d.toISOString().slice(0,10);
     const isTrainDay = trainDays.includes(d.getDay());
     if (!isTrainDay) { d.setDate(d.getDate()-1); continue; }
@@ -49,33 +49,12 @@ function calcStreak(history: Record<string, HistoryEntry>, trainDays: number[]):
   return streak;
 }
 
-function calcWeekVol(history: Record<string, HistoryEntry>): number {
+function getWeekDots(history: Record<string,any>, trainDays: number[]) {
   const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - ((today.getDay()||7)-1));
-  const wsStr = weekStart.toISOString().slice(0,10);
-  let vol = 0;
-  Object.entries(history).forEach(([iso, entry]) => {
-    if (iso >= wsStr) {
-      (entry.entries||[]).forEach(e => {
-        (e.sets||[]).forEach(s => {
-          const w = parseFloat(String(s.w).replace(',','.'));
-          const r = parseFloat(String(s.r).replace(',','.'));
-          if (isFinite(w) && isFinite(r)) vol += w*r;
-        });
-      });
-    }
-  });
-  return Math.round(vol);
-}
-
-function getWeekDots(history: Record<string, HistoryEntry>, trainDays: number[]) {
-  const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - ((today.getDay()||7)-1));
-  return Array.from({length:7}, (_,i) => {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate()+i);
+  const ws = new Date(today);
+  ws.setDate(today.getDate()-((today.getDay()||7)-1));
+  return Array.from({length:7},(_,i)=>{
+    const d = new Date(ws); d.setDate(ws.getDate()+i);
     return {
       trained: !!history[d.toISOString().slice(0,10)],
       isTrainDay: trainDays.includes(d.getDay()),
@@ -84,314 +63,283 @@ function getWeekDots(history: Record<string, HistoryEntry>, trainDays: number[])
   });
 }
 
-function getNextTrainDay(ficha: Ficha | null): {day:string; exs:{name:string}[]} | null {
-  if (!ficha) return null;
+function calcWeekStats(history: Record<string,any>) {
+  const today = new Date();
+  const ws = new Date(today);
+  ws.setDate(today.getDate()-((today.getDay()||7)-1));
+  const wsStr = ws.toISOString().slice(0,10);
+  let treinos=0, vol=0;
+  Object.entries(history).forEach(([iso,entry]:any)=>{
+    if(iso>=wsStr){
+      treinos++;
+      (entry.entries||[]).forEach((e:any)=>(e.sets||[]).forEach((s:any)=>{
+        const w=parseFloat(String(s.w||0).replace(',','.'));
+        const r=parseFloat(String(s.r||0).replace(',','.'));
+        if(isFinite(w)&&isFinite(r)) vol+=w*r;
+      }));
+    }
+  });
+  return {treinos, vol:Math.round(vol)};
+}
+
+function getNextTreino(ficha:any) {
+  if(!ficha) return null;
   const today = new Date();
   const todayIdx = (today.getDay()+6)%7;
   const todayNome = DIAS_NOME[todayIdx];
-  if (ficha.byDay[todayNome]?.length > 0)
-    return { day:'Hoje', exs: ficha.byDay[todayNome] };
-  for (let i=1; i<=7; i++) {
-    const d = DIAS_NOME[(todayIdx+i)%7];
-    if (ficha.byDay[d]?.length > 0)
-      return { day: d, exs: ficha.byDay[d] };
+  if(ficha.byDay?.[todayNome]?.length>0)
+    return {day:'Hoje', exs:ficha.byDay[todayNome]};
+  for(let i=1;i<=7;i++){
+    const d=DIAS_NOME[(todayIdx+i)%7];
+    if(ficha.byDay?.[d]?.length>0) return {day:d,exs:ficha.byDay[d]};
   }
   return null;
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const [user, setUser]           = useState<any>(null);
-  const [userData, setUserData]   = useState<UserData>({ name:'', photoURL:null, weeklyGoal:5, trainDays:[1,2,3,4,5,6] });
-  const [history, setHistory]     = useState<Record<string, HistoryEntry>>({});
-  const [fichas, setFichas]       = useState<Ficha[]>([]);
-  const [activeId, setActiveId]   = useState<string|null>(null);
-  const [selosCount, setSelosCount] = useState(0);
-  const [loading, setLoading]     = useState(true);
+  const [user,    setUser]    = useState<any>(null);
+  const [prefs,   setPrefs]   = useState({name:'',photoURL:'',weeklyGoal:5,trainDays:[1,2,3,4,5,6]});
+  const [history, setHistory] = useState<Record<string,any>>({});
+  const [fichas,  setFichas]  = useState<any[]>([]);
+  const [activeId,setActiveId]= useState<string|null>(null);
+  const [selos,   setSelos]   = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { setLoading(false); return; }
+  useEffect(()=>{
+    return onAuthStateChanged(auth, async(u)=>{
+      if(!u){ setLoading(false); return; }
       setUser(u);
-      try {
-        // Carrega dados do usuário
-        const userDoc = await getDoc(doc(db,'users',u.uid));
-        if (userDoc.exists()) {
-          const d = userDoc.data();
-          setUserData({
-            name:        d.name || u.displayName || '',
-            photoURL:    d.photoURL || u.photoURL || null,
-            weeklyGoal:  d.weeklyGoal || 5,
-            trainDays:   d.trainDays  || [1,2,3,4,5,6],
+      try{
+        const ud = await getDoc(doc(db,'users',u.uid));
+        if(ud.exists()){
+          const d=ud.data();
+          setPrefs({
+            name:       d.name||u.displayName||'',
+            photoURL:   d.photoURL||u.photoURL||'',
+            weeklyGoal: d.weeklyGoal||5,
+            trainDays:  d.trainDays||[1,2,3,4,5,6],
           });
         } else {
-          setUserData(prev => ({
-            ...prev,
-            name:     u.displayName || '',
-            photoURL: u.photoURL    || null,
-          }));
+          setPrefs(p=>({...p,name:u.displayName||'',photoURL:u.photoURL||''}));
         }
-
-        // Carrega histórico
-        const histDoc = await getDoc(doc(db,'users',u.uid,'data','history'));
-        if (histDoc.exists()) {
-          const payload = histDoc.data().payload;
-          const parsed = payload ? JSON.parse(payload) : {};
-          setHistory(parsed);
-        }
-
-        // Carrega fichas
-        const plansDoc = await getDoc(doc(db,'users',u.uid,'data','plans'));
-        if (plansDoc.exists()) {
-          const payload = plansDoc.data().payload;
-          const parsed = payload ? JSON.parse(payload) : {list:[],activeId:null};
-          setFichas(parsed.list || []);
-          setActiveId(parsed.activeId || null);
-        }
-
-        // Conta selos desbloqueados (simplificado)
-        const selosDoc = await getDoc(doc(db,'users',u.uid,'data','selos'));
-        if (selosDoc.exists()) {
-          const s = selosDoc.data();
-          setSelosCount(Object.values(s).filter(Boolean).length);
-        }
-      } catch(e) {
-        console.error('Erro ao carregar dados:', e);
-      }
+        const hd = await getDoc(doc(db,'users',u.uid,'data','history'));
+        if(hd.exists()){ const p=hd.data().payload; if(p) setHistory(JSON.parse(p)); }
+        const pd = await getDoc(doc(db,'users',u.uid,'data','plans'));
+        if(pd.exists()){ const p=pd.data().payload; if(p){ const parsed=JSON.parse(p); setFichas(parsed.list||[]); setActiveId(parsed.activeId||null); } }
+        const sd = await getDoc(doc(db,'users',u.uid,'data','selos'));
+        if(sd.exists()) setSelos(Object.values(sd.data()).filter(Boolean).length);
+      }catch(e){ console.error(e); }
       setLoading(false);
     });
-    return () => unsub();
-  }, []);
+  },[]);
 
-  const trainDays = userData.trainDays;
-  const streak    = calcStreak(history, trainDays);
-  const weekVol   = calcWeekVol(history);
-  const weekDots  = getWeekDots(history, trainDays);
-  const thisWeek  = weekDots.filter(d=>d.trained && d.isTrainDay).length;
-  const totalSessions = Object.keys(history).length;
-  const activeFicha   = fichas.find(f=>f.id===activeId) || fichas[0] || null;
-  const nextTreino    = getNextTrainDay(activeFicha);
-  const ultimosTreinos = Object.entries(history)
-    .sort((a,b)=>b[0].localeCompare(a[0]))
-    .slice(0,3);
+  const trainDays   = prefs.trainDays;
+  const streak      = calcStreak(history, trainDays);
+  const weekDots    = getWeekDots(history, trainDays);
+  const {treinos:thisWeek, vol:weekVol} = calcWeekStats(history);
+  const totalSess   = Object.keys(history).length;
+  const activeFicha = fichas.find(f=>f.id===activeId)||fichas[0]||null;
+  const nextTreino  = getNextTreino(activeFicha);
+  const ultimos     = Object.entries(history).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,3);
+  const rank        = [...RANK_NIVEIS].reverse().find(n=>selos>=n.minSelos)||RANK_NIVEIS[0];
+  const nextRank    = RANK_NIVEIS.find(n=>n.minSelos>selos);
+  const rankPct     = nextRank ? Math.round((selos-rank.minSelos)/(nextRank.minSelos-rank.minSelos)*100) : 100;
+  const nome        = prefs.name||user?.displayName||'Atleta';
 
-  // Rank baseado em selos
-  const rank = [...RANK_NIVEIS].reverse().find(n=>selosCount>=n.minSelos) || RANK_NIVEIS[0];
-  const nextRank = RANK_NIVEIS.find(n=>n.minSelos>selosCount);
-  const rankPct  = nextRank
-    ? Math.round((selosCount-rank.minSelos)/(nextRank.minSelos-rank.minSelos)*100)
-    : 100;
-
-  const nome = userData.name || user?.displayName || 'Atleta';
-  const initials = nome.slice(0,2).toUpperCase();
-
-  if (loading) return (
+  if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <div style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%',animation:'spinCw .65s linear infinite'}}/>
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="w-8 h-8 border-[3px] border-white/10 border-t-red-600 rounded-full animate-spin"/>
       </div>
     </PageShell>
   );
 
-  if (!user) return (
+  if(!user) return (
     <PageShell>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:'1rem',textAlign:'center'}}>
-        <div style={{fontSize:'3rem'}}>🏋️</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'#f0f0f2'}}>
-          DARK<span style={{color:'#e31b23'}}>SET</span>
-        </div>
-        <div style={{fontSize:'.88rem',color:'#7a7a8a'}}>Faça login para ver seus treinos</div>
-        <button onClick={()=>router.push('/login')} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'13px 32px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
+        <span className="text-5xl">🏋️</span>
+        <h1 className="font-condensed font-black text-3xl uppercase tracking-wide text-white">
+          DARK<span className="text-red-600">SET</span>
+        </h1>
+        <p className="text-sm text-muted-foreground">Faça login para ver seus treinos</p>
+        <Button onClick={()=>router.push('/login')} className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide px-8">
           Entrar
-        </button>
+        </Button>
       </div>
     </PageShell>
   );
 
   return (
     <PageShell>
-      {/* ── Header ──────────────────────────────────────────── */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+      {/* ── Header ────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <p style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.12em',color:'#7a7a8a',margin:0}}>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             {new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
           </p>
-          <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.9rem',textTransform:'uppercase',color:'#f0f0f2',margin:0,lineHeight:1,marginTop:2}}>
-            {nome.split(' ')[0]
-              ? `E aí, ${nome.split(' ')[0]}!`
-              : 'Bora Treinar!'
-            }
+          <h1 className="font-condensed font-black text-3xl uppercase tracking-wide text-foreground leading-none mt-0.5">
+            {nome.split(' ')[0] ? `E aí, ${nome.split(' ')[0]}!` : 'Bora Treinar!'}
           </h1>
         </div>
-        <button onClick={()=>router.push('/perfil')} style={{background:'none',border:'none',padding:0,cursor:'pointer'}}>
-          {userData.photoURL
-            ? <img src={userData.photoURL} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',objectFit:'cover'}} alt="avatar"/>
-            : <div style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',background:'linear-gradient(135deg,#e31b23,#6b0a0e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#fff'}}>
-                {initials}
-              </div>
-          }
-        </button>
+        <Avatar className="w-11 h-11 border-2 border-border cursor-pointer" onClick={()=>router.push('/perfil')}>
+          <AvatarImage src={prefs.photoURL} alt={nome}/>
+          <AvatarFallback className="bg-red-700 text-white font-bold font-condensed text-base">
+            {nome.slice(0,2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
       </div>
 
-      {/* ── Streak Hero ─────────────────────────────────────── */}
-      <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'16px',padding:'1.1rem',marginBottom:'.75rem',position:'relative',overflow:'hidden'}}>
-        {streak>0 && <div style={{position:'absolute',top:-30,right:-30,width:120,height:120,borderRadius:'50%',background:'radial-gradient(circle,rgba(227,27,35,.15),transparent 70%)',pointerEvents:'none'}}/>}
-
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-          <div style={{display:'flex',alignItems:'baseline',gap:'.4rem'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',lineHeight:1,color:streak>0?'#e31b23':'#484858'}}>{streak}</div>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',color:streak>0?'#f0f0f2':'#484858'}}>dias</div>
-              <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em'}}>streak</div>
+      {/* ── Streak Hero ───────────────────────────────────── */}
+      <Card className="mb-3 border-border overflow-hidden relative">
+        {streak>0 && (
+          <div className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none"
+            style={{background:'radial-gradient(circle,rgba(227,27,35,.15),transparent 70%)',transform:'translate(20%,-20%)'}}/>
+        )}
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-baseline gap-2">
+              <span className="font-condensed font-black text-6xl leading-none"
+                style={{color: streak>0?'#e31b23':'#484858'}}>{streak}</span>
+              <div>
+                <p className="font-condensed font-bold text-base uppercase text-foreground/80">dias</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">streak</p>
+              </div>
+            </div>
+            <div className="flex gap-5">
+              <div className="text-center">
+                <p className="font-condensed font-black text-2xl text-foreground leading-none">
+                  {thisWeek}<span className="text-base text-muted-foreground">/{prefs.weeklyGoal}</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">semana</p>
+              </div>
+              <div className="text-center">
+                <p className="font-condensed font-black text-xl text-foreground leading-none">
+                  {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
+                </p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">volume</p>
+              </div>
             </div>
           </div>
-          <div style={{display:'flex',gap:'1.2rem'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#f0f0f2',lineHeight:1}}>
-                {thisWeek}<span style={{fontSize:'.9rem',color:'#484858'}}>/{userData.weeklyGoal}</span>
+          {/* Dots semana */}
+          <div className="flex justify-between items-end px-0.5">
+            {weekDots.map(({trained,isTrainDay,label},i)=>(
+              <div key={i} className="flex flex-col items-center gap-1" style={{opacity:isTrainDay?1:0.3}}>
+                <div className="rounded-full transition-all duration-200" style={{
+                  width: trained?12:8, height: trained?12:8,
+                  background: trained?'#e31b23':(isTrainDay?'#2e2e38':'transparent'),
+                  border: trained?'none':`1px solid ${isTrainDay?'#3e3e48':'#2e2e38'}`,
+                  boxShadow: trained?'0 0 8px rgba(227,27,35,.5)':'none',
+                }}/>
+                <span className="text-[10px]" style={{color:trained?'#b0b0be':'#484858',fontWeight:trained?700:400}}>{label}</span>
               </div>
-              <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>semana</div>
-            </div>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#f0f0f2',lineHeight:1}}>
-                {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
-              </div>
-              <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>volume</div>
-            </div>
+            ))}
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Dots da semana */}
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',padding:'0 .1rem'}}>
-          {weekDots.map(({trained,isTrainDay,label},i)=>(
-            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem',opacity:isTrainDay?1:0.35}}>
-              <div style={{
-                width: trained?12:8, height: trained?12:8,
-                borderRadius:'50%',
-                background: trained?'#e31b23':(isTrainDay?'#2e2e38':'transparent'),
-                border: trained?'none':`1px solid ${isTrainDay?'#3e3e48':'#2e2e38'}`,
-                boxShadow: trained?'0 0 8px rgba(227,27,35,.5)':'none',
-                transition:'all .2s',
-              }}/>
-              <span style={{fontSize:'.58rem',color:trained?'#b0b0be':'#484858',fontWeight:trained?700:400}}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Botão Modo Treino ────────────────────────────────── */}
-      <button onClick={()=>router.push('/modo-treino')} style={{
-        width:'100%',marginBottom:'.75rem',
-        background:'linear-gradient(135deg,#e31b23,#8b0000)',
-        border:'none',borderRadius:'14px',padding:'1.1rem 1.25rem',
-        display:'flex',alignItems:'center',justifyContent:'space-between',
-        cursor:'pointer',position:'relative',overflow:'hidden',
-        boxShadow:'0 4px 24px rgba(227,27,35,.25)',
-      }}>
-        <div style={{position:'absolute',right:-10,top:-10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5.5rem',fontWeight:900,color:'rgba(0,0,0,.12)',lineHeight:1,pointerEvents:'none'}}>▶</div>
-        <div style={{textAlign:'left'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>
+      {/* ── Botão Modo Treino ──────────────────────────────── */}
+      <button onClick={()=>router.push('/modo-treino')} className="w-full mb-3 rounded-2xl p-4 flex items-center justify-between cursor-pointer relative overflow-hidden text-left"
+        style={{background:'linear-gradient(135deg,#e31b23,#8b0000)',boxShadow:'0 4px 24px rgba(227,27,35,.25)'}}>
+        <div className="absolute right-[-10px] top-[-10px] font-condensed font-black text-[88px] leading-none pointer-events-none"
+          style={{color:'rgba(0,0,0,.12)'}}>▶</div>
+        <div>
+          <p className="font-condensed font-black text-2xl uppercase tracking-wide text-white leading-none">
             Modo Treino
-          </div>
-          <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.6)',marginTop:'.25rem'}}>
+          </p>
+          <p className="text-xs mt-1" style={{color:'rgba(255,255,255,.6)'}}>
             {nextTreino
               ? `${nextTreino.day} · ${nextTreino.exs.slice(0,2).map((e:any)=>e.name||e.nome).join(', ')}${nextTreino.exs.length>2?'...':''}`
               : activeFicha ? activeFicha.name : 'Com ou sem ficha'
             }
-          </div>
+          </p>
         </div>
-        <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <div style={{width:0,height:0,borderTop:'9px solid transparent',borderBottom:'9px solid transparent',borderLeft:'15px solid #fff',marginLeft:3}}/>
+        <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{background:'rgba(0,0,0,.2)'}}>
+          <div style={{width:0,height:0,borderTop:'8px solid transparent',borderBottom:'8px solid transparent',borderLeft:'14px solid white',marginLeft:3}}/>
         </div>
       </button>
 
-      {/* ── Card de Rank ─────────────────────────────────────── */}
-      <button onClick={()=>router.push('/darkselos')} style={{
-        width:'100%',marginBottom:'.75rem',
-        background:'#1e1e24',border:`1px solid ${rank.cor}33`,
-        borderRadius:'16px',padding:'.9rem 1.1rem',
-        display:'flex',alignItems:'center',gap:'1rem',
-        cursor:'pointer',position:'relative',overflow:'hidden',textAlign:'left',
-      }}>
-        <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 0% 50%,${rank.cor}12 0%,transparent 60%)`,pointerEvents:'none'}}/>
-        <div style={{width:56,height:56,borderRadius:'12px',background:`${rank.cor}22`,border:`1px solid ${rank.cor}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.8rem',flexShrink:0}}>
-          {rank.icon}
-        </div>
-        <div style={{flex:1,minWidth:0,position:'relative'}}>
-          <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,marginBottom:'2px'}}>Seu rank</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1,color:rank.cor,marginBottom:'.4rem'}}>
-            {rank.label}
+      {/* ── Card Rank ─────────────────────────────────────── */}
+      <Card className="mb-3 border-border cursor-pointer hover:border-border/80 transition-colors relative overflow-hidden"
+        onClick={()=>router.push('/darkselos')}
+        style={{borderColor:`${rank.cor}33`}}>
+        <div className="absolute inset-0 pointer-events-none"
+          style={{background:`radial-gradient(ellipse at 0% 50%,${rank.cor}12 0%,transparent 60%)`}}/>
+        <CardContent className="p-4 flex items-center gap-4 relative">
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
+            style={{background:`${rank.cor}22`,border:`1px solid ${rank.cor}44`}}>
+            {rank.icon}
           </div>
-          <div style={{background:'rgba(255,255,255,.08)',borderRadius:'3px',height:'4px',marginBottom:'3px'}}>
-            <div style={{height:'100%',borderRadius:'3px',background:rank.cor,width:`${rankPct}%`,boxShadow:`0 0 8px ${rank.cor}66`}}/>
-          </div>
-          <div style={{display:'flex',justifyContent:'space-between'}}>
-            <div style={{fontSize:'.52rem',color:'#7a7a8a'}}>
-              {nextRank ? `→ ${nextRank.label}` : '⚡ Máximo'}
-            </div>
-            <div style={{fontSize:'.52rem',color:rank.cor,fontWeight:700}}>
-              {selosCount}{nextRank?`/${nextRank.minSelos}`:''}
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Seu rank</p>
+            <p className="font-condensed font-black text-2xl uppercase tracking-wide leading-none mb-2"
+              style={{color:rank.cor}}>{rank.label}</p>
+            <Progress value={rankPct} className="h-1 mb-1" style={{'--progress-bg':rank.cor} as any}/>
+            <div className="flex justify-between">
+              <span className="text-[10px] text-muted-foreground">{nextRank?`→ ${nextRank.label}`:'⚡ Máximo'}</span>
+              <span className="text-[10px] font-bold" style={{color:rank.cor}}>{selos}{nextRank?`/${nextRank.minSelos}`:''} selos</span>
             </div>
           </div>
-        </div>
-        <span style={{color:'#484858',fontSize:'.9rem',position:'relative'}}>›</span>
-      </button>
+          <span className="text-muted-foreground/50 text-lg relative">›</span>
+        </CardContent>
+      </Card>
 
-      {/* ── Grid de atalhos ──────────────────────────────────── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.75rem'}}>
+      {/* ── Grid atalhos ──────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
         {ATALHOS.map(a=>(
-          <button key={a.href} onClick={()=>router.push(a.href)} style={{
-            background:'#1e1e24',border:'1px solid #2e2e38',
-            borderRadius:'12px',padding:'.75rem .5rem',
-            display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',
-            cursor:'pointer',transition:'all .12s',
-          }}>
-            <span style={{fontSize:'1.3rem'}}>{a.icon}</span>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#b0b0be'}}>{a.label}</span>
+          <button key={a.href} onClick={()=>router.push(a.href)}
+            className="flex flex-col items-center gap-1 p-3 rounded-xl border border-border bg-card hover:bg-card/80 transition-colors cursor-pointer">
+            <span className="text-xl leading-none">{a.icon}</span>
+            <span className="font-condensed font-bold text-[11px] uppercase tracking-wide text-muted-foreground">{a.label}</span>
           </button>
         ))}
       </div>
 
-      {/* ── Últimos treinos ───────────────────────────────────── */}
-      {ultimosTreinos.length > 0 && (
+      {/* ── Últimos treinos ───────────────────────────────── */}
+      {ultimos.length>0 && (
         <>
-          <p style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#7a7a8a',marginBottom:'.5rem',margin:'0 0 .5rem'}}>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
             Últimos treinos
           </p>
-          <div style={{display:'grid',gap:'.45rem'}}>
-            {ultimosTreinos.map(([date, entry],i)=>{
-              const d = new Date(date+'T12:00:00');
-              const hoje = new Date().toISOString().slice(0,10);
-              const ontem = new Date(Date.now()-86400000).toISOString().slice(0,10);
-              const label = date===hoje?'Hoje':date===ontem?'Ontem':d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
-              const totalSets = (entry.entries||[]).reduce((s,e)=>s+(e.sets||[]).length,0);
-              const vol = (entry.entries||[]).reduce((s,e)=>(e.sets||[]).reduce((s2,set)=>s2+parseFloat(String(set.w||0))*parseFloat(String(set.r||0)),s),0);
-              return (
-                <div key={date} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'12px',padding:'.85rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <div>
-                    <div style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#7a7a8a',marginBottom:'2px'}}>{label}</div>
-                    <div style={{fontWeight:600,fontSize:'.9rem',color:'#f0f0f2'}}>{totalSets} séries</div>
-                  </div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#e31b23'}}>
-                    {vol>=1000?(vol/1000).toFixed(1)+'t':Math.round(vol)+'kg'}
-                  </div>
-                </div>
+          <div className="flex flex-col gap-2">
+            {ultimos.map(([date,entry]:any)=>{
+              const d=new Date(date+'T12:00:00');
+              const hoje=new Date().toISOString().slice(0,10);
+              const ontem=new Date(Date.now()-86400000).toISOString().slice(0,10);
+              const lbl=date===hoje?'Hoje':date===ontem?'Ontem':d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+              const sets=(entry.entries||[]).reduce((s:number,e:any)=>s+(e.sets||[]).length,0);
+              const vol=(entry.entries||[]).reduce((s:number,e:any)=>(e.sets||[]).reduce((s2:number,st:any)=>s2+parseFloat(String(st.w||0))*parseFloat(String(st.r||0)),s),0);
+              return(
+                <Card key={date} className="border-border">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">{lbl}</p>
+                      <p className="font-semibold text-sm text-foreground">{sets} séries</p>
+                    </div>
+                    <p className="font-condensed font-black text-xl text-red-500">
+                      {vol>=1000?(vol/1000).toFixed(1)+'t':Math.round(vol)+'kg'}
+                    </p>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
         </>
       )}
 
-      {/* ── Estado vazio ─────────────────────────────────────── */}
-      {totalSessions === 0 && (
-        <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #2e2e38',borderRadius:'12px',marginTop:'.5rem'}}>
-          <div style={{fontSize:'2.5rem',marginBottom:'.75rem'}}>💪</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Nenhum treino ainda</div>
-          <div style={{fontSize:'.82rem',color:'#7a7a8a',marginBottom:'1rem'}}>Comece seu primeiro treino agora!</div>
-          <button onClick={()=>router.push('/modo-treino')} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
-            Iniciar Treino
-          </button>
-        </div>
+      {/* ── Estado vazio ─────────────────────────────────── */}
+      {totalSess===0 && (
+        <Card className="border-dashed border-border mt-2">
+          <CardContent className="p-8 flex flex-col items-center text-center gap-3">
+            <span className="text-4xl">💪</span>
+            <p className="font-condensed font-black text-xl uppercase text-foreground">Nenhum treino ainda</p>
+            <p className="text-sm text-muted-foreground">Comece seu primeiro treino agora!</p>
+            <Button onClick={()=>router.push('/modo-treino')} className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide">
+              Iniciar Treino
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </PageShell>
   );
