@@ -201,8 +201,7 @@ const PRESET_PLANS:Preset[] = [
   },
 ];
 
-// ── ExerciseDB GIF ────────────────────────────────────────────────────────
-function ExerciseGif({name}:{name:string}) {
+function ExerciseGif({name, size=80}:{name:string; size?:number}) {
   const [gifUrl, setGifUrl] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -220,20 +219,25 @@ function ExerciseGif({name}:{name:string}) {
     .finally(()=>setLoading(false));
   },[name]);
 
-  if(loading) return <div style={{width:80,height:80,borderRadius:8,background:'rgba(255,255,255,.06)',animation:'pulse 1.5s ease-in-out infinite'}}/>;
-  if(!gifUrl) return null;
-  return <img src={gifUrl} alt={name} style={{width:80,height:80,borderRadius:8,objectFit:'cover',border:'1px solid #2e2e38'}}/>;
+  if(loading) return (
+    <div style={{width:size,height:size,borderRadius:8,background:'rgba(255,255,255,.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/>
+  );
+  if(!gifUrl) return (
+    <div style={{width:size,height:size,borderRadius:8,flexShrink:0,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>60?'1.5rem':'1rem'}}>🏋️</div>
+  );
+  return (
+    <img src={gifUrl} alt={name} style={{width:size,height:size,borderRadius:8,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}/>
+  );
 }
 
-// ── BUILDER ──────────────────────────────────────────────────────────────
 function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;onBack:()=>void}) {
-  const [local, setLocal]     = useState<Plan>(JSON.parse(JSON.stringify(plan)));
-  const [day, setDay]         = useState(DAYS[0]);
-  const [tab, setTab]         = useState<'ficha'|'buscar'>('ficha');
-  const [busca, setBusca]     = useState('');
+  const [local, setLocal]   = useState<Plan>(JSON.parse(JSON.stringify(plan)));
+  const [day, setDay]       = useState(DAYS[0]);
+  const [tab, setTab]       = useState<'ficha'|'buscar'>('ficha');
+  const [busca, setBusca]   = useState('');
   const [filtMuscle, setFiltMuscle] = useState('');
   const [filtEquip, setFiltEquip]   = useState('');
-  const [saving, setSaving]   = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showGif, setShowGif] = useState<string|null>(null);
 
   const dayItems = local.byDay[day]||[];
@@ -260,21 +264,17 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
 
   return (
     <PageShell>
-      {/* Modal GIF */}
       {showGif && (
-        <div onClick={()=>setShowGif(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1rem'}}>
-          <ExerciseGif name={showGif}/>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',textTransform:'uppercase',color:'#f0f0f2'}}>{showGif}</div>
+        <div onClick={()=>setShowGif(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.92)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1rem'}}>
+          <ExerciseGif name={showGif} size={200}/>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2'}}>{showGif}</div>
           <div style={{fontSize:'.75rem',color:'#7a7a8a'}}>Toque para fechar</div>
         </div>
       )}
 
-      {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',animation:'fadeUp .3s ease'}}>
         <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
-          <button onClick={onBack} style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .8rem',color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>
-            ← Voltar
-          </button>
+          <button onClick={onBack} style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .8rem',color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
           <div>
             <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em'}}>Editando</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{local.name}</div>
@@ -285,21 +285,23 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         </div>
       </div>
 
-      {/* Seletor de dias */}
-      <div style={{display:'flex',gap:'.35rem',overflowX:'auto',marginBottom:'.75rem',paddingBottom:'.35rem'}}>
+      <div style={{display:'flex',gap:'.35rem',overflowX:'auto',marginBottom:'.75rem',paddingTop:'10px',paddingBottom:'.35rem',scrollbarWidth:'none',msOverflowStyle:'none'}}>
         {DAYS.map(dy=>{
           const count = local.byDay[dy]?.length||0;
           const active = day===dy;
           return (
-            <button key={dy} onClick={()=>setDay(dy)} style={{flexShrink:0,minWidth:42,padding:'.4rem .6rem',borderRadius:'10px',cursor:'pointer',background:active?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(active?'#e31b23':'#2e2e38'),color:active?'#fff':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',position:'relative',transition:'all .15s'}}>
+            <button key={dy} onClick={()=>setDay(dy)} style={{flexShrink:0,minWidth:46,padding:'.45rem .6rem',borderRadius:'10px',cursor:'pointer',background:active?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(active?'#e31b23':'#2e2e38'),color:active?'#fff':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',position:'relative',transition:'all .15s'}}>
               {dy.slice(0,3)}
-              {count>0 && <span style={{position:'absolute',top:-7,right:-5,background:active?'#fff':'#e31b23',color:active?'#e31b23':'#fff',borderRadius:'50%',width:17,height:17,fontSize:'.52rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,zIndex:1}}>{count}</span>}
+              {count>0 && (
+                <span style={{position:'absolute',top:-8,right:-6,background:active?'#fff':'#e31b23',color:active?'#e31b23':'#fff',borderRadius:'50%',width:18,height:18,fontSize:'.52rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,zIndex:1,boxShadow:'0 0 0 2px #0f0f13'}}>
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Tabs */}
       <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
         <button onClick={()=>setTab('ficha')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',textTransform:'uppercase',background:tab==='ficha'?'rgba(227,27,35,.15)':'transparent',color:tab==='ficha'?'#e31b23':'#7a7a8a',boxShadow:tab==='ficha'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>
           Ficha {day.slice(0,3)} ({dayItems.length})
@@ -309,7 +311,6 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         </button>
       </div>
 
-      {/* TAB FICHA */}
       {tab==='ficha' && (
         <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',overflow:'hidden',animation:'fadeUp .25s ease'}}>
           {dayItems.length===0 ? (
@@ -317,9 +318,7 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
               <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🏋️</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#484858',marginBottom:'.4rem'}}>Vazio</div>
               <div style={{fontSize:'.82rem',color:'#484858',marginBottom:'1rem'}}>Nenhum exercício para {day}</div>
-              <button onClick={()=>setTab('buscar')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>
-                + Adicionar Exercício
-              </button>
+              <button onClick={()=>setTab('buscar')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>+ Adicionar Exercício</button>
             </div>
           ) : (
             <div style={{padding:'.65rem'}}>
@@ -329,7 +328,7 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
                 ))}
               </div>
               {dayItems.map((it,i)=>(
-                <div key={i} style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',alignItems:'center',background:'rgba(0,0,0,.25)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.5rem .4rem',marginBottom:'.35rem',animation:'fadeUp .2s ease',transition:'background .15s'}}>
+                <div key={i} style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',alignItems:'center',background:'rgba(0,0,0,.25)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.5rem .4rem',marginBottom:'.35rem',animation:'fadeUp .2s ease'}}>
                   <button onClick={()=>setShowGif(it.name)} style={{background:'none',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:'#484858',textAlign:'center',padding:0,lineHeight:1}} title="Ver GIF">
                     {i+1}
                   </button>
@@ -351,7 +350,6 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         </div>
       )}
 
-      {/* TAB BUSCAR */}
       {tab==='buscar' && (
         <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',overflow:'hidden',animation:'fadeUp .25s ease'}}>
           <div style={{padding:'.75rem .75rem .4rem'}}>
@@ -371,23 +369,30 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
             </div>
             <div style={{fontSize:'.6rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',paddingBottom:'.4rem'}}>{exsFiltrados.length} exercício(s)</div>
           </div>
-          <div style={{maxHeight:400,overflowY:'auto',padding:'0 .75rem .75rem'}}>
+          <div style={{maxHeight:460,overflowY:'auto',padding:'0 .75rem .75rem'}}>
             {(()=>{
               const rows:React.ReactNode[] = [];
               let lastGroup = '';
               exsFiltrados.forEach((e,idx)=>{
                 if(e.primary!==lastGroup){
                   lastGroup=e.primary;
-                  rows.push(<div key={'g_'+e.primary} style={{fontSize:'.62rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.1em',padding:'.5rem .3rem .2rem',borderBottom:'1px solid rgba(227,27,35,.15)',marginTop:idx?'.35rem':0}}>{e.primary}</div>);
+                  rows.push(
+                    <div key={'g_'+e.primary} style={{fontSize:'.62rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.1em',padding:'.5rem .3rem .2rem',borderBottom:'1px solid rgba(227,27,35,.15)',marginTop:idx?'.35rem':0}}>
+                      {e.primary}
+                    </div>
+                  );
                 }
                 const added = dayItems.some(it=>it.exId===e.id);
                 rows.push(
-                  <button key={e.id} onClick={()=>!added&&addEx(e)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:added?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:'1px solid '+(added?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:'8px',padding:'.55rem .75rem',textAlign:'left',cursor:added?'default':'pointer',marginBottom:'.3rem',transition:'all .15s'}}>
-                    <div>
-                      <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#4ade80':'#f0f0f2'}}>{e.name}</div>
-                      <div style={{fontSize:'.6rem',color:'#484858',marginTop:'1px'}}>{e.equipment} · {e.difficulty}</div>
+                  <button key={e.id} onClick={()=>!added&&addEx(e)} style={{width:'100%',display:'flex',alignItems:'center',gap:'.65rem',background:added?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:'1px solid '+(added?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:'10px',padding:'.5rem .65rem',textAlign:'left',cursor:added?'default':'pointer',marginBottom:'.3rem',transition:'all .15s'}}>
+                    <ExerciseGif name={e.name} size={56}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#4ade80':'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.name}</div>
+                      <div style={{fontSize:'.6rem',color:'#484858',marginTop:'2px'}}>{e.equipment} · <span style={{color:NIVEL_COR[e.difficulty]||'#484858'}}>{e.difficulty}</span></div>
                     </div>
-                    <span style={{fontSize:'1rem',color:added?'#4ade80':'#484858',flexShrink:0,marginLeft:'.5rem'}}>{added?'✓':'+'}</span>
+                    <span style={{flexShrink:0,width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:added?'rgba(34,197,94,.15)':'rgba(255,255,255,.06)',border:'1px solid '+(added?'rgba(34,197,94,.3)':'#2e2e38'),fontSize:'.85rem',color:added?'#4ade80':'#7a7a8a',fontWeight:700}}>
+                      {added?'✓':'+'}
+                    </span>
                   </button>
                 );
               });
@@ -405,19 +410,18 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
   );
 }
 
-// ── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────
 export default function TreinoPage() {
-  const [uid, setUid]             = useState<string|null>(null);
-  const [plans, setPlans]         = useState<Plan[]>([]);
-  const [activeId, setActiveId]   = useState<string|null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [newName, setNewName]     = useState('');
-  const [editPlan, setEditPlan]   = useState<Plan|null>(null);
-  const [tab, setTab]             = useState<'minhas'|'prontas'>('minhas');
+  const [uid, setUid]           = useState<string|null>(null);
+  const [plans, setPlans]       = useState<Plan[]>([]);
+  const [activeId, setActiveId] = useState<string|null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [newName, setNewName]   = useState('');
+  const [editPlan, setEditPlan] = useState<Plan|null>(null);
+  const [tab, setTab]           = useState<'minhas'|'prontas'>('minhas');
   const [previewId, setPreviewId] = useState<string|null>(null);
-  const [renameId, setRenameId]   = useState<string|null>(null);
-  const [toast, setToast]         = useState('');
+  const [renameId, setRenameId] = useState<string|null>(null);
+  const [toast, setToast]       = useState('');
   const [filtLevel, setFiltLevel] = useState('todos');
 
   useEffect(()=>{
@@ -503,45 +507,31 @@ export default function TreinoPage() {
         </div>
       )}
 
-      {/* Header */}
       <div style={{marginBottom:'1.25rem',animation:'fadeUp .3s ease'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-          Fichas de Treino
-        </div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>Fichas de Treino</div>
         <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px'}}>{plans.length} ficha(s) · {saving?'💾 salvando...':''}</div>
       </div>
 
-      {/* Criar nova ficha */}
       <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',marginBottom:'.75rem',animation:'fadeUp .35s ease'}}>
         <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Nova ficha</div>
         <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
           <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createPlan()} placeholder="Nome da ficha…" style={{flex:1,minWidth:0,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'11px 13px',fontSize:'.9rem',color:'#f0f0f2',outline:'none'}}/>
-          <button onClick={createPlan} disabled={saving} style={{flexShrink:0,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'11px 18px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',whiteSpace:'nowrap'}}>
-            + Criar
-          </button>
+          <button onClick={createPlan} disabled={saving} style={{flexShrink:0,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'11px 18px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',whiteSpace:'nowrap'}}>+ Criar</button>
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem',animation:'fadeUp .4s ease'}}>
-        <button onClick={()=>setTab('minhas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='minhas'?'rgba(227,27,35,.15)':'transparent',color:tab==='minhas'?'#e31b23':'#7a7a8a',boxShadow:tab==='minhas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>
-          Minhas Fichas
-        </button>
-        <button onClick={()=>setTab('prontas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='prontas'?'rgba(227,27,35,.15)':'transparent',color:tab==='prontas'?'#e31b23':'#7a7a8a',boxShadow:tab==='prontas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>
-          Fichas Prontas
-        </button>
+        <button onClick={()=>setTab('minhas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='minhas'?'rgba(227,27,35,.15)':'transparent',color:tab==='minhas'?'#e31b23':'#7a7a8a',boxShadow:tab==='minhas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>Minhas Fichas</button>
+        <button onClick={()=>setTab('prontas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='prontas'?'rgba(227,27,35,.15)':'transparent',color:tab==='prontas'?'#e31b23':'#7a7a8a',boxShadow:tab==='prontas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>Fichas Prontas</button>
       </div>
 
-      {/* MINHAS FICHAS */}
       {tab==='minhas' && (
         plans.length===0 ? (
           <div style={{textAlign:'center',padding:'3rem 1rem',border:'1px dashed #2e2e38',borderRadius:'12px',animation:'fadeUp .4s ease'}}>
             <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>📋</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Sem fichas ainda</div>
             <div style={{fontSize:'.82rem',color:'#7a7a8a',marginBottom:'1rem'}}>Crie uma ficha ou importe uma pronta</div>
-            <button onClick={()=>setTab('prontas')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>
-              Ver fichas prontas
-            </button>
+            <button onClick={()=>setTab('prontas')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>Ver fichas prontas</button>
           </div>
         ) : (
           <div style={{display:'grid',gap:'.65rem'}}>
@@ -588,10 +578,8 @@ export default function TreinoPage() {
         )
       )}
 
-      {/* FICHAS PRONTAS */}
       {tab==='prontas' && (
         <div style={{animation:'fadeUp .3s ease'}}>
-          {/* Filtro nível */}
           <div style={{display:'flex',gap:'.4rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.25rem'}}>
             {['todos','iniciante','intermediário','avançado'].map(l=>(
               <button key={l} onClick={()=>setFiltLevel(l)} style={{flexShrink:0,padding:'.35rem .85rem',borderRadius:'999px',cursor:'pointer',background:filtLevel===l?NIVEL_COR[l]||'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(filtLevel===l?NIVEL_COR[l]||'#e31b23':'#2e2e38'),color:filtLevel===l?'#fff':(NIVEL_COR[l]||'#7a7a8a'),fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'capitalize',transition:'all .15s'}}>
@@ -609,26 +597,20 @@ export default function TreinoPage() {
                     <div style={{fontSize:'.72rem',color:'#7a7a8a',marginTop:'.3rem',lineHeight:1.4}}>{preset.description}</div>
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'.3rem',flexShrink:0}}>
-                    <span style={{background:(NIVEL_COR[preset.level]||'#7a7a8a')+'22',border:'1px solid '+(NIVEL_COR[preset.level]||'#7a7a8a')+'44',borderRadius:'5px',padding:'.2rem .55rem',fontSize:'.6rem',fontWeight:700,color:NIVEL_COR[preset.level]||'#7a7a8a',textTransform:'uppercase',letterSpacing:'.05em'}}>
-                      {preset.level}
-                    </span>
+                    <span style={{background:(NIVEL_COR[preset.level]||'#7a7a8a')+'22',border:'1px solid '+(NIVEL_COR[preset.level]||'#7a7a8a')+'44',borderRadius:'5px',padding:'.2rem .55rem',fontSize:'.6rem',fontWeight:700,color:NIVEL_COR[preset.level]||'#7a7a8a',textTransform:'uppercase',letterSpacing:'.05em'}}>{preset.level}</span>
                     <span style={{fontSize:'.65rem',color:'#7a7a8a',fontWeight:600}}>{preset.days} dias/sem</span>
                   </div>
                 </div>
                 <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
                   {DAYS.filter(d=>preset.byDay[d]?.length>0).map(d=>(
-                    <span key={d} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'5px',padding:'2px 7px',fontSize:'.62rem',color:'#e31b23',fontWeight:700}}>
-                      {d.slice(0,3)} {preset.byDay[d].length}ex
-                    </span>
+                    <span key={d} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'5px',padding:'2px 7px',fontSize:'.62rem',color:'#e31b23',fontWeight:700}}>{d.slice(0,3)} {preset.byDay[d].length}ex</span>
                   ))}
                 </div>
                 <div style={{display:'flex',gap:'.5rem'}}>
                   <button onClick={()=>setPreviewId(previewId===preset.id?null:preset.id)} style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.5rem',color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,cursor:'pointer',transition:'all .15s'}}>
                     {previewId===preset.id?'▲ Fechar':'▼ Ver exercícios'}
                   </button>
-                  <button onClick={()=>importPreset(preset)} style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>
-                    + Usar ficha
-                  </button>
+                  <button onClick={()=>importPreset(preset)} style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>+ Usar ficha</button>
                 </div>
                 {previewId===preset.id && (
                   <div style={{marginTop:'.75rem',borderTop:'1px solid #2e2e38',paddingTop:'.75rem',display:'grid',gap:'.4rem',animation:'fadeUp .2s ease'}}>
