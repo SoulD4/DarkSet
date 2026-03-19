@@ -296,11 +296,12 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
                   else if(id==='scan') setStatus(camErr?'notfound':'scanning');
                   else { setStatus('notfound'); setNameResults([]); }
                 }}
-                style={{flex:1,padding:'.45rem',borderRadius:10,border:'1px solid '+(
-                  (id==='scan'&&(status==='scanning'||status==='requesting'))||
-                  (id==='name'&&status==='notfound'&&nameResults.length>=0)||
-                  (id==='manual'&&status==='manual')
-                  ?'#22c55e':'#2e2e38'),
+                style={{flex:1,padding:'.45rem',borderRadius:10,
+                  border:'1px solid '+((
+                    id==='scan'?(status==='scanning'||status==='requesting'):
+                    id==='name'?status==='notfound':
+                    status==='manual'
+                  )?'#22c55e':'#2e2e38'),
                   background:(id==='manual'&&status==='manual')?'rgba(34,197,94,.1)':'rgba(255,255,255,.04)',
                   color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase' as const}}>
                 <Icon size={14}/>{label}
