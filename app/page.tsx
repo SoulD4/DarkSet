@@ -1,340 +1,433 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Flame, Zap, ChevronRight, Play,
+  History, Medal, Dumbbell, Salad,
+  Users, Wind, TrendingUp, Trophy,
+  CalendarCheck, BarChart2
+} from 'lucide-react';
+import {
+  PersonSimpleRun, Sword, Skull,
+  Crown, Hourglass, ShieldStar,
+  SunHorizon
+} from '@phosphor-icons/react';
 
-const DIAS_NOME = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+// ── Tipos ─────────────────────────────────────────────────────
+type UserData    = { name:string; photoURL:string|null; weeklyGoal:number; trainDays:number[] };
+type HistEntry   = { entries:{sets:{w:string;r:string}[]}[] };
+type Ficha       = { id:string; name:string; byDay:Record<string,{name:string}[]> };
+
+const DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const DIAS_LABEL = ['S','T','Q','Q','S','S','D'];
 
 const RANK_NIVEIS = [
-  {label:'MORTAL',    minSelos:0,  cor:'#7a7a8a', icon:'💀'},
-  {label:'GUERREIRO', minSelos:3,  cor:'#cd7f32', icon:'⚔️'},
-  {label:'POSEIDON',  minSelos:8,  cor:'#60a5fa', icon:'🔱'},
-  {label:'HADES',     minSelos:15, cor:'#a78bfa', icon:'💀'},
-  {label:'CRONOS',    minSelos:25, cor:'#facc15', icon:'⏳'},
-  {label:'DARKGOD',   minSelos:40, cor:'#e31b23', icon:'👑'},
+  { label:'MORTAL',    minSelos:0,  cor:'#7a7a8a', Icon:Skull      },
+  { label:'GUERREIRO', minSelos:3,  cor:'#cd7f32', Icon:Sword      },
+  { label:'POSEIDON',  minSelos:8,  cor:'#60a5fa', Icon:ShieldStar },
+  { label:'HADES',     minSelos:15, cor:'#a78bfa', Icon:Skull      },
+  { label:'CRONOS',    minSelos:25, cor:'#facc15', Icon:Hourglass  },
+  { label:'DARKGOD',   minSelos:40, cor:'#e31b23', Icon:Crown      },
 ];
 
 const ATALHOS = [
-  {icon:'📋', label:'Histórico', href:'/historico'},
-  {icon:'🏅', label:'Selos',     href:'/darkselos'},
-  {icon:'🏃', label:'Cardio',    href:'/cardio'},
-  {icon:'🥗', label:'DarkDiet',  href:'/darkdiet'},
-  {icon:'⚔️', label:'Squad',     href:'/darksquad'},
-  {icon:'🧘', label:'DarkZen',   href:'/darkzen'},
+  { Icon:History,         label:'Histórico',  href:'/historico'  },
+  { Icon:Medal,           label:'Selos',      href:'/darkselos'  },
+  { Icon:PersonSimpleRun, label:'Cardio',     href:'/cardio'     },
+  { Icon:Salad,           label:'DarkDiet',   href:'/darkdiet'   },
+  { Icon:Users,           label:'Squad',      href:'/darksquad'  },
+  { Icon:Wind,            label:'DarkZen',    href:'/darkzen'    },
 ];
 
-function calcStreak(history: Record<string,any>, trainDays: number[]) {
-  let streak = 0;
-  const today = new Date();
-  const todayKey = today.toISOString().slice(0,10);
-  const d = new Date(today);
-  if (trainDays.includes(today.getDay()) && !history[todayKey])
-    d.setDate(d.getDate()-1);
-  for (let i=0; i<800; i++) {
-    const k = d.toISOString().slice(0,10);
-    const isTrainDay = trainDays.includes(d.getDay());
-    if (!isTrainDay) { d.setDate(d.getDate()-1); continue; }
-    if (history[k]) { streak++; d.setDate(d.getDate()-1); }
-    else break;
+// ── Helpers ───────────────────────────────────────────────────
+const num = (v: string) => { const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:0; };
+
+function calcStreak(history: Record<string,HistEntry>, trainDays: number[]): number {
+  let streak=0;
+  const today=new Date(), todayKey=today.toISOString().slice(0,10);
+  const d=new Date(today);
+  if(trainDays.includes(today.getDay())&&!history[todayKey]) d.setDate(d.getDate()-1);
+  for(let i=0;i<800;i++){
+    const k=d.toISOString().slice(0,10);
+    if(!trainDays.includes(d.getDay())){ d.setDate(d.getDate()-1); continue; }
+    if(history[k]){ streak++; d.setDate(d.getDate()-1); } else break;
   }
   return streak;
 }
 
-function getWeekDots(history: Record<string,any>, trainDays: number[]) {
-  const today = new Date();
-  const ws = new Date(today);
-  ws.setDate(today.getDate()-((today.getDay()||7)-1));
+function calcWeekVol(history: Record<string,HistEntry>): number {
+  const today=new Date();
+  const ws=new Date(today); ws.setDate(today.getDate()-((today.getDay()||7)-1));
+  const wsStr=ws.toISOString().slice(0,10);
+  let vol=0;
+  Object.entries(history).forEach(([iso,entry])=>{
+    if(iso>=wsStr) (entry.entries||[]).forEach(e=>(e.sets||[]).forEach(s=>{ vol+=num(s.w)*num(s.r); }));
+  });
+  return Math.round(vol);
+}
+
+function getWeekDots(history: Record<string,HistEntry>, trainDays: number[]) {
+  const today=new Date();
+  const ws=new Date(today); ws.setDate(today.getDate()-((today.getDay()||7)-1));
   return Array.from({length:7},(_,i)=>{
-    const d = new Date(ws); d.setDate(ws.getDate()+i);
-    return {
-      trained: !!history[d.toISOString().slice(0,10)],
-      isTrainDay: trainDays.includes(d.getDay()),
-      label: DIAS_LABEL[i],
-    };
+    const d=new Date(ws); d.setDate(ws.getDate()+i);
+    return { trained:!!history[d.toISOString().slice(0,10)], isTrainDay:trainDays.includes(d.getDay()), label:DIAS_LABEL[i] };
   });
 }
 
-function calcWeekStats(history: Record<string,any>) {
-  const today = new Date();
-  const ws = new Date(today);
-  ws.setDate(today.getDate()-((today.getDay()||7)-1));
-  const wsStr = ws.toISOString().slice(0,10);
-  let treinos=0, vol=0;
-  Object.entries(history).forEach(([iso,entry]:any)=>{
-    if(iso>=wsStr){
-      treinos++;
-      (entry.entries||[]).forEach((e:any)=>(e.sets||[]).forEach((s:any)=>{
-        const w=parseFloat(String(s.w||0).replace(',','.'));
-        const r=parseFloat(String(s.r||0).replace(',','.'));
-        if(isFinite(w)&&isFinite(r)) vol+=w*r;
-      }));
-    }
-  });
-  return {treinos, vol:Math.round(vol)};
-}
-
-function getNextTreino(ficha:any) {
+function getNextTrainDay(ficha: Ficha|null): {day:string;exs:{name:string}[]}|null {
   if(!ficha) return null;
-  const today = new Date();
-  const todayIdx = (today.getDay()+6)%7;
-  const todayNome = DIAS_NOME[todayIdx];
-  if(ficha.byDay?.[todayNome]?.length>0)
-    return {day:'Hoje', exs:ficha.byDay[todayNome]};
+  const todayIdx=(new Date().getDay()+6)%7;
+  const todayNome=DIAS_NOME[todayIdx];
+  if(ficha.byDay[todayNome]?.length>0) return {day:'Hoje',exs:ficha.byDay[todayNome]};
   for(let i=1;i<=7;i++){
     const d=DIAS_NOME[(todayIdx+i)%7];
-    if(ficha.byDay?.[d]?.length>0) return {day:d,exs:ficha.byDay[d]};
+    if(ficha.byDay[d]?.length>0) return {day:d,exs:ficha.byDay[d]};
   }
   return null;
 }
 
+// ── Componente ────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter();
-  const [user,    setUser]    = useState<any>(null);
-  const [prefs,   setPrefs]   = useState({name:'',photoURL:'',weeklyGoal:5,trainDays:[1,2,3,4,5,6]});
-  const [history, setHistory] = useState<Record<string,any>>({});
-  const [fichas,  setFichas]  = useState<any[]>([]);
-  const [activeId,setActiveId]= useState<string|null>(null);
-  const [selos,   setSelos]   = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [user,       setUser]       = useState<any>(null);
+  const [userData,   setUserData]   = useState<UserData>({name:'',photoURL:null,weeklyGoal:5,trainDays:[1,2,3,4,5,6]});
+  const [history,    setHistory]    = useState<Record<string,HistEntry>>({});
+  const [fichas,     setFichas]     = useState<Ficha[]>([]);
+  const [activeId,   setActiveId]   = useState<string|null>(null);
+  const [selosCount, setSelosCount] = useState(0);
+  const [loading,    setLoading]    = useState(true);
 
   useEffect(()=>{
-    return onAuthStateChanged(auth, async(u)=>{
+    return onAuthStateChanged(auth, async u=>{
       if(!u){ setLoading(false); return; }
       setUser(u);
-      try{
-        const ud = await getDoc(doc(db,'users',u.uid));
-        if(ud.exists()){
-          const d=ud.data();
-          setPrefs({
-            name:       d.name||u.displayName||'',
-            photoURL:   d.photoURL||u.photoURL||'',
-            weeklyGoal: d.weeklyGoal||5,
-            trainDays:  d.trainDays||[1,2,3,4,5,6],
-          });
+      try {
+        const [userSnap, histSnap, plansSnap, selosSnap] = await Promise.all([
+          getDoc(doc(db,'users',u.uid)),
+          getDoc(doc(db,'users',u.uid,'data','history')),
+          getDoc(doc(db,'users',u.uid,'data','plans')),
+          getDoc(doc(db,'users',u.uid,'data','selos')),
+        ]);
+        if(userSnap.exists()){
+          const d=userSnap.data();
+          setUserData({name:d.name||u.displayName||'',photoURL:d.photoURL||u.photoURL||null,weeklyGoal:d.weeklyGoal||5,trainDays:d.trainDays||[1,2,3,4,5,6]});
         } else {
-          setPrefs(p=>({...p,name:u.displayName||'',photoURL:u.photoURL||''}));
+          setUserData(p=>({...p,name:u.displayName||'',photoURL:u.photoURL||null}));
         }
-        const hd = await getDoc(doc(db,'users',u.uid,'data','history'));
-        if(hd.exists()){ const p=hd.data().payload; if(p) setHistory(JSON.parse(p)); }
-        const pd = await getDoc(doc(db,'users',u.uid,'data','plans'));
-        if(pd.exists()){ const p=pd.data().payload; if(p){ const parsed=JSON.parse(p); setFichas(parsed.list||[]); setActiveId(parsed.activeId||null); } }
-        const sd = await getDoc(doc(db,'users',u.uid,'data','selos'));
-        if(sd.exists()) setSelos(Object.values(sd.data()).filter(Boolean).length);
-      }catch(e){ console.error(e); }
+        if(histSnap.exists())  setHistory(JSON.parse(histSnap.data().payload||'{}'));
+        if(plansSnap.exists()){ const p=JSON.parse(plansSnap.data().payload||'{}'); setFichas(p.list||[]); setActiveId(p.activeId||null); }
+        if(selosSnap.exists()) setSelosCount(Object.values(selosSnap.data()).filter(Boolean).length);
+      } catch(e){ console.error(e); }
       setLoading(false);
     });
   },[]);
 
-  const trainDays   = prefs.trainDays;
-  const streak      = calcStreak(history, trainDays);
-  const weekDots    = getWeekDots(history, trainDays);
-  const {treinos:thisWeek, vol:weekVol} = calcWeekStats(history);
-  const totalSess   = Object.keys(history).length;
-  const activeFicha = fichas.find(f=>f.id===activeId)||fichas[0]||null;
-  const nextTreino  = getNextTreino(activeFicha);
-  const ultimos     = Object.entries(history).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,3);
-  const rank        = [...RANK_NIVEIS].reverse().find(n=>selos>=n.minSelos)||RANK_NIVEIS[0];
-  const nextRank    = RANK_NIVEIS.find(n=>n.minSelos>selos);
-  const rankPct     = nextRank ? Math.round((selos-rank.minSelos)/(nextRank.minSelos-rank.minSelos)*100) : 100;
-  const nome        = prefs.name||user?.displayName||'Atleta';
+  const trainDays    = userData.trainDays;
+  const streak       = calcStreak(history, trainDays);
+  const weekVol      = calcWeekVol(history);
+  const weekDots     = getWeekDots(history, trainDays);
+  const thisWeek     = weekDots.filter(d=>d.trained&&d.isTrainDay).length;
+  const totalSess    = Object.keys(history).length;
+  const activeFicha  = fichas.find(f=>f.id===activeId)||fichas[0]||null;
+  const nextTreino   = getNextTrainDay(activeFicha);
+  const ultimosTreinos = Object.entries(history).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,3);
+  const rank         = [...RANK_NIVEIS].reverse().find(n=>selosCount>=n.minSelos)||RANK_NIVEIS[0];
+  const nextRank     = RANK_NIVEIS.find(n=>n.minSelos>selosCount);
+  const rankPct      = nextRank ? Math.round((selosCount-rank.minSelos)/(nextRank.minSelos-rank.minSelos)*100) : 100;
+  const nome         = userData.name||user?.displayName||'Atleta';
+  const initials     = nome.slice(0,2).toUpperCase();
+  const RankIcon     = rank.Icon;
 
+  // ── Loading ──────────────────────────────────────────────
   if(loading) return (
     <PageShell>
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <div className="w-8 h-8 border-[3px] border-white/10 border-t-red-600 rounded-full animate-spin"/>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
+        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
+          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
       </div>
     </PageShell>
   );
 
+  // ── Não logado ────────────────────────────────────────────
   if(!user) return (
     <PageShell>
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
-        <span className="text-5xl">🏋️</span>
-        <h1 className="font-condensed font-black text-3xl uppercase tracking-wide text-white">
-          DARK<span className="text-red-600">SET</span>
-        </h1>
-        <p className="text-sm text-muted-foreground">Faça login para ver seus treinos</p>
-        <Button onClick={()=>router.push('/login')} className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide px-8">
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:'1rem',textAlign:'center'}}>
+        <motion.div initial={{scale:.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{type:'spring',stiffness:200}}>
+          <Dumbbell size={56} color="#e31b23"/>
+        </motion.div>
+        <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:.15}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
+            DARK<span style={{color:'#e31b23'}}>SET</span>
+          </div>
+          <div style={{fontSize:'.88rem',color:'#7a7a8a',marginTop:'.5rem'}}>Faça login para ver seus treinos</div>
+        </motion.div>
+        <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.3}}
+          whileTap={{scale:.97}} onClick={()=>router.push('/login')}
+          style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'13px 32px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.3)',outline:'none'}}>
           Entrar
-        </Button>
+        </motion.button>
       </div>
     </PageShell>
   );
 
   return (
     <PageShell>
-      {/* ── Header ────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-5">
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
+        style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+          <div style={{fontSize:'.62rem',textTransform:'uppercase',letterSpacing:'.12em',color:'#7a7a8a',display:'flex',alignItems:'center',gap:'.3rem'}}>
+            <SunHorizon size={12} color="#7a7a8a"/>
             {new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
-          </p>
-          <h1 className="font-condensed font-black text-3xl uppercase tracking-wide text-foreground leading-none mt-0.5">
+          </div>
+          <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.9rem',textTransform:'uppercase',color:'#f0f0f2',margin:0,lineHeight:1,marginTop:2}}>
             {nome.split(' ')[0] ? `E aí, ${nome.split(' ')[0]}!` : 'Bora Treinar!'}
           </h1>
         </div>
+        <motion.button whileTap={{scale:.93}} onClick={()=>router.push('/perfil')}
+          style={{background:'none',border:'none',padding:0,cursor:'pointer',outline:'none'}}>
+          {userData.photoURL
+            ? <img src={userData.photoURL} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',objectFit:'cover'}} alt="avatar"/>
+            : <div style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',background:'linear-gradient(135deg,#e31b23,#6b0a0e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#fff'}}>
+                {initials}
+              </div>
+          }
+        </motion.button>
+      </motion.div>
 
-      </div>
+      {/* ── Streak Hero ────────────────────────────────────── */}
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.06}}>
+        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,marginBottom:'.75rem',overflow:'hidden',position:'relative'}}>
+          {streak>0 && (
+            <div style={{position:'absolute',top:-30,right:-30,width:130,height:130,borderRadius:'50%',background:'radial-gradient(circle,rgba(227,27,35,.15),transparent 70%)',pointerEvents:'none'}}/>
+          )}
+          <CardContent style={{padding:'1.1rem'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+              {/* Streak */}
+              <div style={{display:'flex',alignItems:'center',gap:'.6rem'}}>
+                <motion.div animate={streak>0?{scale:[1,1.15,1]}:{}} transition={{duration:.6,repeat:Infinity,repeatDelay:2}}>
+                  <Flame size={32} color={streak>0?'#e31b23':'#484858'}/>
+                </motion.div>
+                <div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',lineHeight:1,color:streak>0?'#e31b23':'#484858'}}>{streak}</div>
+                  <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em'}}>dias streak</div>
+                </div>
+              </div>
 
-      {/* ── Streak Hero ───────────────────────────────────── */}
-      <Card className="mb-3 border-border overflow-hidden relative">
-        {streak>0 && (
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none"
-            style={{background:'radial-gradient(circle,rgba(227,27,35,.15),transparent 70%)',transform:'translate(20%,-20%)'}}/>
-        )}
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-end gap-2">
-                <span className="font-condensed font-black leading-none" style={{fontSize:'4rem',color:streak>0?'#e31b23':'#484858'}}>{streak}</span>
-                <span className="font-condensed font-bold text-lg uppercase leading-none mb-1" style={{color:streak>0?'#f0f0f2':'#484858'}}>dias</span>
-              </div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">🔥 Streak</p>
-            </div>
-            <div className="flex gap-5">
-              <div className="text-center">
-                <p className="font-condensed font-black text-2xl text-foreground leading-none">
-                  {thisWeek}<span className="text-base text-muted-foreground">/{prefs.weeklyGoal}</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">semana</p>
-              </div>
-              <div className="text-center">
-                <p className="font-condensed font-black text-xl text-foreground leading-none">
-                  {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
-                </p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">volume</p>
+              {/* Stats semana */}
+              <div style={{display:'flex',gap:'1.25rem'}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'.25rem',marginBottom:'1px'}}>
+                    <CalendarCheck size={12} color="#7a7a8a"/>
+                  </div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:'#f0f0f2',lineHeight:1}}>
+                    {thisWeek}<span style={{fontSize:'.85rem',color:'#484858'}}>/{userData.weeklyGoal}</span>
+                  </div>
+                  <div style={{fontSize:'.5rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em'}}>semana</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'.25rem',marginBottom:'1px'}}>
+                    <Zap size={12} color="#7a7a8a"/>
+                  </div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:'#f0f0f2',lineHeight:1}}>
+                    {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
+                  </div>
+                  <div style={{fontSize:'.5rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em'}}>volume</div>
+                </div>
               </div>
             </div>
-          </div>
-          {/* Dots semana */}
-          <div className="flex justify-between items-end px-0.5">
-            {weekDots.map(({trained,isTrainDay,label},i)=>(
-              <div key={i} className="flex flex-col items-center gap-1" style={{opacity:isTrainDay?1:0.3}}>
-                <div className="rounded-full transition-all duration-200" style={{
-                  width: trained?12:8, height: trained?12:8,
-                  background: trained?'#e31b23':(isTrainDay?'#2e2e38':'transparent'),
-                  border: trained?'none':`1px solid ${isTrainDay?'#3e3e48':'#2e2e38'}`,
-                  boxShadow: trained?'0 0 8px rgba(227,27,35,.5)':'none',
-                }}/>
-                <span className="text-[10px]" style={{color:trained?'#b0b0be':'#484858',fontWeight:trained?700:400}}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+
+            <Separator style={{background:'rgba(255,255,255,.05)',marginBottom:'.85rem'}}/>
+
+            {/* Dots da semana */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',padding:'0 .1rem'}}>
+              {weekDots.map(({trained,isTrainDay,label},i)=>(
+                <motion.div key={i} initial={{opacity:0,scale:.8}} animate={{opacity:isTrainDay?1:.35,scale:1}} transition={{delay:.3+i*.04}}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem'}}>
+                  <motion.div
+                    animate={trained?{boxShadow:['0 0 0px rgba(227,27,35,0)','0 0 10px rgba(227,27,35,.6)','0 0 0px rgba(227,27,35,0)']}:{}}
+                    transition={{duration:2,repeat:Infinity,repeatDelay:1}}
+                    style={{
+                      width:trained?12:8, height:trained?12:8,
+                      borderRadius:'50%',
+                      background:trained?'#e31b23':(isTrainDay?'#2e2e38':'transparent'),
+                      border:trained?'none':`1px solid ${isTrainDay?'#3e3e48':'#2e2e38'}`,
+                      transition:'all .2s',
+                    }}/>
+                  <span style={{fontSize:'.58rem',color:trained?'#b0b0be':'#484858',fontWeight:trained?700:400}}>{label}</span>
+                </motion.div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* ── Botão Modo Treino ──────────────────────────────── */}
-      <button onClick={()=>router.push('/modo-treino')} className="w-full mb-3 rounded-2xl p-4 flex items-center justify-between cursor-pointer relative overflow-hidden text-left"
-        style={{background:'linear-gradient(135deg,#e31b23,#8b0000)',boxShadow:'0 4px 24px rgba(227,27,35,.25)'}}>
-        <div className="absolute right-[-10px] top-[-10px] font-condensed font-black text-[88px] leading-none pointer-events-none"
-          style={{color:'rgba(0,0,0,.12)'}}>▶</div>
-        <div>
-          <p className="font-condensed font-black text-2xl uppercase tracking-wide text-white leading-none">
-            Modo Treino
-          </p>
-          <p className="text-xs mt-1" style={{color:'rgba(255,255,255,.6)'}}>
-            {nextTreino
-              ? `${nextTreino.day} · ${nextTreino.exs.slice(0,2).map((e:any)=>e.name||e.nome).join(', ')}${nextTreino.exs.length>2?'...':''}`
-              : activeFicha ? activeFicha.name : 'Com ou sem ficha'
-            }
-          </p>
-        </div>
-        <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{background:'rgba(0,0,0,.2)'}}>
-          <div style={{width:0,height:0,borderTop:'8px solid transparent',borderBottom:'8px solid transparent',borderLeft:'14px solid white',marginLeft:3}}/>
-        </div>
-      </button>
-
-      {/* ── Card Rank ─────────────────────────────────────── */}
-      <Card className="mb-3 border-border cursor-pointer hover:border-border/80 transition-colors relative overflow-hidden"
-        onClick={()=>router.push('/darkselos')}
-        style={{borderColor:`${rank.cor}33`}}>
-        <div className="absolute inset-0 pointer-events-none"
-          style={{background:`radial-gradient(ellipse at 0% 50%,${rank.cor}12 0%,transparent 60%)`}}/>
-        <CardContent className="p-4 flex items-center gap-4 relative">
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
-            style={{background:`${rank.cor}22`,border:`1px solid ${rank.cor}44`}}>
-            {rank.icon}
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.12}}>
+        <motion.button whileTap={{scale:.98}} onClick={()=>router.push('/modo-treino')} style={{
+          width:'100%',marginBottom:'.75rem',
+          background:'linear-gradient(135deg,#e31b23,#8b0000)',
+          border:'none',borderRadius:14,padding:'1.1rem 1.25rem',
+          display:'flex',alignItems:'center',justifyContent:'space-between',
+          cursor:'pointer',position:'relative',overflow:'hidden',
+          boxShadow:'0 4px 24px rgba(227,27,35,.25)',outline:'none',
+        }}>
+          <div style={{position:'absolute',right:-8,top:'50%',transform:'translateY(-50%)',opacity:.08}}>
+            <Dumbbell size={96} color="#fff"/>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Seu rank</p>
-            <p className="font-condensed font-black text-2xl uppercase tracking-wide leading-none mb-2"
-              style={{color:rank.cor}}>{rank.label}</p>
-            <Progress value={rankPct} className="h-1 mb-1" style={{'--progress-bg':rank.cor} as any}/>
-            <div className="flex justify-between">
-              <span className="text-[10px] text-muted-foreground">{nextRank?`→ ${nextRank.label}`:'⚡ Máximo'}</span>
-              <span className="text-[10px] font-bold" style={{color:rank.cor}}>{selos}{nextRank?`/${nextRank.minSelos}`:''} selos</span>
+          <div style={{textAlign:'left',position:'relative'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>
+              Modo Treino
+            </div>
+            <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.6)',marginTop:'.25rem'}}>
+              {nextTreino
+                ? `${nextTreino.day} · ${nextTreino.exs.slice(0,2).map((e:any)=>e.name||e.nome).join(', ')}${nextTreino.exs.length>2?'…':''}`
+                : activeFicha ? activeFicha.name : 'Com ou sem ficha'
+              }
             </div>
           </div>
-          <span className="text-muted-foreground/50 text-lg relative">›</span>
-        </CardContent>
-      </Card>
+          <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
+            <Play size={20} color="#fff" fill="#fff"/>
+          </div>
+        </motion.button>
+      </motion.div>
 
-      {/* ── Grid atalhos ──────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        {ATALHOS.map(a=>(
-          <button key={a.href} onClick={()=>router.push(a.href)}
-            className="flex flex-col items-center gap-1 p-3 rounded-xl border border-border bg-card hover:bg-card/80 transition-colors cursor-pointer">
-            <span className="text-xl leading-none">{a.icon}</span>
-            <span className="font-condensed font-bold text-[11px] uppercase tracking-wide text-muted-foreground">{a.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* ── Card de Rank ──────────────────────────────────── */}
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.18}}>
+        <motion.button whileTap={{scale:.98}} onClick={()=>router.push('/darkselos')} style={{
+          width:'100%',marginBottom:'.75rem',
+          background:'#1e1e24',border:`1px solid ${rank.cor}33`,
+          borderRadius:16,padding:'.9rem 1.1rem',
+          display:'flex',alignItems:'center',gap:'1rem',
+          cursor:'pointer',position:'relative',overflow:'hidden',textAlign:'left',outline:'none',
+        }}>
+          <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 0% 50%,${rank.cor}10 0%,transparent 60%)`,pointerEvents:'none'}}/>
+          <div style={{width:52,height:52,borderRadius:12,background:`${rank.cor}22`,border:`1px solid ${rank.cor}44`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
+            <RankIcon size={28} color={rank.cor} weight="fill"/>
+          </div>
+          <div style={{flex:1,minWidth:0,position:'relative'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'2px'}}>
+              <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Seu rank</div>
+              <Badge style={{background:`${rank.cor}22`,color:rank.cor,border:`1px solid ${rank.cor}44`,fontSize:'.48rem',padding:'1px 5px'}}>{selosCount} selos</Badge>
+            </div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1,color:rank.cor,marginBottom:'.4rem'}}>
+              {rank.label}
+            </div>
+            <div style={{background:'rgba(255,255,255,.06)',borderRadius:3,height:4,marginBottom:3,overflow:'hidden'}}>
+              <motion.div initial={{width:0}} animate={{width:`${rankPct}%`}} transition={{delay:.5,duration:.8,ease:'easeOut'}}
+                style={{height:'100%',borderRadius:3,background:rank.cor,boxShadow:`0 0 8px ${rank.cor}66`}}/>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <div style={{fontSize:'.52rem',color:'#7a7a8a',display:'flex',alignItems:'center',gap:'.2rem'}}>
+                {nextRank ? <><TrendingUp size={9}/> {nextRank.label}</> : <><Trophy size={9}/> Máximo</>}
+              </div>
+              <div style={{fontSize:'.52rem',color:rank.cor,fontWeight:700}}>{selosCount}{nextRank?`/${nextRank.minSelos}`:''}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} color="#484858" style={{position:'relative',flexShrink:0}}/>
+        </motion.button>
+      </motion.div>
+
+      {/* ── Grid de atalhos ───────────────────────────────── */}
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.24}}
+        style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.75rem'}}>
+        {ATALHOS.map((a,i)=>{
+          const AIcon = a.Icon;
+          return (
+            <motion.button key={a.href} whileTap={{scale:.95}} onClick={()=>router.push(a.href)} style={{
+              background:'#1e1e24',border:'1px solid #2e2e38',
+              borderRadius:12,padding:'.75rem .5rem',
+              display:'flex',flexDirection:'column',alignItems:'center',gap:'.35rem',
+              cursor:'pointer',outline:'none',
+            }}>
+              {'size' in AIcon
+                ? <AIcon size={20} color="#b0b0be"/>
+                : <AIcon size={20} color="#b0b0be" weight="fill"/>
+              }
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#b0b0be'}}>{a.label}</span>
+            </motion.button>
+          );
+        })}
+      </motion.div>
 
       {/* ── Últimos treinos ───────────────────────────────── */}
-      {ultimos.length>0 && (
-        <>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-            Últimos treinos
-          </p>
-          <div className="flex flex-col gap-2">
-            {ultimos.map(([date,entry]:any)=>{
+      {ultimosTreinos.length > 0 && (
+        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.3}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+            <div style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#7a7a8a',display:'flex',alignItems:'center',gap:'.3rem'}}>
+              <BarChart2 size={12} color="#7a7a8a"/> Últimos treinos
+            </div>
+            <motion.button whileTap={{scale:.95}} onClick={()=>router.push('/historico')}
+              style={{background:'none',border:'none',cursor:'pointer',fontSize:'.62rem',color:'#e31b23',fontWeight:700,display:'flex',alignItems:'center',gap:'.2rem',outline:'none',padding:0}}>
+              Ver todos <ChevronRight size={12}/>
+            </motion.button>
+          </div>
+          <div style={{display:'grid',gap:'.45rem'}}>
+            {ultimosTreinos.map(([date,entry],i)=>{
               const d=new Date(date+'T12:00:00');
               const hoje=new Date().toISOString().slice(0,10);
               const ontem=new Date(Date.now()-86400000).toISOString().slice(0,10);
-              const lbl=date===hoje?'Hoje':date===ontem?'Ontem':d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
-              const sets=(entry.entries||[]).reduce((s:number,e:any)=>s+(e.sets||[]).length,0);
-              const vol=(entry.entries||[]).reduce((s:number,e:any)=>(e.sets||[]).reduce((s2:number,st:any)=>s2+parseFloat(String(st.w||0))*parseFloat(String(st.r||0)),s),0);
-              return(
-                <Card key={date} className="border-border">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">{lbl}</p>
-                      <p className="font-semibold text-sm text-foreground">{sets} séries</p>
-                    </div>
-                    <p className="font-condensed font-black text-xl text-red-500">
-                      {vol>=1000?(vol/1000).toFixed(1)+'t':Math.round(vol)+'kg'}
-                    </p>
-                  </CardContent>
-                </Card>
+              const label=date===hoje?'Hoje':date===ontem?'Ontem':d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+              const totalSets=(entry.entries||[]).reduce((s,e)=>s+(e.sets||[]).length,0);
+              const vol=(entry.entries||[]).reduce((s,e)=>(e.sets||[]).reduce((s2,st)=>s2+num(st.w)*num(st.r),s),0);
+              return (
+                <motion.div key={date} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.3+i*.06}}>
+                  <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12,cursor:'pointer'}}
+                    onClick={()=>router.push('/historico')}>
+                    <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'.65rem'}}>
+                        <div style={{width:36,height:36,borderRadius:9,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                          <Dumbbell size={18} color="#e31b23"/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:'.62rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#7a7a8a',marginBottom:'1px'}}>{label}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.95rem',color:'#f0f0f2'}}>{totalSets} séries · {(entry.entries||[]).length} ex</div>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#e31b23'}}>
+                          {vol>=1000?(vol/1000).toFixed(1)+'t':Math.round(vol)+'kg'}
+                        </div>
+                        <ChevronRight size={14} color="#484858"/>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               );
             })}
           </div>
-        </>
+        </motion.div>
       )}
 
-      {/* ── Estado vazio ─────────────────────────────────── */}
-      {totalSess===0 && (
-        <Card className="border-dashed border-border mt-2">
-          <CardContent className="p-8 flex flex-col items-center text-center gap-3">
-            <span className="text-4xl">💪</span>
-            <p className="font-condensed font-black text-xl uppercase text-foreground">Nenhum treino ainda</p>
-            <p className="text-sm text-muted-foreground">Comece seu primeiro treino agora!</p>
-            <Button onClick={()=>router.push('/modo-treino')} className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide">
-              Iniciar Treino
-            </Button>
-          </CardContent>
-        </Card>
+      {/* ── Estado vazio ──────────────────────────────────── */}
+      {totalSess === 0 && (
+        <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.35}}>
+          <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:14,marginTop:'.5rem'}}>
+            <CardContent style={{padding:'2.5rem 1rem',textAlign:'center'}}>
+              <motion.div animate={{y:[0,-6,0]}} transition={{duration:2,repeat:Infinity,ease:'easeInOut'}} style={{marginBottom:'.75rem'}}>
+                <Dumbbell size={44} color="#484858" style={{margin:'0 auto'}}/>
+              </motion.div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Nenhum treino ainda</div>
+              <div style={{fontSize:'.82rem',color:'#7a7a8a',marginBottom:'1rem'}}>Comece seu primeiro treino agora!</div>
+              <motion.button whileTap={{scale:.97}} onClick={()=>router.push('/modo-treino')}
+                style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'inline-flex',alignItems:'center',gap:'.5rem'}}>
+                <Play size={16} fill="#fff" color="#fff"/> Iniciar Treino
+              </motion.button>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
+
     </PageShell>
   );
 }
-// deploy Wed Mar 18 08:59:49 PM UTC 2026
