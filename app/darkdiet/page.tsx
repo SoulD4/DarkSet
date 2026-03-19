@@ -112,7 +112,7 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
   const streamRef = React.useRef<MediaStream|null>(null);
   const rafRef    = React.useRef<number|null>(null);
 
-  const [status,       setStatus]       = React.useState<'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual'>('requesting');
+  const [status,       setStatus]       = React.useState<'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual'>('requesting' as 'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual');
   const [camErr,       setCamErr]       = React.useState(false);
   const [preview,      setPreview]      = React.useState<OFFResult|null>(null);
   const [editPrev,     setEditPrev]     = React.useState<Partial<OFFResult>>({});
@@ -297,12 +297,8 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
                   else { setStatus('notfound'); setNameResults([]); }
                 }}
                 style={{flex:1,padding:'.45rem',borderRadius:10,
-                  border:'1px solid '+((
-                    id==='scan'?(status==='scanning'||status==='requesting'):
-                    id==='name'?status==='notfound':
-                    status==='manual'
-                  )?'#22c55e':'#2e2e38'),
-                  background:(id==='manual'&&status==='manual')?'rgba(34,197,94,.1)':'rgba(255,255,255,.04)',
+                  border:'1px solid #2e2e38',
+                  background:'rgba(255,255,255,.04)',
                   color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase' as const}}>
                 <Icon size={14}/>{label}
               </motion.button>
