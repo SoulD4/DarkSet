@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   X, Play, Pause, ChevronRight, ChevronLeft,
   History, Clock, CheckCircle2, Flame,
-  Volume2, VolumeX, Wind, Waves
+  Volume2, VolumeX, Wind, Waves, Zap
 } from 'lucide-react';
 import {
   Brain, Leaf, PersonSimpleRun, Tree,
@@ -20,140 +20,43 @@ import {
   ArrowsClockwise
 } from '@phosphor-icons/react';
 
-// ── Áudio zen ──────────────────────────────────────────────────
-let _zenCtx: AudioContext | null = null;
-let _zenNodes: AudioNode[] = [];
+// ── Áudio zen — URLs reais CC0/Public Domain ──────────────────
+// Fontes: Wikimedia Commons (CC0) e upload.wikimedia.org
+const AMBIENT_URLS: Record<string, string> = {
+  chuva:   'https://upload.wikimedia.org/wikipedia/commons/3/35/Thunderstorm_-_thunder_and_rain_sound.ogg',
+  floresta:'https://upload.wikimedia.org/wikipedia/commons/f/f4/Bourne_woods_Birdsong_and_rain_2020-06-17_0742.mp3',
+  ondas:   'https://upload.wikimedia.org/wikipedia/commons/f/fb/Water_on_Rocks.ogg',
+  bowls:   'https://upload.wikimedia.org/wikipedia/commons/0/09/Tibetan_Singing_Bowl_-_strikes_and_continuous_rim.ogg',
+  vento:   'https://upload.wikimedia.org/wikipedia/commons/d/d9/Wind.ogg',
+};
 
-function getZenCtx(): AudioContext | null {
-  try {
-    if(!_zenCtx || _zenCtx.state === 'closed')
-      _zenCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    return _zenCtx;
-  } catch(_){ return null; }
-}
+let _ambientAudio: HTMLAudioElement | null = null;
 
 function stopAmbient() {
-  _zenNodes.forEach(n=>{ try{ (n as any).stop?.(); n.disconnect(); }catch(_){} });
-  _zenNodes = [];
+  if(_ambientAudio){
+    _ambientAudio.pause();
+    _ambientAudio.src = '';
+    _ambientAudio = null;
+  }
 }
 
 function playAmbient(id: string) {
   stopAmbient();
   if(id === 'silencio') return;
-  const ctx = getZenCtx();
-  if(!ctx) return;
-  if(ctx.state === 'suspended') ctx.resume();
-
-  const master = ctx.createGain();
-  master.gain.value = 0;
-  master.connect(ctx.destination);
-  master.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 1.5);
-  _zenNodes.push(master);
-
-  if(id === 'chuva') {
-    // White noise filtrado — som de chuva
-    const bufSize = ctx.sampleRate * 3;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.loop = true;
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.4;
-    const filt2 = ctx.createBiquadFilter();
-    filt2.type = 'highpass'; filt2.frequency.value = 800;
-    src.connect(filt); filt.connect(filt2); filt2.connect(master);
-    src.start(); _zenNodes.push(src, filt, filt2);
-  }
-
-  if(id === 'floresta') {
-    // Noise suave + chirp simulado
-    const bufSize = ctx.sampleRate * 4;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1)*0.3;
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.loop = true;
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'lowpass'; filt.frequency.value = 600;
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.value = 0.2; lfo.type = 'sine';
-    lfoGain.gain.value = 200;
-    lfo.connect(lfoGain); lfoGain.connect(filt.frequency);
-    src.connect(filt); filt.connect(master);
-    lfo.start(); src.start();
-    _zenNodes.push(src, filt, lfo, lfoGain);
-  }
-
-  if(id === 'ondas') {
-    // White noise com LFO lento — som de ondas do mar
-    const bufSize = ctx.sampleRate * 4;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.loop = true;
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'lowpass'; filt.frequency.value = 500;
-    const ampLfo = ctx.createOscillator();
-    const ampGain = ctx.createGain();
-    ampLfo.frequency.value = 0.12; ampLfo.type = 'sine';
-    ampGain.gain.value = 0.3;
-    const waveGain = ctx.createGain();
-    waveGain.gain.value = 0.4;
-    ampLfo.connect(ampGain); ampGain.connect(waveGain.gain);
-    src.connect(filt); filt.connect(waveGain); waveGain.connect(master);
-    ampLfo.start(); src.start();
-    _zenNodes.push(src, filt, ampLfo, ampGain, waveGain);
-  }
-
-  if(id === 'bowls') {
-    // Tibetan bowls — sine waves harmônicas com fade lento
-    [528, 396, 264].forEach((freq, i) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.value = freq;
-      gain.gain.value = 0;
-      gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2 + i);
-      // Pulsa suavemente
-      const lfo = ctx.createOscillator();
-      const lfoG = ctx.createGain();
-      lfo.frequency.value = 0.05 + i*0.02; lfo.type = 'sine';
-      lfoG.gain.value = 0.03;
-      lfo.connect(lfoG); lfoG.connect(gain.gain);
-      osc.connect(gain); gain.connect(master);
-      osc.start(); lfo.start();
-      _zenNodes.push(osc, gain, lfo, lfoG);
-    });
-  }
-
-  if(id === 'vento') {
-    // Filtered noise com sweep lento
-    const bufSize = ctx.sampleRate * 3;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.loop = true;
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'bandpass'; filt.frequency.value = 400; filt.Q.value = 0.8;
-    const lfo = ctx.createOscillator();
-    const lfoG = ctx.createGain();
-    lfo.frequency.value = 0.08; lfo.type = 'sine';
-    lfoG.gain.value = 300;
-    lfo.connect(lfoG); lfoG.connect(filt.frequency);
-    src.connect(filt); filt.connect(master);
-    lfo.start(); src.start();
-    _zenNodes.push(src, filt, lfo, lfoG);
-  }
+  const url = AMBIENT_URLS[id];
+  if(!url) return;
+  try {
+    const audio = new Audio(url);
+    audio.loop  = true;
+    audio.volume = 0.35;
+    audio.play().catch(()=>{});
+    _ambientAudio = audio;
+  } catch(_){}
 }
 
 function playBell(freq = 528, dur = 1.2) {
   try {
-    const ctx = getZenCtx();
-    if(!ctx) return;
-    if(ctx.state === 'suspended') ctx.resume();
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -230,6 +133,46 @@ const SESSOES = [
     desc:'Mental training para atletas',
     passos:['Respire fundo 3x','Visualize seu objetivo','Sinta o movimento perfeito','Veja-se alcançando a meta','Retorne ao presente','Afirmação final'] },
 ];
+
+// ── Descrições dos movimentos ─────────────────────────────────
+const MOVIMENTOS: Record<string, { titulo: string; desc: string; dica: string }> = {
+  'Tadasana — posição da montanha':         { titulo:'Tadasana', desc:'Fique em pé, pés paralelos e juntos. Distribua o peso igualmente nos dois pés. Alongue a coluna, relaxe os ombros e mantenha o olhar ao horizonte. Respire profundamente.', dica:'Ative o core suavemente. Imagine que um fio te puxa pelo topo da cabeça.' },
+  'Urdhva Hastasana — braços ao alto':      { titulo:'Urdhva Hastasana', desc:'A partir de Tadasana, inspire e eleve os braços acima da cabeça com as palmas voltadas uma para a outra. Estique bem os dedos, eleve levemente o olhar.', dica:'Não deixe os ombros subirem em direção às orelhas. Mantenha o core firme.' },
+  'Uttanasana — flexão à frente':           { titulo:'Uttanasana', desc:'Expire e dobre o tronco para frente a partir dos quadris. Deixe a cabeça pender livremente. Você pode dobrar os joelhos levemente se necessário.', dica:'O objetivo é soltar a tensão da lombar, não tocar o chão. Respire fundo.' },
+  'Plank — prancha':                        { titulo:'Prancha', desc:'Apoie as mãos no chão, ombros acima dos pulsos. Corpo reto como uma tábua, desde a cabeça até os calcanhares. Ative abdômen e glúteos.', dica:'Não deixe o quadril cair nem subir. Olhe para o chão, mantendo a nuca alinhada.' },
+  'Chaturanga — flexão baixa':              { titulo:'Chaturanga', desc:'A partir da prancha, dobre os cotovelos a 90° e desça o corpo em linha reta. Cotovelos próximos ao corpo, peito quase tocando o chão.', dica:'É um dos movimentos mais difíceis do yoga. Adapte apoiando os joelhos se precisar.' },
+  'Urdhva Mukha — cachorro olhando pra cima':{ titulo:'Cachorro Olhando pra Cima', desc:'Vire o dorso dos pés para o chão. Endireite os braços, eleve o peito e olhe para cima. Coxas e joelhos suspensos do chão.', dica:'Abra bem o peito e os ombros. Evite comprimir a lombar demais.' },
+  'Adho Mukha — cachorro olhando pra baixo':{ titulo:'Cachorro Olhando pra Baixo', desc:'Eleve o quadril formando um V invertido. Afaste bem os dedos das mãos, pressione o chão e tente aproximar os calcanhares do solo.', dica:'Dobre levemente os joelhos se os isquiotibiais forem muito tensos. Respire pelo nariz.' },
+  'Balasana — posição da criança':          { titulo:'Balasana', desc:'Sente-se sobre os calcanhares, estenda os braços à frente e apoie a testa no chão. Respire para as costas, sentindo o abdômen pressionar as coxas.', dica:'Posição de descanso e recuperação. Fique aqui o tempo que precisar.' },
+  'Supta Baddha Konasana':                  { titulo:'Supta Baddha Konasana', desc:'Deite de costas, junte as plantas dos pés e deixe os joelhos abrirem para os lados. Coloque as mãos na barriga ou ao lado do corpo.', dica:'Use almofadas sob os joelhos se sentir desconforto no quadril.' },
+  'Viparita Karani — pernas na parede':     { titulo:'Pernas na Parede', desc:'Deite próximo a uma parede e apoie as pernas contra ela. O quadril pode estar encostado ou próximo da parede. Feche os olhos.', dica:'Excelente para reduzir o inchaço nas pernas e acalmar o sistema nervoso.' },
+  'Savasana — relaxamento final':           { titulo:'Savasana', desc:'Deite de costas, braços levemente afastados do corpo com as palmas voltadas para cima. Pés relaxados. Feche os olhos e libere qualquer tensão.', dica:'A postura mais importante do yoga. Não se mova. Apenas respire e observe.' },
+  'Sente-se confortavelmente':              { titulo:'Posição de Meditação', desc:'Sente-se em uma cadeira ou no chão com a coluna ereta. Cruze as pernas se estiver no chão, ou apoie os pés inteiros no chão se estiver na cadeira.', dica:'O importante é estar confortável e com a coluna reta. Use almofadas se precisar.' },
+  'Feche os olhos suavemente':              { titulo:'Fechar os Olhos', desc:'Feche os olhos sem forçar. O fechamento suave ajuda a remover estímulos visuais e redirecionar a atenção para o interior.', dica:'Se não conseguir fechar os olhos, direcione o olhar para um ponto fixo no chão.' },
+  'Foque na respiração':                    { titulo:'Foco na Respiração', desc:'Observe a respiração natural, sem modificar. Perceba o ar entrando pelas narinas, o peito ou barriga subindo e descendo, e o ar saindo.', dica:'Quando a mente divagar — e vai divagar — gentilmente traga o foco de volta para a respiração. Sem julgamentos.' },
+  'Observe os pensamentos sem julgamento':  { titulo:'Observação dos Pensamentos', desc:'Imagine que os pensamentos são nuvens passando no céu. Você os observa, mas não os segue. Não os classifique como bons ou ruins, simplesmente deixe-os ir.', dica:'A meditação não é esvaziar a mente. É aprender a não se prender aos pensamentos.' },
+  'Inspire pelo nariz por 4 segundos':      { titulo:'Inspiração 4s', desc:'Respire pelo nariz de forma lenta e controlada, contando mentalmente 1-2-3-4. Sinta o abdômen expandir antes do peito.', dica:'Respire pelo abdômen (diafragma), não pelo peito. Isso ativa o sistema nervoso parassimpático.' },
+  'Segure por 7 segundos':                  { titulo:'Retenção 7s', desc:'Após inspirar, segure o ar suavemente sem tensionar os músculos. Conte mentalmente 1-2-3-4-5-6-7.', dica:'Não aperte a glote ou feche a garganta com força. A retenção deve ser confortável.' },
+  'Expire pela boca por 8 segundos':        { titulo:'Expiração 8s', desc:'Expire pela boca fazendo um suave som de "whoosh". Esvaze completamente os pulmões nos 8 segundos. Esta é a fase mais importante.', dica:'A expiração mais longa que a inspiração ativa o nervo vago e induz relaxamento.' },
+  'Inspire por 4 segundos':                 { titulo:'Inspiração 4s', desc:'Respire pelo nariz contando 4 segundos. Expanda o abdômen primeiro, depois o peito. Respiração lenta e controlada.', dica:'Visualize o ar como energia positiva entrando no seu corpo.' },
+  'Segure por 4 segundos':                  { titulo:'Retenção 4s', desc:'Segure o ar por 4 segundos. Mantenha o corpo relaxado, apenas a respiração está suspensa.', dica:'A retenção na respiração box cria um estado de equilíbrio entre inspiração e expiração.' },
+  'Expire por 4 segundos':                  { titulo:'Expiração 4s', desc:'Expire pelo nariz por 4 segundos, esvaziando completamente os pulmões de forma controlada.', dica:'Imagine que está liberando toda a tensão do dia a cada expiração.' },
+  'Vazio por 4 segundos':                   { titulo:'Vazio 4s', desc:'Após expirar, fique sem ar por 4 segundos. Este é o momento de maior calma do ciclo.', dica:'Esta fase é a mais difícil. Se 4s for muito, comece com 2s e aumente gradualmente.' },
+  'Downward Dog — 1 min':                   { titulo:'Cachorro Olhando pra Baixo', desc:'V invertido com as mãos e pés no chão. Eleve o quadril, pressione as palmas e tente aproximar os calcanhares do solo. Fique 1 minuto respirando.', dica:'Alterne dobrando um joelho de cada vez para aquecer os isquiotibiais.' },
+  'Warrior I — 30s cada':                   { titulo:'Guerreiro I', desc:'Passo largo para frente, joelho da frente dobrado a 90°, pé de trás virado 45°. Braços acima da cabeça, quadril voltado para frente.', dica:'Mantenha o joelho da frente acima do tornozelo, nunca além dele.' },
+  'Warrior II — 30s cada':                  { titulo:'Guerreiro II', desc:'Posição similar ao Guerreiro I, mas os braços se abrem para os lados, paralelos ao chão. Olhe por cima da mão da frente.', dica:'O quadril se abre para o lado nesta postura. Braços fortes e ativos.' },
+  'Pigeon Pose — 1 min cada':               { titulo:'Pombo', desc:'A partir do cachorro olhando pra baixo, traga um joelho para frente e apoie a canela no chão em diagonal. O quadril da perna de trás afunda em direção ao chão.', dica:'Coloque uma almofada sob o quadril se houver dificuldade. É uma abertura intensa de quadril.' },
+  'The Hundred — ativação do core':         { titulo:'The Hundred', desc:'Deite de costas, eleve pernas a 45° e cabeça e ombros do chão. Braços paralelos ao chão, pulse-os para cima e para baixo 100 vezes enquanto respira.', dica:'Inspire por 5 batidas e expire por 5 batidas. Mantenha o queixo próximo ao peito.' },
+  'Roll Up — 10 repetições':                { titulo:'Roll Up', desc:'Deite de costas, braços acima da cabeça. Inspire e aos poucos suba articulando cada vértebra da coluna até sentar completamente. Retorne.', dica:'Se não conseguir fazer completo, use as mãos para ajudar. O objetivo é mobilidade da coluna.' },
+  'Single Leg Stretch — 10 cada':           { titulo:'Single Leg Stretch', desc:'Deite e eleve cabeça e ombros. Traga um joelho ao peito enquanto a outra perna estende. Alterne as pernas como se fosse pedalar.', dica:'Mantenha o core ativado e a lombar na esteira durante todo o exercício.' },
+  'Pigeon Pose direito — 1 min':            { titulo:'Pombo Direito', desc:'A partir de quatro apoios, traga o joelho direito para frente e apoie a canela diagonal no chão. Afunde o quadril direito. Fique 1 minuto.', dica:'Respire profundamente para o quadril. A cada expiração, deixe o corpo afundar um pouco mais.' },
+  'Pigeon Pose esquerdo — 1 min':           { titulo:'Pombo Esquerdo', desc:'Repita o mesmo do lado esquerdo, trazendo o joelho esquerdo para frente. Fique 1 minuto no mesmo lado antes de trocar.', dica:'É normal um lado ser mais tenso que o outro. Respeite os limites do seu corpo.' },
+  'Frog Pose — 1 min':                      { titulo:'Frog Pose', desc:'De quatro apoios, afaste os joelhos o máximo possível, apontando os pés para fora. Afunde o quadril em direção ao chão. Fique 1 minuto.', dica:'Uma das posturas mais intensas para abertura de quadril. Respire e relaxe ativamente.' },
+  'Squat profundo — 1 min':                 { titulo:'Agachamento Profundo (Malasana)', desc:'Coloque os pés na largura dos ombros levemente abertos. Agache profundamente mantendo os calcanhares no chão. Junte as mãos e use os cotovelos para abrir os joelhos.', dica:'Se os calcanhares não ficam no chão, coloque um suporte embaixo deles.' },
+  'Alongamento de quadríceps — 30s cada':   { titulo:'Quadríceps', desc:'Em pé, dobre um joelho e segure o tornozelo com a mão do mesmo lado. Mantenha os joelhos juntos e o quadril empurrado para frente. 30s cada lado.', dica:'Apoie-se em uma parede se necessário. Não arqueie demais a lombar.' },
+  'Flexão de isquiotibiais — 30s':          { titulo:'Isquiotibiais', desc:'Em pé ou sentado, estenda uma perna e incline o tronco em direção ao pé sem arredondar as costas. 30s cada lado.', dica:'O objetivo é sentir o alongamento na parte de trás da coxa, não tocar o pé.' },
+  'Abertura de peito — 30s':               { titulo:'Abertura de Peito', desc:'Entrelaça os dedos atrás das costas, endireite os braços e abra o peito elevando levemente os braços. Olhe para cima.', dica:'Ótimo para contrariar a postura fechada que ficamos ao usar o celular e computador.' },
+};
 
 type Sessao = typeof SESSOES[0];
 const fmt = (s:number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
@@ -349,7 +292,8 @@ function TimerRespiracao({ sessao, onFim }: { sessao:Sessao; onFim:()=>void }) {
 function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
   sessao:Sessao; somAtivo:string; onFim:()=>void; onSalvar:(dur:number)=>void;
 }) {
-  const [passoAtual, setPassoAtual] = useState(0);
+  const [passoAtual,   setPassoAtual]   = useState(0);
+  const [modalPasso,   setModalPasso]   = useState<string|null>(null);
   const [elapsed,    setElapsed]    = useState(0);
   const [running,    setRunning]    = useState(true);
   const [concluido,  setConcluido]  = useState(false);
@@ -476,6 +420,57 @@ function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
           <CardContent style={{padding:'.85rem'}}>
             <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.65rem'}}>Sequência</div>
             <div style={{display:'grid',gap:'.4rem'}}>
+              {/* Modal explicação do passo */}
+              <AnimatePresence>
+                {modalPasso && (
+                  <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+                    onClick={()=>setModalPasso(null)}
+                    style={{position:'fixed',inset:0,zIndex:300,background:'rgba(0,0,0,.85)',backdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 env(safe-area-inset-bottom,1rem)'}}>
+                    <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
+                      transition={{type:'spring',stiffness:300,damping:32}}
+                      onClick={e=>e.stopPropagation()}
+                      style={{width:'min(480px,100vw)',background:'#0f0f13',borderTop:'1px solid #2e2e38',borderRadius:'24px 24px 0 0',padding:'1.5rem',maxHeight:'80vh',overflowY:'auto'}}>
+                      {/* Handle */}
+                      <div style={{width:40,height:4,background:'rgba(255,255,255,.15)',borderRadius:2,margin:'0 auto 1.25rem'}}/>
+                      {/* Conteúdo */}
+                      {(() => {
+                        const info = MOVIMENTOS[modalPasso];
+                        if(!info) return (
+                          <div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.75rem'}}>{modalPasso.split(' — ')[0]}</div>
+                            <div style={{fontSize:'.88rem',color:'#9898a8',lineHeight:1.7}}>Siga as instruções do instrutor e mantenha a respiração constante durante o movimento.</div>
+                          </div>
+                        );
+                        return (
+                          <div style={{display:'grid',gap:'1rem'}}>
+                            <div>
+                              <div style={{fontSize:'.58rem',color:sessao.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,marginBottom:'.3rem'}}>Movimento</div>
+                              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{info.titulo}</div>
+                            </div>
+                            <div style={{background:'rgba(255,255,255,.04)',borderRadius:12,padding:'.85rem',borderLeft:`3px solid ${sessao.cor}`}}>
+                              <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                                <CheckCircle2 size={11}/> Como fazer
+                              </div>
+                              <div style={{fontSize:'.88rem',color:'#d0d0dc',lineHeight:1.75}}>{info.desc}</div>
+                            </div>
+                            <div style={{background:`${sessao.cor}12`,borderRadius:12,padding:'.85rem',border:`1px solid ${sessao.cor}30`}}>
+                              <div style={{fontSize:'.58rem',color:sessao.cor,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem',fontWeight:700}}>
+                                <Zap size={11}/> Dica
+                              </div>
+                              <div style={{fontSize:'.85rem',color:'#d0d0dc',lineHeight:1.7}}>{info.dica}</div>
+                            </div>
+                            <motion.button whileTap={{scale:.97}} onClick={()=>setModalPasso(null)}
+                              style={{width:'100%',background:`linear-gradient(135deg,${sessao.cor},${sessao.cor}99)`,border:'none',borderRadius:12,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                              Entendido
+                            </motion.button>
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {sessao.passos.map((passo,i)=>(
                 <motion.button key={i} whileTap={{scale:.98}} onClick={()=>{setPassoAtual(i);vibrate(20);}} style={{
                   display:'flex',alignItems:'center',gap:'.75rem',
@@ -492,7 +487,14 @@ function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
                   }}>
                     {i<passoAtual ? <CheckCircle2 size={13}/> : i+1}
                   </div>
-                  <div style={{fontSize:'.82rem',color:i===passoAtual?'#f0f0f2':i<passoAtual?'#484858':'#9898a8',fontWeight:i===passoAtual?600:400}}>{passo}</div>
+                  <div style={{flex:1,fontSize:'.82rem',color:i===passoAtual?'#f0f0f2':i<passoAtual?'#484858':'#9898a8',fontWeight:i===passoAtual?600:400}}>{passo}</div>
+                  {/* Botão info */}
+                  <motion.button
+                    whileTap={{scale:.88}}
+                    onClick={e=>{e.stopPropagation();setModalPasso(passo);vibrate(15);}}
+                    style={{width:24,height:24,borderRadius:'50%',flexShrink:0,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',outline:'none',color:'#484858',fontSize:'.65rem',fontWeight:700}}>
+                    ?
+                  </motion.button>
                 </motion.button>
               ))}
             </div>
