@@ -218,13 +218,17 @@ export default function HistoricoPage() {
         <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}
           style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
           {[
-            [String(session.entries.length),'Exercícios', <Dumbbell size={14} color="#7a7a8a"/>],
-            [String(totalSets),'Séries', <BarChart2 size={14} color="#7a7a8a"/>],
-            [fmtVol(sessVol),'Volume', <TrendingUp size={14} color="#e31b23"/>],
+            [String(session.entries.length),'Exercícios', 'dumbbell'],
+            [String(totalSets),'Séries', 'barchart'],
+            [fmtVol(sessVol),'Volume', 'trending'],
           ].map(([val,lbl,icon],i)=>(
             <Card key={i} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
               <CardContent style={{padding:'.75rem .5rem',textAlign:'center'}}>
-                <div style={{display:'flex',justifyContent:'center',marginBottom:'3px'}}>{icon as any}</div>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:'3px'}}>
+                    {icon==='dumbbell'&&<Dumbbell size={14} color="#7a7a8a"/>}
+                    {icon==='barchart'&&<BarChart2 size={14} color="#7a7a8a"/>}
+                    {icon==='trending'&&<TrendingUp size={14} color="#e31b23"/>}
+                  </div>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:i===2?'#e31b23':'#f0f0f2',lineHeight:1}}>{val as string}</div>
                 <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>{lbl as string}</div>
               </CardContent>
@@ -326,14 +330,18 @@ export default function HistoricoPage() {
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}
         style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'1rem'}}>
         {[
-          [String(sorted.length), <Dumbbell size={18} color="#f0f0f2"/>, 'Treinos'],
-          [fmtVol(totalVol),      <TrendingUp size={18} color="#e31b23"/>, 'Volume Total'],
-          [String(uniqueExs),     <Trophy size={18} color="#facc15"/>, 'Exercícios'],
+          [String(sorted.length), 'dumbbell', 'Treinos'],
+          [fmtVol(totalVol),      'trending',  'Volume Total'],
+          [String(uniqueExs),     'trophy',    'Exercícios'],
         ].map(([val,icon,lbl],i)=>(
           <motion.div key={i} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.1+i*.06}}>
             <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
               <CardContent style={{padding:'.75rem .5rem',textAlign:'center'}}>
-                <div style={{display:'flex',justifyContent:'center',marginBottom:'.2rem'}}>{icon as any}</div>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:'.2rem'}}>
+                    {icon==='dumbbell'&&<Dumbbell size={18} color="#f0f0f2"/>}
+                    {icon==='trending'&&<TrendingUp size={18} color="#e31b23"/>}
+                    {icon==='trophy'&&<Trophy size={18} color="#facc15"/>}
+                  </div>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:i===1?'#e31b23':i===2?'#facc15':'#f0f0f2',lineHeight:1}}>{val as string}</div>
                 <div style={{fontSize:'.5rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>{lbl as string}</div>
               </CardContent>
