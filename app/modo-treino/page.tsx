@@ -66,8 +66,6 @@ function sendNotif(title: string, body: string) {
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: 'darkset-timer',
-      renotify: true,
-      silent: false,
     });
   } catch(_){}
 }
@@ -112,12 +110,20 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
   const leftRef = useRef(initialSeconds);
   const totalRef = useRef(initialSeconds);
 
-  useEffect(()=>{
-    const t = setInterval(()=>{
-      leftRef.current -= 1;
-      setLeft(leftRef.current);
+  const restStartRef = useRef(Date.now());
+  const endTimeRef   = useRef(Date.now() + initialSeconds * 1000);
+  const warnedRef    = useRef(false);
 
-      if(leftRef.current <= 0) {
+  useEffect(()=>{
+    restStartRef.current = Date.now();
+    endTimeRef.current   = Date.now() + leftRef.current * 1000;
+
+    const t = setInterval(()=>{
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+      leftRef.current = remaining;
+      setLeft(remaining);
+
+      if(remaining <= 0) {
         clearInterval(t);
         playBeep('done');
         vibrate([200,100,200,100,400]);
@@ -125,15 +131,16 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
         onDone();
         return;
       }
-      if(leftRef.current === 10) {
+      if(remaining === 10 && !warnedRef.current) {
+        warnedRef.current = true;
         playBeep('warn');
         vibrate([80,40,80]);
       }
-      if(leftRef.current <= 5) {
+      if(remaining <= 5) {
         playBeep('tick');
         vibrate(30);
       }
-    }, 1000);
+    }, 500);
     return ()=>clearInterval(t);
   },[]);
 
@@ -142,6 +149,7 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
     const newLeft  = Math.max(1, leftRef.current + delta);
     totalRef.current = newTotal;
     leftRef.current  = newLeft;
+    endTimeRef.current = Date.now() + newLeft * 1000;
     setTotal(newTotal);
     setLeft(newLeft);
     vibrate(20);
@@ -297,12 +305,19 @@ export default function ModoTreino() {
 
   const showToast = (msg:string) => {setToast(msg);setTimeout(()=>setToast(''),2500);};
 
+  const startTsRef = useRef<number>(0);
+
   useEffect(()=>{
     if(started){
-      timerRef.current = setInterval(()=>{elapsedRef.current+=1;setElapsed(elapsedRef.current);},1000);
+      startTsRef.current = Date.now() - elapsedRef.current * 1000;
+      timerRef.current = setInterval(()=>{
+        const secs = Math.floor((Date.now() - startTsRef.current) / 1000);
+        elapsedRef.current = secs;
+        setElapsed(secs);
+      }, 500);
     } else {
       if(timerRef.current) clearInterval(timerRef.current);
-      elapsedRef.current=0; setElapsed(0);
+      elapsedRef.current=0; setElapsed(0); startTsRef.current=0;
     }
     return ()=>{if(timerRef.current) clearInterval(timerRef.current);};
   },[started]);
