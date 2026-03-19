@@ -70,3 +70,32 @@ html, body {
   background: #1e1e24;
   border-color: #2e2e38;
 }
+
+/* Fix shadcn Card border azul */
+[data-slot="card"],
+.border-border,
+[class*="rounded-"][class*="border"] {
+  border-color: #2e2e38 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+*:focus,
+*:focus-visible,
+*:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: inherit !important;
+  ring: none !important;
+}
+
+/* Radix / shadcn select e outros */
+[data-radix-popper-content-wrapper] *:focus,
+button:focus,
+select:focus,
+input:focus,
+[role="combobox"]:focus,
+[role="option"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
