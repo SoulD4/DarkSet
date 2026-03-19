@@ -289,11 +289,12 @@ function TimerRespiracao({ sessao, onFim }: { sessao:Sessao; onFim:()=>void }) {
 }
 
 // ── Timer Sessão ───────────────────────────────────────────────
-function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
-  sessao:Sessao; somAtivo:string; onFim:()=>void; onSalvar:(dur:number)=>void;
+function TimerSessao({ sessao, somAtivoInicial, onFim, onSalvar }: {
+  sessao:Sessao; somAtivoInicial:string; onFim:()=>void; onSalvar:(dur:number)=>void;
 }) {
   const [passoAtual,   setPassoAtual]   = useState(0);
   const [modalPasso,   setModalPasso]   = useState<string|null>(null);
+  const [somLocal,     setSomLocal]     = useState(somAtivoInicial);
   const [elapsed,    setElapsed]    = useState(0);
   const [running,    setRunning]    = useState(true);
   const [concluido,  setConcluido]  = useState(false);
@@ -402,12 +403,12 @@ function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
               {SONS.map(s=>{
                 const SIcon = s.Icon;
                 return (
-                  <div key={s.id} onClick={()=>playAmbient(s.id)} style={{flexShrink:0,cursor:'pointer',padding:'.4rem .75rem',borderRadius:8,
-                    background:somAtivo===s.id?'rgba(167,139,250,.15)':'rgba(255,255,255,.04)',
-                    border:`1px solid ${somAtivo===s.id?'rgba(167,139,250,.4)':'#2e2e38'}`,
+                  <div key={s.id} onClick={()=>{setSomLocal(s.id);playAmbient(s.id);}} style={{flexShrink:0,cursor:'pointer',padding:'.4rem .75rem',borderRadius:8,
+                    background:somLocal===s.id?'rgba(167,139,250,.15)':'rgba(255,255,255,.04)',
+                    border:`1px solid ${somLocal===s.id?'rgba(167,139,250,.4)':'#2e2e38'}`,
                     textAlign:'center',minWidth:60,display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem'}}>
-                    <SIcon size={18} color={somAtivo===s.id?'#a78bfa':'#484858'} weight={somAtivo===s.id?'fill':'regular'}/>
-                    <div style={{fontSize:'.55rem',color:somAtivo===s.id?'#a78bfa':'#484858',fontWeight:600}}>{s.nome}</div>
+                    <SIcon size={18} color={somLocal===s.id?'#a78bfa':'#484858'} weight={somLocal===s.id?'fill':'regular'}/>
+                    <div style={{fontSize:'.55rem',color:somLocal===s.id?'#a78bfa':'#484858',fontWeight:600}}>{s.nome}</div>
                   </div>
                 );
               })}
@@ -535,6 +536,19 @@ export default function DarkZenPage() {
   const [timerResp,    setTimerResp]   = useState<Sessao|null>(null);
   const [toast,        setToast]       = useState('');
 
+  // Parar som ao sair da página (trocar aba, navegar, etc)
+  useEffect(()=>{
+    const handleHide = () => stopAmbient();
+    const handleUnload = () => stopAmbient();
+    document.addEventListener('visibilitychange', handleHide);
+    window.addEventListener('beforeunload', handleUnload);
+    return ()=>{
+      stopAmbient();
+      document.removeEventListener('visibilitychange', handleHide);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  },[]);
+
   useEffect(()=>{
     return onAuthStateChanged(auth, async u=>{
       if(!u){ setLoading(false); return; }
@@ -599,7 +613,7 @@ export default function DarkZenPage() {
   if(timerResp) return <TimerRespiracao sessao={timerResp} onFim={()=>{ stopAmbient(); salvarSessao(timerResp,timerResp.duracao*60); setTimerResp(null); }}/>;
 
   if(sessaoAtiva) return (
-    <TimerSessao sessao={sessaoAtiva} somAtivo={somAtivo}
+    <TimerSessao sessao={sessaoAtiva} somAtivoInicial={somAtivo}
       onFim={()=>{stopAmbient();setSessaoAtiva(null);}}
       onSalvar={(dur)=>salvarSessao(sessaoAtiva,dur)}/>
   );
