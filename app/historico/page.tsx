@@ -123,7 +123,7 @@ export default function HistoricoPage() {
       return Math.abs(estRM(w,r)-(prMap[en.name]||0))<0.01;
     }));
 
-  const planOptions = [...new Set(sorted.map(([,o])=>o.planName).filter(Boolean))] as string[];
+  const planOptions = Array.from(new Set(sorted.map(([,o])=>o.planName).filter(Boolean))) as string[];
 
   const filtered = sorted.filter(([date,o])=>{
     const matchDay  = !filtDay  || o.day===filtDay;
