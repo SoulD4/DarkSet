@@ -21,9 +21,139 @@ import {
 } from '@phosphor-icons/react';
 
 // ── Áudio zen ──────────────────────────────────────────────────
+let _zenCtx: AudioContext | null = null;
+let _zenNodes: AudioNode[] = [];
+
+function getZenCtx(): AudioContext | null {
+  try {
+    if(!_zenCtx || _zenCtx.state === 'closed')
+      _zenCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    return _zenCtx;
+  } catch(_){ return null; }
+}
+
+function stopAmbient() {
+  _zenNodes.forEach(n=>{ try{ (n as any).stop?.(); n.disconnect(); }catch(_){} });
+  _zenNodes = [];
+}
+
+function playAmbient(id: string) {
+  stopAmbient();
+  if(id === 'silencio') return;
+  const ctx = getZenCtx();
+  if(!ctx) return;
+  if(ctx.state === 'suspended') ctx.resume();
+
+  const master = ctx.createGain();
+  master.gain.value = 0;
+  master.connect(ctx.destination);
+  master.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 1.5);
+  _zenNodes.push(master);
+
+  if(id === 'chuva') {
+    // White noise filtrado — som de chuva
+    const bufSize = ctx.sampleRate * 3;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.4;
+    const filt2 = ctx.createBiquadFilter();
+    filt2.type = 'highpass'; filt2.frequency.value = 800;
+    src.connect(filt); filt.connect(filt2); filt2.connect(master);
+    src.start(); _zenNodes.push(src, filt, filt2);
+  }
+
+  if(id === 'floresta') {
+    // Noise suave + chirp simulado
+    const bufSize = ctx.sampleRate * 4;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1)*0.3;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = 600;
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 0.2; lfo.type = 'sine';
+    lfoGain.gain.value = 200;
+    lfo.connect(lfoGain); lfoGain.connect(filt.frequency);
+    src.connect(filt); filt.connect(master);
+    lfo.start(); src.start();
+    _zenNodes.push(src, filt, lfo, lfoGain);
+  }
+
+  if(id === 'ondas') {
+    // White noise com LFO lento — som de ondas do mar
+    const bufSize = ctx.sampleRate * 4;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = 500;
+    const ampLfo = ctx.createOscillator();
+    const ampGain = ctx.createGain();
+    ampLfo.frequency.value = 0.12; ampLfo.type = 'sine';
+    ampGain.gain.value = 0.3;
+    const waveGain = ctx.createGain();
+    waveGain.gain.value = 0.4;
+    ampLfo.connect(ampGain); ampGain.connect(waveGain.gain);
+    src.connect(filt); filt.connect(waveGain); waveGain.connect(master);
+    ampLfo.start(); src.start();
+    _zenNodes.push(src, filt, ampLfo, ampGain, waveGain);
+  }
+
+  if(id === 'bowls') {
+    // Tibetan bowls — sine waves harmônicas com fade lento
+    [528, 396, 264].forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.value = 0;
+      gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2 + i);
+      // Pulsa suavemente
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 0.05 + i*0.02; lfo.type = 'sine';
+      lfoG.gain.value = 0.03;
+      lfo.connect(lfoG); lfoG.connect(gain.gain);
+      osc.connect(gain); gain.connect(master);
+      osc.start(); lfo.start();
+      _zenNodes.push(osc, gain, lfo, lfoG);
+    });
+  }
+
+  if(id === 'vento') {
+    // Filtered noise com sweep lento
+    const bufSize = ctx.sampleRate * 3;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 400; filt.Q.value = 0.8;
+    const lfo = ctx.createOscillator();
+    const lfoG = ctx.createGain();
+    lfo.frequency.value = 0.08; lfo.type = 'sine';
+    lfoG.gain.value = 300;
+    lfo.connect(lfoG); lfoG.connect(filt.frequency);
+    src.connect(filt); filt.connect(master);
+    lfo.start(); src.start();
+    _zenNodes.push(src, filt, lfo, lfoG);
+  }
+}
+
 function playBell(freq = 528, dur = 1.2) {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = getZenCtx();
+    if(!ctx) return;
+    if(ctx.state === 'suspended') ctx.resume();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -328,7 +458,7 @@ function TimerSessao({ sessao, somAtivo, onFim, onSalvar }: {
               {SONS.map(s=>{
                 const SIcon = s.Icon;
                 return (
-                  <div key={s.id} style={{flexShrink:0,padding:'.4rem .75rem',borderRadius:8,
+                  <div key={s.id} onClick={()=>playAmbient(s.id)} style={{flexShrink:0,cursor:'pointer',padding:'.4rem .75rem',borderRadius:8,
                     background:somAtivo===s.id?'rgba(167,139,250,.15)':'rgba(255,255,255,.04)',
                     border:`1px solid ${somAtivo===s.id?'rgba(167,139,250,.4)':'#2e2e38'}`,
                     textAlign:'center',minWidth:60,display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem'}}>
@@ -464,11 +594,11 @@ export default function DarkZenPage() {
     </PageShell>
   );
 
-  if(timerResp) return <TimerRespiracao sessao={timerResp} onFim={()=>{ salvarSessao(timerResp,timerResp.duracao*60); setTimerResp(null); }}/>;
+  if(timerResp) return <TimerRespiracao sessao={timerResp} onFim={()=>{ stopAmbient(); salvarSessao(timerResp,timerResp.duracao*60); setTimerResp(null); }}/>;
 
   if(sessaoAtiva) return (
     <TimerSessao sessao={sessaoAtiva} somAtivo={somAtivo}
-      onFim={()=>setSessaoAtiva(null)}
+      onFim={()=>{stopAmbient();setSessaoAtiva(null);}}
       onSalvar={(dur)=>salvarSessao(sessaoAtiva,dur)}/>
   );
 
@@ -572,11 +702,11 @@ export default function DarkZenPage() {
                     {SONS.map(s=>{
                       const SIcon = s.Icon;
                       return (
-                        <motion.button key={s.id} whileTap={{scale:.93}} onClick={()=>setSomAtivo(s.id)} style={{
-                          flexShrink:0,padding:'.45rem .75rem',borderRadius:10,cursor:'pointer',
+                        <motion.button key={s.id} whileTap={{scale:.93}} onClick={()=>{setSomAtivo(s.id);playAmbient(s.id);}} style={{
+                          flexShrink:0,width:72,height:68,padding:'.45rem .5rem',borderRadius:10,cursor:'pointer',
                           background:somAtivo===s.id?'rgba(167,139,250,.15)':'rgba(255,255,255,.04)',
                           border:`1px solid ${somAtivo===s.id?'rgba(167,139,250,.4)':'#2e2e38'}`,
-                          display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem',outline:'none',
+                          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'.25rem',outline:'none',
                         }}>
                           <SIcon size={20} color={somAtivo===s.id?'#a78bfa':'#484858'} weight={somAtivo===s.id?'fill':'regular'}/>
                           <span style={{fontSize:'.58rem',color:somAtivo===s.id?'#a78bfa':'#484858',fontWeight:600,whiteSpace:'nowrap'}}>{s.nome}</span>
