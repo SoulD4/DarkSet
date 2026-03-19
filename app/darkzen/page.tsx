@@ -23,11 +23,11 @@ import {
 // ── Áudio zen — URLs reais CC0/Public Domain ──────────────────
 // Fontes: Wikimedia Commons (CC0) e upload.wikimedia.org
 const AMBIENT_URLS: Record<string, string> = {
-  chuva:   'https://upload.wikimedia.org/wikipedia/commons/3/35/Thunderstorm_-_thunder_and_rain_sound.ogg',
-  floresta:'https://upload.wikimedia.org/wikipedia/commons/f/f4/Bourne_woods_Birdsong_and_rain_2020-06-17_0742.mp3',
-  ondas:   'https://upload.wikimedia.org/wikipedia/commons/f/fb/Water_on_Rocks.ogg',
-  bowls:   'https://upload.wikimedia.org/wikipedia/commons/0/09/Tibetan_Singing_Bowl_-_strikes_and_continuous_rim.ogg',
-  vento:   'https://upload.wikimedia.org/wikipedia/commons/d/d9/Wind.ogg',
+  chuva:   '/sounds/chuva.ogg',
+  floresta:'/sounds/floresta.ogg',
+  ondas:   '/sounds/ondas.ogg',
+  bowls:   '/sounds/bowls.ogg',
+  vento:   '/sounds/vento.ogg',
 };
 
 let _ambientAudio: HTMLAudioElement | null = null;
