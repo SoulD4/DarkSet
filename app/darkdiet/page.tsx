@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
 import { auth, db } from '@/lib/firebase';
@@ -12,7 +12,8 @@ import {
   X, Search, Plus, Minus, ChevronRight,
   ArrowLeft, Droplets, Target, TrendingUp,
   History, CheckCircle2, Trash2, Settings,
-  BarChart2, Flame, Zap
+  BarChart2, Flame, Zap, Camera, Barcode,
+  ScanLine, Pencil, Loader2, AlertCircle
 } from 'lucide-react';
 import {
   ForkKnife, Egg, Barbell, Carrot, Drop,
@@ -20,6 +21,13 @@ import {
 } from '@phosphor-icons/react';
 
 // ── Tipos ─────────────────────────────────────────────────────
+// ── OpenFoodFacts ─────────────────────────────────────────────
+type OFFResult = {
+  name: string; cal100: number; prot100: number; carb100: number; fat100: number;
+  calories: string; protein: string; carbs: string; fat: string;
+  note: string; per100g: boolean; servQty: number; hasNutrients: boolean;
+};
+
 type Alimento = {
   nome: string; cal: number; prot: number;
   carb: number; gord: number; por: number;
@@ -98,6 +106,395 @@ const diaVazio = (data:string, metaCal=2400, metaProt=150): DiaRegistro => ({
   refeicoes: REFEICOES_PADRAO.map(n=>({nome:n,itens:[]})),
 });
 
+// ── BarcodeScanner + OpenFoodFacts ────────────────────────────
+function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; onClose:()=>void }) {
+  const videoRef  = React.useRef<HTMLVideoElement>(null);
+  const streamRef = React.useRef<MediaStream|null>(null);
+  const rafRef    = React.useRef<number|null>(null);
+
+  const [status,       setStatus]       = React.useState<'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual'>('requesting');
+  const [camErr,       setCamErr]       = React.useState(false);
+  const [preview,      setPreview]      = React.useState<OFFResult|null>(null);
+  const [editPrev,     setEditPrev]     = React.useState<Partial<OFFResult>>({});
+  const [portion,      setPortion]      = React.useState('100');
+  const [nameSearch,   setNameSearch]   = React.useState('');
+  const [nameResults,  setNameResults]  = React.useState<any[]>([]);
+  const [nameLoading,  setNameLoading]  = React.useState(false);
+  const [nameNotFound, setNameNotFound] = React.useState(false);
+  const [manualData,   setManualData]   = React.useState({name:'',calories:'',protein:'',carbs:'',fat:''});
+
+  const numOFF = (v: any) => { const x=parseFloat(String(v||0).replace(',','.')); return isFinite(x)?x:0; };
+
+  const stopCamera = React.useCallback(()=>{
+    if(rafRef.current)  cancelAnimationFrame(rafRef.current);
+    if(streamRef.current){ streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
+  },[]);
+
+  const fetchProduct = React.useCallback(async (barcode: string)=>{
+    setStatus('searching'); setPreview(null);
+    try {
+      const r = await fetch(
+        'https://world.openfoodfacts.org/api/v2/product/'+barcode+
+        '?fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity'
+      );
+      const data = await r.json();
+      if(!data||data.status!==1||!data.product){ setStatus('notfound'); return; }
+      const p = data.product;
+      const n = p.nutriments||{};
+      const tryN = (...keys: string[]) => { for(const k of keys){ const v=numOFF(n[k]); if(v>0) return v; } return 0; };
+      const cal  = tryN('energy-kcal_100g','energy-kcal_serving','energy-kcal','energy_100g_kcal') || (tryN('energy_100g','energy_serving','energy')/4.184);
+      const prot = tryN('proteins_100g','protein_100g','proteins_serving','proteins','protein');
+      const carb = tryN('carbohydrates_100g','carbohydrate_100g','carbohydrates_serving','carbohydrates');
+      const fat  = tryN('fat_100g','fats_100g','fat_serving','fat','fats');
+      const name = p.product_name_pt||p.product_name||p.generic_name_pt||p.generic_name||'Produto '+barcode;
+      const brand = (p.brands||'').split(',')[0].trim();
+      const servQty = numOFF(p.serving_quantity)||100;
+      const hasNutrients = cal>0||prot>0||carb>0||fat>0;
+      const result: OFFResult = {
+        name, cal100:cal, prot100:prot, carb100:carb, fat100:fat,
+        calories: String(Math.round(cal*servQty/100)),
+        protein:  String(Math.round(prot*servQty/100)),
+        carbs:    String(Math.round(carb*servQty/100)),
+        fat:      String(Math.round(fat*servQty/100)),
+        note: [brand, p.serving_size?'porção: '+p.serving_size:'', !hasNutrients?'⚠️ sem macros na base':''].filter(Boolean).join(' · '),
+        per100g:true, servQty, hasNutrients,
+      };
+      setPortion(String(servQty)); setPreview(result); setEditPrev(result); setStatus('preview');
+    } catch(e){ setStatus('notfound'); }
+  },[]);
+
+  const searchByName = async ()=>{
+    const q = nameSearch.trim(); if(!q) return;
+    setNameLoading(true); setNameNotFound(false); setNameResults([]);
+    try {
+      const r = await fetch(
+        'https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(q)+
+        '&search_simple=1&action=process&json=1&page_size=8'+
+        '&fields=product_name,product_name_pt,brands,nutriments,serving_size,serving_quantity,code'
+      );
+      const data = await r.json();
+      const products = (data.products||[]).filter((p:any)=>p.product_name||p.product_name_pt);
+      if(!products.length) setNameNotFound(true);
+      else setNameResults(products);
+    } catch(e){ setNameNotFound(true); }
+    setNameLoading(false);
+  };
+
+  const selectNameResult = (p: any)=>{
+    const n=p.nutriments||{};
+    const tryN=(...keys: string[])=>{ for(const k of keys){ const v=numOFF(n[k]); if(v>0) return v; } return 0; };
+    const cal =tryN('energy-kcal_100g','energy-kcal_serving','energy-kcal')||(tryN('energy_100g')/4.184);
+    const prot=tryN('proteins_100g','proteins_serving','proteins');
+    const carb=tryN('carbohydrates_100g','carbohydrates_serving','carbohydrates');
+    const fat =tryN('fat_100g','fat_serving','fat');
+    const servQty=numOFF(p.serving_quantity)||100;
+    const name=p.product_name_pt||p.product_name||'Alimento';
+    const brand=(p.brands||'').split(',')[0].trim();
+    const result: OFFResult = {
+      name, cal100:cal, prot100:prot, carb100:carb, fat100:fat,
+      calories:String(Math.round(cal*servQty/100)),
+      protein: String(Math.round(prot*servQty/100)),
+      carbs:   String(Math.round(carb*servQty/100)),
+      fat:     String(Math.round(fat*servQty/100)),
+      note:brand+(p.serving_size?' · porção: '+p.serving_size:''),
+      per100g:true, servQty, hasNutrients:cal>0||prot>0||carb>0||fat>0,
+    };
+    setPortion(String(servQty)); setPreview(result); setEditPrev(result); setNameResults([]); setStatus('preview');
+  };
+
+  const handlePortionChange = (v: string)=>{
+    setPortion(v);
+    if(!preview?.per100g) return;
+    const g=numOFF(v)||100;
+    setEditPrev(p=>({
+      ...p,
+      calories:String(Math.round(numOFF(preview.cal100)*g/100)),
+      protein: String(Math.round(numOFF(preview.prot100)*g/100)),
+      carbs:   String(Math.round(numOFF(preview.carb100)*g/100)),
+      fat:     String(Math.round(numOFF(preview.fat100)*g/100)),
+    }));
+  };
+
+  // Inicia câmera
+  React.useEffect(()=>{
+    let cancelled=false;
+    const start=async()=>{
+      try {
+        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280}}});
+        if(cancelled){stream.getTracks().forEach(t=>t.stop());return;}
+        streamRef.current=stream;
+        if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play();}
+        setStatus('scanning');
+        if('BarcodeDetector' in window){
+          const det=new (window as any).BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','qr_code']});
+          const tick=async()=>{
+            if(cancelled||!videoRef.current) return;
+            try { const codes=await det.detect(videoRef.current); if(codes.length){stopCamera();fetchProduct(codes[0].rawValue);return;} } catch(_){}
+            rafRef.current=requestAnimationFrame(tick);
+          };
+          rafRef.current=requestAnimationFrame(tick);
+        }
+      } catch(e){if(!cancelled){setCamErr(true);setStatus('notfound');}}
+    };
+    start();
+    return()=>{cancelled=true;stopCamera();};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[fetchProduct]);
+
+  const accept=()=>{
+    if(!editPrev.name&&!manualData.name) return;
+    if(status==='manual'){
+      onResult({
+        name:manualData.name||'Alimento', cal100:numOFF(manualData.calories),
+        prot100:numOFF(manualData.protein), carb100:numOFF(manualData.carbs), fat100:numOFF(manualData.fat),
+        calories:manualData.calories||'0', protein:manualData.protein||'0',
+        carbs:manualData.carbs||'0', fat:manualData.fat||'0',
+        note:'entrada manual', per100g:false, servQty:100, hasNutrients:true,
+      });
+    } else {
+      onResult({
+        ...(preview as OFFResult),
+        ...editPrev,
+        name: (editPrev.name||preview?.name||''),
+        calories: editPrev.calories||'0', protein:editPrev.protein||'0',
+        carbs:editPrev.carbs||'0', fat:editPrev.fat||'0',
+      });
+    }
+  };
+
+  const S = {
+    overlay: {position:'fixed' as const,inset:0,zIndex:250,background:'#06060a',display:'flex',flexDirection:'column' as const},
+    header:  {display:'flex',alignItems:'center',justifyContent:'space-between',padding:'1rem 1.25rem',borderBottom:'1px solid #1e1e24',flexShrink:0},
+    body:    {flex:1,overflowY:'auto' as const,padding:'1rem 1.25rem'},
+  };
+
+  return (
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} style={S.overlay}>
+      {/* Header */}
+      <div style={S.header}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase' as const,color:'#f0f0f2',display:'flex',alignItems:'center',gap:'.5rem'}}>
+          <ScanLine size={20} color="#22c55e"/> Adicionar Alimento
+        </div>
+        <motion.button whileTap={{scale:.9}} onClick={()=>{stopCamera();onClose();}}
+          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:'#7a7a8a',cursor:'pointer',outline:'none'}}>
+          <X size={16}/>
+        </motion.button>
+      </div>
+
+      <div style={S.body}>
+        {/* Tabs de modo */}
+        {status!=='preview'&&status!=='manual'&&(
+          <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem'}}>
+            {[
+              {id:'scan', label:'Scanner',  Icon:Camera},
+              {id:'name', label:'Buscar',   Icon:Search},
+              {id:'manual',label:'Manual',  Icon:Pencil},
+            ].map(({id,label,Icon})=>(
+              <motion.button key={id} whileTap={{scale:.95}}
+                onClick={()=>{
+                  if(id==='manual') setStatus('manual');
+                  else if(id==='scan') setStatus(camErr?'notfound':'scanning');
+                  else { setStatus('notfound'); setNameResults([]); }
+                }}
+                style={{flex:1,padding:'.45rem',borderRadius:10,border:'1px solid '+(
+                  (id==='scan'&&(status==='scanning'||status==='requesting'))||
+                  (id==='name'&&status==='notfound'&&nameResults.length>=0)||
+                  (id==='manual'&&status==='manual')
+                  ?'#22c55e':'#2e2e38'),
+                  background:(id==='manual'&&status==='manual')?'rgba(34,197,94,.1)':'rgba(255,255,255,.04)',
+                  color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase' as const}}>
+                <Icon size={14}/>{label}
+              </motion.button>
+            ))}
+          </div>
+        )}
+
+        <AnimatePresence mode="wait">
+          {/* Câmera */}
+          {(status==='scanning'||status==='requesting')&&(
+            <motion.div key="cam" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+              <div style={{position:'relative',borderRadius:16,overflow:'hidden',background:'#000',marginBottom:'1rem',aspectRatio:'4/3'}}>
+                <video ref={videoRef} playsInline muted style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                {/* Guia de scan */}
+                <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <div style={{width:220,height:140,border:'2px solid #22c55e',borderRadius:12,boxShadow:'0 0 0 2000px rgba(0,0,0,.4)'}}/>
+                </div>
+                <div style={{position:'absolute',bottom:12,left:0,right:0,textAlign:'center',fontSize:'.72rem',color:'rgba(255,255,255,.7)',fontWeight:600}}>
+                  {status==='requesting'?'Iniciando câmera...':'Aponte para o código de barras'}
+                </div>
+              </div>
+              {'BarcodeDetector' in window
+                ? <div style={{fontSize:'.72rem',color:'#4ade80',textAlign:'center',marginBottom:'1rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}><ScanLine size={14}/> Detecção automática ativa</div>
+                : <div style={{fontSize:'.72rem',color:'#f87171',textAlign:'center',marginBottom:'1rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}><AlertCircle size={14}/> Câmera sem suporte a barcode — use busca por nome</div>
+              }
+            </motion.div>
+          )}
+
+          {/* Buscando */}
+          {status==='searching'&&(
+            <motion.div key="searching" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+              style={{textAlign:'center',padding:'3rem 1rem'}}>
+              <motion.div animate={{rotate:360}} transition={{duration:.7,repeat:Infinity,ease:'linear'}} style={{display:'inline-block',marginBottom:'1rem'}}>
+                <Loader2 size={36} color="#22c55e"/>
+              </motion.div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',color:'#f0f0f2'}}>Buscando na base...</div>
+              <div style={{fontSize:'.72rem',color:'#7a7a8a',marginTop:'.3rem'}}>OpenFoodFacts · 3M+ produtos</div>
+            </motion.div>
+          )}
+
+          {/* Busca por nome */}
+          {(status==='notfound'||nameResults.length>0)&&status!=='preview'&&status!=='manual'&&(
+            <motion.div key="namesearch" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+              <div style={{position:'relative',marginBottom:'.75rem'}}>
+                <Search size={15} color="#484858" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}/>
+                <input value={nameSearch} onChange={e=>setNameSearch(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&searchByName()}
+                  placeholder="Buscar alimento por nome..."
+                  style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'11px 70px 11px 36px',fontSize:'.9rem',outline:'none'}}
+                  autoFocus/>
+                <motion.button whileTap={{scale:.95}} onClick={searchByName}
+                  style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'#22c55e',border:'none',borderRadius:7,padding:'5px 10px',color:'#000',fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none'}}>
+                  {nameLoading?<Loader2 size={12}/>:'Buscar'}
+                </motion.button>
+              </div>
+
+              {nameNotFound&&<div style={{textAlign:'center',padding:'1.5rem',color:'#484858',fontSize:'.82rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}><AlertCircle size={16}/> Nenhum resultado encontrado</div>}
+
+              <div style={{display:'grid',gap:'.4rem'}}>
+                {nameResults.map((p:any,i:number)=>{
+                  const n=p.nutriments||{};
+                  const cal=parseFloat(n['energy-kcal_100g'])||0;
+                  const name=p.product_name_pt||p.product_name||'Alimento';
+                  return (
+                    <motion.button key={i} whileTap={{scale:.98}} onClick={()=>selectNameResult(p)}
+                      style={{background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:12,padding:'.75rem 1rem',textAlign:'left' as const,cursor:'pointer',display:'flex',alignItems:'center',gap:'.75rem',outline:'none'}}>
+                      <div style={{width:36,height:36,borderRadius:9,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                        <ForkKnife size={18} color="#22c55e" weight="fill"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'.88rem',fontWeight:600,color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{name}</div>
+                        <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>
+                          {cal>0?`${Math.round(cal)}kcal/100g`:'macros não disponíveis'}
+                          {p.brands?` · ${p.brands.split(',')[0]}`:''}
+                        </div>
+                      </div>
+                      <ChevronRight size={15} color="#484858"/>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Manual */}
+          {status==='manual'&&(
+            <motion.div key="manual" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0}} style={{display:'grid',gap:'.75rem'}}>
+              <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                <Pencil size={12}/> Entrada manual
+              </div>
+              {[
+                {key:'name',     label:'Nome do alimento', type:'text',   placeholder:'Ex: Frango grelhado'},
+                {key:'calories', label:'Calorias (kcal)',   type:'number', placeholder:'0'},
+                {key:'protein',  label:'Proteína (g)',      type:'number', placeholder:'0'},
+                {key:'carbs',    label:'Carboidrato (g)',   type:'number', placeholder:'0'},
+                {key:'fat',      label:'Gordura (g)',       type:'number', placeholder:'0'},
+              ].map(f=>(
+                <div key={f.key}>
+                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.06em',display:'block',marginBottom:4}}>{f.label}</label>
+                  <input type={f.type} placeholder={f.placeholder}
+                    value={(manualData as any)[f.key]}
+                    onChange={e=>setManualData(d=>({...d,[f.key]:e.target.value}))}
+                    style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'10px 13px',fontSize:'1rem',outline:'none'}}/>
+                </div>
+              ))}
+              <motion.button whileTap={{scale:.97}} onClick={accept} disabled={!manualData.name}
+                style={{width:'100%',background:manualData.name?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(34,197,94,.2)',border:'none',borderRadius:12,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase' as const,cursor:manualData.name?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+                <CheckCircle2 size={16}/> Adicionar
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* Preview produto */}
+          {status==='preview'&&preview&&(
+            <motion.div key="preview" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} style={{display:'grid',gap:'.85rem'}}>
+              {/* Info produto */}
+              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
+                <CardContent style={{padding:'1rem'}}>
+                  <input value={editPrev.name||''} onChange={e=>setEditPrev(p=>({...p,name:e.target.value}))}
+                    style={{width:'100%',background:'transparent',border:'none',color:'#f0f0f2',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',outline:'none',marginBottom:'.25rem'}}/>
+                  {preview.note&&<div style={{fontSize:'.62rem',color:'#7a7a8a'}}>{preview.note}</div>}
+                  {!preview.hasNutrients&&(
+                    <div style={{display:'flex',alignItems:'center',gap:'.35rem',background:'rgba(250,204,21,.08)',border:'1px solid rgba(250,204,21,.2)',borderRadius:8,padding:'.45rem .65rem',marginTop:'.5rem'}}>
+                      <AlertCircle size={13} color="#facc15"/>
+                      <span style={{fontSize:'.68rem',color:'#facc15'}}>Macros não disponíveis para este produto. Preencha manualmente.</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Porção */}
+              {preview.per100g&&(
+                <div>
+                  <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.06em',display:'block',marginBottom:5}}>Porção (gramas)</label>
+                  <div style={{display:'flex',gap:'.4rem',alignItems:'center'}}>
+                    <motion.button whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(Math.max(5,numOFF(portion)-10)))}
+                      style={{width:38,height:38,borderRadius:9,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <Minus size={15}/>
+                    </motion.button>
+                    <input type="number" value={portion} onChange={e=>handlePortionChange(e.target.value)}
+                      style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'10px',fontSize:'1rem',outline:'none',textAlign:'center' as const,fontWeight:700}}/>
+                    <motion.button whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(numOFF(portion)+10))}
+                      style={{width:38,height:38,borderRadius:9,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <Plus size={15}/>
+                    </motion.button>
+                  </div>
+                  <div style={{display:'flex',gap:'.3rem',marginTop:'.5rem'}}>
+                    {[50,100,150,200,300].map(g=>(
+                      <motion.button key={g} whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(g))}
+                        style={{flex:1,padding:'.3rem',borderRadius:7,border:'1px solid '+(portion===String(g)?'#22c55e':'#2e2e38'),background:portion===String(g)?'rgba(34,197,94,.15)':'transparent',color:portion===String(g)?'#22c55e':'#7a7a8a',fontSize:'.68rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+                        {g}g
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Macros editáveis */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem'}}>
+                {[
+                  {key:'calories', lbl:'kcal', cor:'#e31b23'},
+                  {key:'protein',  lbl:'prot',  cor:'#60a5fa'},
+                  {key:'carbs',    lbl:'carb',  cor:'#34d399'},
+                  {key:'fat',      lbl:'gord',  cor:'#f472b6'},
+                ].map(m=>(
+                  <div key={m.key} style={{background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:10,padding:'.5rem',textAlign:'center' as const}}>
+                    <input type="number" value={(editPrev as any)[m.key]||'0'}
+                      onChange={e=>setEditPrev(p=>({...p,[m.key]:e.target.value}))}
+                      style={{width:'100%',background:'transparent',border:'none',color:m.cor,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',outline:'none',textAlign:'center' as const}}/>
+                    <div style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase' as const,letterSpacing:'.06em'}}>{m.lbl}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botões */}
+              <div style={{display:'flex',gap:'.5rem'}}>
+                <motion.button whileTap={{scale:.97}} onClick={()=>{setStatus(camErr?'notfound':'scanning');setPreview(null);}}
+                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase' as const,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem'}}>
+                  <ArrowLeft size={14}/> Voltar
+                </motion.button>
+                <motion.button whileTap={{scale:.97}} onClick={accept}
+                  style={{flex:2,background:'linear-gradient(135deg,#22c55e,#16a34a)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase' as const,letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem',boxShadow:'0 4px 16px rgba(34,197,94,.25)'}}>
+                  <CheckCircle2 size={16}/> Adicionar
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Página ────────────────────────────────────────────────────
 export default function DarkDietPage() {
   const [uid,       setUid]       = useState<string|null>(null);
@@ -107,6 +504,8 @@ export default function DarkDietPage() {
   const [saving,    setSaving]    = useState(false);
   const [view,      setView]      = useState<'home'|'historico'|'metas'>('home');
   const [modalRef,  setModalRef]  = useState<number|null>(null);
+  const [showScanner,setShowScanner] = useState(false);
+  const [scanRefIdx, setScanRefIdx]  = useState<number|null>(null);
   const [busca,     setBusca]     = useState('');
   const [alimentoSel,setAlimentoSel] = useState<Alimento|null>(null);
   const [porcao,    setPorcao]    = useState('100');
@@ -158,6 +557,24 @@ export default function DarkDietPage() {
     setHistorico(novoHist);
     await save(dia, novoHist);
     showToast('Dia salvo!');
+  };
+
+  const handleScanResult = (r: OFFResult, refIdx: number) => {
+    const item: ItemRefeicao = {
+      nome: r.name,
+      cal:  parseFloat(r.calories)||0,
+      prot: parseFloat(r.protein)||0,
+      carb: parseFloat(r.carbs)||0,
+      gord: parseFloat(r.fat)||0,
+      por:  100, porcao: 100,
+      icon: 'fork', id: Date.now().toString(),
+    };
+    setDia(d=>{
+      const refs=d.refeicoes.map((ref,i)=>i===refIdx?{...ref,itens:[...ref.itens,item]}:ref);
+      return {...d,refeicoes:refs};
+    });
+    setShowScanner(false); setScanRefIdx(null);
+    showToast('Adicionado: '+r.name);
   };
 
   const addItem = () => {
@@ -444,7 +861,15 @@ export default function DarkDietPage() {
   // ── HOME ──────────────────────────────────────────────────
   return (
     <>
-      <AnimatePresence>{modalRef!==null && <ModalBusca/>}</AnimatePresence>
+      <AnimatePresence>
+        {modalRef!==null && <ModalBusca/>}
+        {showScanner && scanRefIdx!==null && (
+          <BarcodeScanner
+            onResult={(r)=>handleScanResult(r, scanRefIdx)}
+            onClose={()=>{setShowScanner(false);setScanRefIdx(null);}}
+          />
+        )}
+      </AnimatePresence>
 
       <PageShell>
         <AnimatePresence>
@@ -577,10 +1002,18 @@ export default function DarkDietPage() {
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#f0f0f2',letterSpacing:'.03em'}}>{ref.nome}</div>
                         {ref.itens.length>0 && <Badge variant="outline" style={{borderColor:'rgba(34,197,94,.2)',color:'#4ade80',fontSize:'.5rem'}}>{macRef.cal} kcal</Badge>}
                       </div>
-                      <motion.button whileTap={{scale:.9}} onClick={()=>setModalRef(ri)}
-                        style={{width:30,height:30,borderRadius:8,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                        <Plus size={15}/>
-                      </motion.button>
+                      <div style={{display:'flex',gap:'.3rem'}}>
+                        <motion.button whileTap={{scale:.9}} onClick={()=>{setScanRefIdx(ri);setShowScanner(true);}}
+                          style={{width:30,height:30,borderRadius:8,background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.15)',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}
+                          title="Scanner / OpenFoodFacts">
+                          <Camera size={14}/>
+                        </motion.button>
+                        <motion.button whileTap={{scale:.9}} onClick={()=>setModalRef(ri)}
+                          style={{width:30,height:30,borderRadius:8,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}
+                          title="Buscar na lista">
+                          <Plus size={15}/>
+                        </motion.button>
+                      </div>
                     </div>
 
                     {/* Itens */}
