@@ -3,21 +3,18 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import ShareWorkoutModal from '@/components/ShareWorkoutModal';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getGifUrls } from '@/lib/exerciseGifs';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const DAYS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 type SetLog = { w: string; r: string; done: boolean };
 type Item   = { exId: string; name: string; setsPlanned: number; repsTarget: string };
 type Plan   = { id: string; name: string; byDay: Record<string, Item[]> };
+type ShareSession = { planName?: string; day?: string; entries: {name:string;sets:{w:string;r:string}[]}[]; duration?: number };
 
 const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 const todayDayName = () => DAYS[(new Date().getDay()||7)-1];
@@ -39,6 +36,7 @@ const ALL_EXS = [
   'Panturrilha em pé máquina','Panturrilha sentado','Abdominal crunch','Prancha',
 ];
 
+// ── ExGif ─────────────────────────────────────────────────────────────
 function ExGif({name, size=64}:{name:string;size?:number}) {
   const urls = getGifUrls(name);
   const [frame, setFrame] = useState(0);
@@ -56,6 +54,7 @@ function ExGif({name, size=64}:{name:string;size?:number}) {
   return <img src={src} alt={name} onError={()=>{if(frame===1)setImg1Ok(false);}} style={{width:size,height:size,borderRadius:10,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}/>;
 }
 
+// ── RestTimer ─────────────────────────────────────────────────────────
 function RestTimer({seconds, onDone}:{seconds:number;onDone:()=>void}) {
   const [left, setLeft] = useState(seconds);
   useEffect(()=>{
@@ -67,8 +66,7 @@ function RestTimer({seconds, onDone}:{seconds:number;onDone:()=>void}) {
   const pct = (left/seconds)*100;
   const color = left<=5?'#e31b23':left<=10?'#facc15':'#22c55e';
   return (
-    <motion.div
-      initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{position:'fixed',inset:0,zIndex:150,background:'rgba(0,0,0,.96)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.5rem',padding:'2rem'}}
     >
       <motion.div initial={{scale:.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{type:'spring',stiffness:200}}>
@@ -77,82 +75,71 @@ function RestTimer({seconds, onDone}:{seconds:number;onDone:()=>void}) {
       <div style={{position:'relative',width:180,height:180}}>
         <svg width="180" height="180" style={{transform:'rotate(-90deg)'}}>
           <circle cx="90" cy="90" r="80" fill="none" stroke="#1e1e24" strokeWidth="10"/>
-          <motion.circle
-            cx="90" cy="90" r="80" fill="none" stroke={color} strokeWidth="10"
-            strokeLinecap="round"
+          <motion.circle cx="90" cy="90" r="80" fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
             strokeDasharray={`${2*Math.PI*80}`}
             animate={{strokeDashoffset: 2*Math.PI*80*(1-pct/100), stroke: color}}
-            transition={{duration:.9, ease:'linear'}}
-          />
+            transition={{duration:.9, ease:'linear'}}/>
         </svg>
         <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-          <motion.div
-            key={left}
-            initial={{scale:1.15,opacity:.7}}
-            animate={{scale:1,opacity:1}}
-            transition={{duration:.2}}
+          <motion.div key={left} initial={{scale:1.15,opacity:.7}} animate={{scale:1,opacity:1}} transition={{duration:.2}}
             style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',color:'#fff',lineHeight:1}}
           >{fmtTime(left)}</motion.div>
           <div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'4px',textTransform:'uppercase',letterSpacing:'.1em'}}>restante</div>
         </div>
       </div>
-      <motion.button
-        whileTap={{scale:.95}}
-        onClick={()=>{vibrate(20);onDone();}}
+      <motion.button whileTap={{scale:.95}} onClick={()=>{vibrate(20);onDone();}}
         style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'999px',padding:'.6rem 2rem',color:'#7a7a8a',fontSize:'.85rem',fontWeight:700,cursor:'pointer',outline:'none'}}
       >Pular descanso</motion.button>
     </motion.div>
   );
 }
 
-function FinishScreen({elapsed,exerciseCount,setCount,onClose}:{elapsed:number;exerciseCount:number;setCount:number;onClose:()=>void}) {
+// ── FinishScreen ──────────────────────────────────────────────────────
+function FinishScreen({elapsed,exerciseCount,setCount,onShare,onClose}:{elapsed:number;exerciseCount:number;setCount:number;onShare:()=>void;onClose:()=>void}) {
   useEffect(()=>{ vibrate([80,40,80,40,120]); },[]);
   return (
-    <motion.div
-      initial={{opacity:0}} animate={{opacity:1}}
-      style={{position:'fixed',inset:0,zIndex:160,background:'#0a0a0e',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.5rem',padding:'2rem'}}
+    <motion.div initial={{opacity:0}} animate={{opacity:1}}
+      style={{position:'fixed',inset:0,zIndex:160,background:'#0a0a0e',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.25rem',padding:'2rem'}}
     >
-      <motion.div
-        initial={{scale:0,rotate:-20}} animate={{scale:1,rotate:0}}
+      <motion.div initial={{scale:0,rotate:-20}} animate={{scale:1,rotate:0}}
         transition={{type:'spring',stiffness:200,damping:12,delay:.1}}
-        style={{fontSize:'5rem'}}
-      >💪</motion.div>
-      <motion.div
-        initial={{opacity:0,y:24}} animate={{opacity:1,y:0}}
-        transition={{delay:.25}}
+        style={{fontSize:'5rem'}}>💪</motion.div>
+
+      <motion.div initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:.25}}
         style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',textTransform:'uppercase',color:'#fff',textAlign:'center',lineHeight:1}}
-      >
-        Treino<br/><span style={{color:'#e31b23'}}>Concluído!</span>
-      </motion.div>
-      <motion.div
-        initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
-        transition={{delay:.4}}
+      >Treino<br/><span style={{color:'#e31b23'}}>Concluído!</span></motion.div>
+
+      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:.4}}
         style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:18,padding:'1.25rem 1.5rem',display:'flex',gap:'2rem',width:'100%',maxWidth:340,justifyContent:'space-around'}}
       >
         {[['⏱',fmtTime(elapsed),'Duração'],['🏋️',String(exerciseCount),'Exercícios'],['📊',String(setCount),'Séries']].map(([icon,val,lbl],idx)=>(
-          <motion.div
-            key={lbl}
-            initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
-            transition={{delay:.5+idx*.1}}
-            style={{textAlign:'center'}}
-          >
+          <motion.div key={lbl} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.5+idx*.1}} style={{textAlign:'center'}}>
             <div style={{fontSize:'1.5rem'}}>{icon}</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',color:'#f0f0f2',lineHeight:1}}>{val}</div>
             <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>{lbl}</div>
           </motion.div>
         ))}
       </motion.div>
-      <motion.button
-        initial={{opacity:0,y:16}} animate={{opacity:1,y:0}}
-        transition={{delay:.7}}
-        whileTap={{scale:.97}}
-        onClick={onClose}
-        style={{width:'100%',maxWidth:340,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'16px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 6px 24px rgba(227,27,35,.4)',outline:'none'}}
-      >Ver Histórico →</motion.button>
+
+      {/* Botão compartilhar — destaque */}
+      <motion.button initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:.65}}
+        whileTap={{scale:.97}} onClick={onShare}
+        style={{width:'100%',maxWidth:340,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'16px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 6px 24px rgba(227,27,35,.4)',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.6rem'}}
+      >
+        📸 Compartilhar Treino
+      </motion.button>
+
+      <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.8}}
+        whileTap={{scale:.97}} onClick={onClose}
+        style={{width:'100%',maxWidth:340,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:14,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}
+      >
+        Ver Histórico →
+      </motion.button>
     </motion.div>
   );
 }
 
+// ── PÁGINA PRINCIPAL ──────────────────────────────────────────────────
 export default function ModoTreino() {
   const router = useRouter();
   const [uid, setUid]           = useState<string|null>(null);
@@ -176,6 +163,8 @@ export default function ModoTreino() {
   const [livreBusca, setLivreBusca] = useState('');
   const [showGif, setShowGif]   = useState<string|null>(null);
   const [showFinish, setShowFinish] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [shareSession, setShareSession] = useState<ShareSession|null>(null);
   const [finishData, setFinishData] = useState({elapsed:0,exerciseCount:0,setCount:0});
   const [toast, setToast]       = useState('');
   const [checkedSets, setCheckedSets] = useState<Record<string,boolean>>({});
@@ -245,52 +234,69 @@ export default function ModoTreino() {
       entries.push({name:ex.name,exId:ex.exId,sets:sets.map(s=>({w:s.w,r:s.r}))});
     });
     if(!entries.length){showToast('Nenhuma série registrada');return;}
+    const sessData: ShareSession = {
+      planName: resolvedPlan?.name,
+      day,
+      entries,
+      duration: elapsed,
+    };
     if(uid){
       try {
         const histRef = doc(db,'users',uid,'data','history');
         const histSnap = await getDoc(histRef);
         const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
-        hist[todayKey()]={planId:resolvedPlan?.id,planName:resolvedPlan?.name,day,entries,duration:elapsed,savedAt:Date.now()};
+        hist[todayKey()]={...sessData,planId:resolvedPlan?.id,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
       } catch(e){console.error(e);}
     }
     setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
-    setShowFinish(true); setStarted(false); setAllSets({}); setCursor(0);
+    setShareSession(sessData);
+    setShowFinish(true);
+    setStarted(false);
+    setAllSets({});
+    setCursor(0);
   };
 
   const saveLivre = async () => {
     const valid = livreExs.filter(ex=>ex.sets.some(s=>s.r.trim()));
     if(!valid.length){showToast('Adicione ao menos uma série');return;}
+    const entries = valid.map(ex=>({name:ex.name,sets:ex.sets.filter(s=>s.r.trim()).map(s=>({w:s.w,r:s.r}))}));
+    const sessData: ShareSession = {
+      planName: 'Treino Livre',
+      day,
+      entries,
+      duration: elapsed,
+    };
     if(uid){
       try {
         const histRef = doc(db,'users',uid,'data','history');
         const histSnap = await getDoc(histRef);
         const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
-        hist[todayKey()]={planName:'Treino Livre',day,entries:valid.map(ex=>({name:ex.name,sets:ex.sets.filter(s=>s.r.trim()).map(s=>({w:s.w,r:s.r}))})),duration:elapsed,savedAt:Date.now()};
+        hist[todayKey()]={...sessData,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
       } catch(e){console.error(e);}
     }
-    const totalSetCount=valid.reduce((a,ex)=>a+ex.sets.filter(s=>s.r.trim()).length,0);
-    setFinishData({elapsed,exerciseCount:valid.length,setCount:totalSetCount});
-    setShowFinish(true); setStarted(false); setLivreExs([]);
+    const totalSetCount=entries.reduce((a,ex)=>a+ex.sets.length,0);
+    setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
+    setShareSession(sessData);
+    setShowFinish(true);
+    setStarted(false);
+    setLivreExs([]);
   };
 
+  // ── LOADING ───────────────────────────────────────────────────────
   if(loading) return (
     <PageShell>
       <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div
-          animate={{rotate:360}}
-          transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}
-        />
+        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
+          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
       </div>
     </PageShell>
   );
 
+  // ── MODAIS GLOBAIS ────────────────────────────────────────────────
   if(showGif) return (
-    <motion.div
-      initial={{opacity:0}} animate={{opacity:1}}
-      onClick={()=>setShowGif(null)}
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} onClick={()=>setShowGif(null)}
       style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.97)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1.25rem',padding:'2rem'}}
     >
       <motion.div initial={{scale:.85}} animate={{scale:1}} transition={{type:'spring',stiffness:200}}>
@@ -303,15 +309,38 @@ export default function ModoTreino() {
     </motion.div>
   );
 
-  if(showFinish) return <FinishScreen elapsed={finishData.elapsed} exerciseCount={finishData.exerciseCount} setCount={finishData.setCount} onClose={()=>{setShowFinish(false);router.push('/historico');}}/>;
   if(showRest) return <RestTimer seconds={restSecs} onDone={()=>setShowRest(false)}/>;
 
+  if(showFinish) return (
+    <>
+      <FinishScreen
+        elapsed={finishData.elapsed}
+        exerciseCount={finishData.exerciseCount}
+        setCount={finishData.setCount}
+        onShare={()=>{ setShowFinish(false); setShowShare(true); }}
+        onClose={()=>{ setShowFinish(false); router.push('/historico'); }}
+      />
+    </>
+  );
+
+  // ── SHARE MODAL ───────────────────────────────────────────────────
+  if(showShare && shareSession) return (
+    <div style={{position:'fixed',inset:0,background:'#0a0a0e',zIndex:250}}>
+      <AnimatePresence>
+        <ShareWorkoutModal
+          session={shareSession}
+          onClose={()=>{ setShowShare(false); router.push('/historico'); }}
+        />
+      </AnimatePresence>
+    </div>
+  );
+
+  // ── PRÉ-INÍCIO ────────────────────────────────────────────────────
   if(!started) return (
     <PageShell>
       <AnimatePresence>
         {toast && (
-          <motion.div
-            initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}
+          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}
             style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)'}}
           >✓ {toast}</motion.div>
         )}
@@ -322,14 +351,11 @@ export default function ModoTreino() {
         <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px'}}>Registre suas séries em tempo real</div>
       </motion.div>
 
-      <motion.div
-        initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.08}}
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.08}}
         style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}
       >
-        {(['plan','livre'] as const).map((m)=>(
-          <motion.button
-            key={m} whileTap={{scale:.97}}
-            onClick={()=>setMode(m)}
+        {(['plan','livre'] as const).map(m=>(
+          <motion.button key={m} whileTap={{scale:.97}} onClick={()=>setMode(m)}
             style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:mode===m?'rgba(227,27,35,.15)':'transparent',color:mode===m?'#e31b23':'#7a7a8a',boxShadow:mode===m?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s',outline:'none'}}
           >{m==='plan'?'Com Ficha':'Treino Livre'}</motion.button>
         ))}
@@ -420,8 +446,7 @@ export default function ModoTreino() {
                     </div>
                   </div>
 
-                  <motion.button
-                    whileTap={{scale:.98}}
+                  <motion.button whileTap={{scale:.98}}
                     onClick={()=>{vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}
                     disabled={planItems.length===0}
                     style={{width:'100%',background:planItems.length===0?'rgba(227,27,35,.3)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:planItems.length===0?'not-allowed':'pointer',boxShadow:planItems.length===0?'none':'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}
@@ -444,9 +469,7 @@ export default function ModoTreino() {
                   Sem ficha? Sem problema. Adicione exercícios conforme vai treinando.
                 </div>
               </div>
-              <motion.button
-                whileTap={{scale:.97}}
-                onClick={()=>{vibrate(30);setStarted(true);}}
+              <motion.button whileTap={{scale:.97}} onClick={()=>{vibrate(30);setStarted(true);}}
                 style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}
               >Começar →</motion.button>
             </div>
@@ -456,6 +479,7 @@ export default function ModoTreino() {
     </PageShell>
   );
 
+  // ── SESSÃO ATIVA — COM FICHA ──────────────────────────────────────
   if(mode==='plan') return (
     <PageShell>
       <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
@@ -465,9 +489,7 @@ export default function ModoTreino() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'.65rem'}}>
           <div style={{textAlign:'right'}}>
-            <motion.div
-              key={Math.floor(elapsed/60)}
-              initial={{scale:1.05}} animate={{scale:1}}
+            <motion.div key={Math.floor(elapsed/60)} initial={{scale:1.05}} animate={{scale:1}}
               style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#e31b23',lineHeight:1}}
             >{fmtTime(elapsed)}</motion.div>
             <div style={{fontSize:'.55rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>duração</div>
@@ -481,11 +503,8 @@ export default function ModoTreino() {
 
       <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}} style={{marginBottom:'.75rem'}}>
         <div style={{height:4,background:'#2e2e38',borderRadius:2,overflow:'hidden'}}>
-          <motion.div
-            animate={{width:`${((cursor+1)/planItems.length)*100}%`}}
-            transition={{duration:.4,ease:'easeOut'}}
-            style={{height:'100%',background:'#e31b23',borderRadius:2}}
-          />
+          <motion.div animate={{width:`${((cursor+1)/planItems.length)*100}%`}} transition={{duration:.4,ease:'easeOut'}}
+            style={{height:'100%',background:'#e31b23',borderRadius:2}}/>
         </div>
         <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px'}}>
           <div style={{fontSize:'.6rem',color:'#484858'}}>{cursor+1} de {planItems.length} exercícios</div>
@@ -498,8 +517,7 @@ export default function ModoTreino() {
           const done=(allSets[i]||[]).some(s=>s.r.trim());
           const active=cursor===i;
           return (
-            <motion.button key={i} whileTap={{scale:.9}}
-              onClick={()=>{setPrevCursor(cursor);setCursor(i);}}
+            <motion.button key={i} whileTap={{scale:.9}} onClick={()=>{setPrevCursor(cursor);setCursor(i);}}
               style={{flexShrink:0,width:36,height:36,borderRadius:8,border:'1px solid '+(active?'#e31b23':done?'rgba(34,197,94,.3)':'#2e2e38'),background:active?'rgba(227,27,35,.15)':done?'rgba(34,197,94,.08)':'rgba(255,255,255,.03)',color:active?'#e31b23':done?'#4ade80':'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>
               {done?'✓':i+1}
             </motion.button>
@@ -509,8 +527,7 @@ export default function ModoTreino() {
 
       <AnimatePresence mode="wait">
         {currentEx && (
-          <motion.div
-            key={cursor}
+          <motion.div key={cursor}
             initial={{opacity:0,x:cursor>=prevCursor?30:-30}}
             animate={{opacity:1,x:0}}
             exit={{opacity:0,x:cursor>=prevCursor?-30:30}}
@@ -544,11 +561,9 @@ export default function ModoTreino() {
                 <AnimatePresence>
                   {currentSets.map((s,si)=>{
                     const key=`${cursor}-${si}`;
-                    const isDone = checkedSets[key]||s.done;
+                    const isDone=checkedSets[key]||s.done;
                     return (
-                      <motion.div key={si}
-                        initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-20}}
-                        transition={{delay:si*.04}}
+                      <motion.div key={si} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-20}} transition={{delay:si*.04}}
                         style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.25)':s.r?'rgba(255,255,255,.08)':'#2e2e38'),borderRadius:10,padding:'.5rem .35rem',transition:'all .2s'}}
                       >
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
@@ -559,8 +574,7 @@ export default function ModoTreino() {
                           onChange={e=>updateSet(si,'r',e.target.value)}
                           onKeyDown={e=>e.key==='Enter'&&handleSetDone(si)}
                           style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.9rem',color:'#fff',height:36,padding:'0 .2rem',outline:'none',width:'100%'}}/>
-                        <motion.button whileTap={{scale:.85}}
-                          onClick={()=>handleSetDone(si)}
+                        <motion.button whileTap={{scale:.85}} onClick={()=>handleSetDone(si)}
                           style={{width:32,height:32,borderRadius:'50%',border:'1px solid '+(isDone?'rgba(34,197,94,.6)':s.r?'rgba(34,197,94,.3)':'#2e2e38'),background:isDone?'rgba(34,197,94,.2)':s.r?'rgba(34,197,94,.08)':'transparent',color:isDone?'#4ade80':s.r?'#4ade80':'#484858',fontSize:'.9rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}
                         >✓</motion.button>
                       </motion.div>
@@ -600,8 +614,7 @@ export default function ModoTreino() {
             style={{flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(227,27,35,.3)',cursor:'pointer',outline:'none'}}
           >Próximo →</motion.button>
         ) : (
-          <motion.button whileTap={{scale:.97}}
-            onClick={saveSession}
+          <motion.button whileTap={{scale:.97}} onClick={saveSession}
             style={{flex:2,background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}
           >Finalizar 💪</motion.button>
         )}
@@ -609,6 +622,7 @@ export default function ModoTreino() {
     </PageShell>
   );
 
+  // ── SESSÃO ATIVA — TREINO LIVRE ───────────────────────────────────
   return (
     <PageShell>
       <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
@@ -693,9 +707,7 @@ export default function ModoTreino() {
                     {ex.sets.map((s,si)=>{
                       const isDone=s.done;
                       return (
-                        <motion.div key={si}
-                          initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}}
-                          transition={{delay:si*.03}}
+                        <motion.div key={si} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{delay:si*.03}}
                           style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:8,padding:'.4rem .3rem',transition:'all .2s'}}
                         >
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
@@ -742,10 +754,7 @@ export default function ModoTreino() {
       </div>
 
       {livreExs.length>0 && (
-        <motion.button
-          initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
-          whileTap={{scale:.98}}
-          onClick={saveLivre}
+        <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} whileTap={{scale:.98}} onClick={saveLivre}
           style={{width:'100%',marginTop:'.85rem',background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:14,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',boxShadow:'0 4px 20px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}
         >Finalizar Treino 💪</motion.button>
       )}
