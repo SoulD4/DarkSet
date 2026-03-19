@@ -512,7 +512,7 @@ function TabCorpo({ measures }: { measures: Measure[] }) {
     gordAbs:+(num(m.peso!)*num(m.gordura!)/100).toFixed(1),
   }));
 
-  const medidas = ['cintura','quadril','braco','coxa'] as const;
+  const medidas: (keyof Measure)[] = ['cintura','quadril','braco','coxa'];
   const hasMedidas = medidas.some(k=>sorted.some(m=>m[k]));
 
   if(!hasPeso) return (
@@ -631,8 +631,8 @@ function TabCorpo({ measures }: { measures: Measure[] }) {
           <CardContent style={{padding:'1rem'}}>
             <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem'}}>Medidas Corporais (cm)</div>
             <div style={{display:'grid',gap:'.5rem'}}>
-              {medidas.filter(k=>sorted.some(m=>m[k])).map(key=>{
-                const data = sorted.filter(m=>m[k]).map(m=>({data:toBR(m.date),val:num(m[key]!)}));
+              {medidas.filter((k)=>sorted.some(m=>m[k as keyof Measure])).map(key=>{
+                const data = sorted.filter(m=>m[key]).map(m=>({data:toBR(m.date),val:num((m[key] as string)||'0')}));
                 const colors: Record<string,string> = {cintura:'#f59e0b',quadril:'#ec4899',braco:'#06b6d4',coxa:'#a855f7'};
                 const diff = data.length>1 ? (data[data.length-1].val - data[0].val).toFixed(1) : null;
                 return (
