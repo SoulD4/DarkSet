@@ -216,7 +216,7 @@ export default function CardioPage() {
 
   // Streak
   const streak = (() => {
-    const dates = [...new Set(sessions.map(s=>s.date))].sort().reverse();
+    const dates = Array.from(new Set(sessions.map(s=>s.date))).sort().reverse();
     let count=0, expect=todayKey();
     for(const d of dates){
       if(d===expect){ count++; const dt=new Date(d+'T12:00:00'); dt.setDate(dt.getDate()-1); expect=dt.toISOString().slice(0,10); }
