@@ -230,14 +230,18 @@ function ExerciseGif({name, size=80}:{name:string;size?:number}) {
 }
 
 function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;onBack:()=>void}) {
-  const [local, setLocal]   = useState<Plan>(JSON.parse(JSON.stringify(plan)));
-  const [day, setDay]       = useState(DAYS[0]);
-  const [tab, setTab]       = useState<'ficha'|'buscar'>('ficha');
-  const [busca, setBusca]   = useState('');
+  const [local, setLocal]     = useState<Plan>(JSON.parse(JSON.stringify(plan)));
+  const [day, setDay]         = useState(DAYS[0]);
+  const [tab, setTab]         = useState<'ficha'|'buscar'>('ficha');
+  const [busca, setBusca]     = useState('');
   const [filtMuscle, setFiltMuscle] = useState('');
   const [filtEquip, setFiltEquip]   = useState('');
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]   = useState(false);
   const [showGif, setShowGif] = useState<string|null>(null);
+  const [dragIdx, setDragIdx]     = useState<number|null>(null);
+  const [dragOver, setDragOver]   = useState<number|null>(null);
+  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout>|null>(null);
+  const [dragging, setDragging]   = useState(false);
 
   const dayItems = local.byDay[day]||[];
   const totalEx  = Object.values(local.byDay).flat().length;
@@ -259,15 +263,60 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
   const removeItem = (i:number) => setLocal(prev=>{const c=JSON.parse(JSON.stringify(prev));c.byDay[day].splice(i,1);return c;});
   const updateSets = (i:number,v:string) => setLocal(prev=>{const c=JSON.parse(JSON.stringify(prev));c.byDay[day][i].setsPlanned=Math.max(1,Math.min(10,parseInt(v)||3));return c;});
   const updateReps = (i:number,v:string) => setLocal(prev=>{const c=JSON.parse(JSON.stringify(prev));c.byDay[day][i].repsTarget=v;return c;});
-  const move = (i:number,dir:number) => setLocal(prev=>{const c=JSON.parse(JSON.stringify(prev));const arr=c.byDay[day];const j=i+dir;if(j<0||j>=arr.length)return prev;[arr[i],arr[j]]=[arr[j],arr[i]];return c;});
+
+  const reorder = (from:number, to:number) => {
+    if(from===to) return;
+    setLocal(prev=>{
+      const c=JSON.parse(JSON.stringify(prev));
+      const arr=c.byDay[day];
+      const [item]=arr.splice(from,1);
+      arr.splice(to,0,item);
+      return c;
+    });
+  };
+
+  const handleTouchStart = (i:number) => {
+    const t = setTimeout(()=>{
+      setDragIdx(i);
+      setDragging(true);
+      if(navigator.vibrate) navigator.vibrate(40);
+    }, 400);
+    setLongPressTimer(t);
+  };
+
+  const handleTouchEnd = () => {
+    if(longPressTimer) clearTimeout(longPressTimer);
+    if(dragging && dragIdx!==null && dragOver!==null) {
+      reorder(dragIdx, dragOver);
+    }
+    setDragIdx(null);
+    setDragOver(null);
+    setDragging(false);
+    setLongPressTimer(null);
+  };
+
+  const handleTouchMove = (e:React.TouchEvent, listLen:number) => {
+    if(!dragging) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const row = el?.closest('[data-drag-idx]');
+    if(row) {
+      const idx = parseInt(row.getAttribute('data-drag-idx')||'-1');
+      if(idx>=0 && idx<listLen) setDragOver(idx);
+    }
+  };
 
   return (
     <PageShell>
       {showGif && (
-        <div onClick={()=>setShowGif(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.92)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1rem'}}>
-          <ExerciseGif name={showGif} size={200}/>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2'}}>{showGif}</div>
-          <div style={{fontSize:'.75rem',color:'#7a7a8a'}}>Toque para fechar</div>
+        <div onClick={()=>setShowGif(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.97)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1.25rem',padding:'2rem'}}>
+          <div style={{position:'relative'}}>
+            <ExerciseGif name={showGif} size={280}/>
+            <div style={{position:'absolute',inset:0,borderRadius:12,boxShadow:'inset 0 0 0 1px rgba(227,27,35,.3)'}}/>
+          </div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2',textAlign:'center',letterSpacing:'.05em'}}>{showGif}</div>
+          <div style={{fontSize:'.72rem',color:'#484858',letterSpacing:'.08em',textTransform:'uppercase'}}>Toque para fechar</div>
         </div>
       )}
 
@@ -284,7 +333,7 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         </div>
       </div>
 
-      <div style={{display:'flex',gap:'.35rem',overflowX:'auto',marginBottom:'.75rem',paddingTop:'10px',paddingBottom:'.35rem',scrollbarWidth:'none',msOverflowStyle:'none'}}>
+      <div style={{display:'flex',gap:'.35rem',overflowX:'auto',marginBottom:'.75rem',paddingTop:'10px',paddingBottom:'.35rem',scrollbarWidth:'none'}}>
         {DAYS.map(dy=>{
           const count = local.byDay[dy]?.length||0;
           const active = day===dy;
@@ -311,43 +360,142 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
       </div>
 
       {tab==='ficha' && (
-        <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',overflow:'hidden',animation:'fadeUp .25s ease'}}>
+        <div style={{animation:'fadeUp .25s ease'}}>
           {dayItems.length===0 ? (
-            <div style={{textAlign:'center',padding:'2.5rem 1rem'}}>
+            <div style={{textAlign:'center',padding:'2.5rem 1rem',background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px'}}>
               <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🏋️</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#484858',marginBottom:'.4rem'}}>Vazio</div>
               <div style={{fontSize:'.82rem',color:'#484858',marginBottom:'1rem'}}>Nenhum exercício para {day}</div>
-              <button onClick={()=>setTab('buscar')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>+ Adicionar Exercício</button>
+              <button onClick={()=>setTab('buscar')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>
+                + Adicionar Exercício
+              </button>
             </div>
           ) : (
-            <div style={{padding:'.65rem'}}>
-              <div style={{display:'grid',gridTemplateColumns:'52px 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',padding:'.2rem .3rem .4rem',marginBottom:'.1rem'}}>
-                {['','EXERCÍCIO','SÉR','REPS','',''].map((h,i)=>(
-                  <div key={i} style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</div>
-                ))}
-              </div>
-              {dayItems.map((it,i)=>(
-                <div key={i} style={{display:'grid',gridTemplateColumns:'52px 1fr 3rem 3.2rem 2.2rem 1.8rem',gap:'.4rem',alignItems:'center',background:'rgba(0,0,0,.25)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.5rem .4rem',marginBottom:'.35rem',animation:'fadeUp .2s ease'}}>
-                  <button onClick={()=>setShowGif(it.name)} style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:8,overflow:'hidden',flexShrink:0,position:'relative'}} title="Ver execução">
-                    <ExerciseGif name={it.name} size={48}/>
-                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.0)',borderRadius:8}}>
-                      <span style={{position:'absolute',bottom:1,right:2,fontSize:'.5rem',color:'rgba(255,255,255,.5)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,lineHeight:1}}>{i+1}</span>
-                    </div>
-                  </button>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:'.82rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</div>
-                    <div style={{fontSize:'.58rem',color:'#484858',marginTop:'1px'}}>{EXS.find(e=>e.id===it.exId)?.primary} · {EXS.find(e=>e.id===it.exId)?.equipment}</div>
-                  </div>
-                  <input type="number" min="1" max="10" value={it.setsPlanned} onChange={e=>updateSets(i,e.target.value)} style={{width:'100%',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'6px',padding:'.3rem .2rem',fontSize:'.82rem',color:'#fff',outline:'none'}}/>
-                  <input type="text" maxLength={6} value={it.repsTarget} placeholder="reps" onChange={e=>updateReps(i,e.target.value)} style={{width:'100%',textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'6px',padding:'.3rem .2rem',color:'#fff',fontSize:'.82rem',outline:'none'}}/>
-                  <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
-                    <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:'none',border:'1px solid #2e2e38',borderRadius:'4px',color:i===0?'#2e2e38':'#7a7a8a',padding:'2px 5px',cursor:i===0?'default':'pointer',fontSize:'.7rem',lineHeight:1}}>↑</button>
-                    <button onClick={()=>move(i,1)} disabled={i===dayItems.length-1} style={{background:'none',border:'1px solid #2e2e38',borderRadius:'4px',color:i===dayItems.length-1?'#2e2e38':'#7a7a8a',padding:'2px 5px',cursor:i===dayItems.length-1?'default':'pointer',fontSize:'.7rem',lineHeight:1}}>↓</button>
-                  </div>
-                  <button onClick={()=>removeItem(i)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',color:'#e31b23',padding:'.35rem .3rem',cursor:'pointer',fontSize:'.75rem',fontWeight:700,lineHeight:1}}>✕</button>
+            <>
+              {dayItems.length > 1 && (
+                <div style={{display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'.5rem',padding:'.3rem .6rem',background:'rgba(255,255,255,.02)',borderRadius:'8px',border:'1px solid #2e2e38'}}>
+                  <span style={{fontSize:'.7rem'}}>☰</span>
+                  <span style={{fontSize:'.6rem',color:'#484858',letterSpacing:'.05em'}}>Segure e arraste para reordenar</span>
                 </div>
-              ))}
-            </div>
+              )}
+              <div
+                style={{display:'grid',gap:'.55rem'}}
+                onTouchMove={e=>handleTouchMove(e,dayItems.length)}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
+              >
+                {dayItems.map((it,i)=>{
+                  const exInfo = EXS.find(e=>e.id===it.exId);
+                  const isDragged = dragIdx===i;
+                  const isTarget  = dragOver===i && dragIdx!==i;
+                  return (
+                    <div
+                      key={i}
+                      data-drag-idx={i}
+                      onTouchStart={()=>handleTouchStart(i)}
+                      style={{
+                        background: isDragged ? 'rgba(227,27,35,.08)' : '#1e1e24',
+                        border: '1px solid ' + (isDragged ? '#e31b23' : isTarget ? 'rgba(227,27,35,.4)' : '#2e2e38'),
+                        borderRadius:'14px',
+                        padding:'.75rem',
+                        animation:'fadeUp .2s ease',
+                        transform: isDragged ? 'scale(1.02)' : isTarget ? 'translateY(-2px)' : 'none',
+                        transition:'transform .15s, border-color .15s, background .15s',
+                        boxShadow: isDragged ? '0 8px 24px rgba(0,0,0,.5)' : 'none',
+                        userSelect:'none',
+                        WebkitUserSelect:'none',
+                        position:'relative',
+                        overflow:'hidden',
+                      }}
+                    >
+                      {isTarget && <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'#e31b23',borderRadius:'2px 2px 0 0'}}/>}
+
+                      <div style={{display:'flex',alignItems:'center',gap:'.65rem',marginBottom:'.65rem'}}>
+                        <button
+                          onClick={()=>!dragging&&setShowGif(it.name)}
+                          style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:10,overflow:'hidden',flexShrink:0,position:'relative',width:56,height:56}}
+                        >
+                          <ExerciseGif name={it.name} size={56}/>
+                          <div style={{position:'absolute',inset:0,borderRadius:10,display:'flex',alignItems:'flex-end',justifyContent:'flex-start',padding:'2px 3px'}}>
+                            <span style={{fontSize:'.5rem',color:'rgba(255,255,255,.7)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,lineHeight:1,background:'rgba(0,0,0,.5)',borderRadius:3,padding:'0 2px'}}>{i+1}</span>
+                          </div>
+                        </button>
+
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>
+                            {it.name}
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:'.3rem',marginTop:'.2rem',flexWrap:'wrap'}}>
+                            {exInfo?.primary && (
+                              <span style={{fontSize:'.58rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:'4px',padding:'1px 5px',textTransform:'uppercase',letterSpacing:'.04em'}}>
+                                {exInfo.primary}
+                              </span>
+                            )}
+                            {exInfo?.equipment && (
+                              <span style={{fontSize:'.58rem',color:'#484858',fontWeight:600}}>
+                                {exInfo.equipment}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{flexShrink:0,display:'flex',flexDirection:'column',gap:'3px',padding:'.4rem .3rem',opacity:0.4,cursor:'grab'}}>
+                          {[0,1,2].map(r=>(
+                            <div key={r} style={{display:'flex',gap:'3px'}}>
+                              {[0,1].map(c=>(
+                                <div key={c} style={{width:3,height:3,borderRadius:'50%',background:'#7a7a8a'}}/>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={()=>removeItem(i)}
+                          style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',color:'#e31b23',padding:'.45rem .5rem',cursor:'pointer',fontSize:'.8rem',fontWeight:700,lineHeight:1,flexShrink:0,transition:'all .15s'}}
+                        >✕</button>
+                      </div>
+
+                      <div style={{display:'flex',gap:'.5rem'}}>
+                        <div style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.4rem .5rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.3rem'}}>
+                          <div>
+                            <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>Séries</div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'#f0f0f2',lineHeight:1}}>{it.setsPlanned}</div>
+                          </div>
+                          <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                            <button onClick={()=>updateSets(i,String(it.setsPlanned+1))}
+                              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'5px',color:'#f0f0f2',width:24,height:22,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.8rem',lineHeight:1,fontWeight:700}}>+</button>
+                            <button onClick={()=>updateSets(i,String(it.setsPlanned-1))}
+                              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'5px',color:'#7a7a8a',width:24,height:22,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.8rem',lineHeight:1,fontWeight:700}}>−</button>
+                          </div>
+                        </div>
+
+                        <div style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.4rem .5rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.3rem'}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>Reps</div>
+                            <input
+                              type="text"
+                              maxLength={8}
+                              value={it.repsTarget}
+                              onChange={e=>updateReps(i,e.target.value)}
+                              style={{width:'100%',background:'none',border:'none',outline:'none',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'#f0f0f2',lineHeight:1,padding:0}}
+                            />
+                          </div>
+                          <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+                            {['8-10','10-12','12-15'].map(r=>(
+                              <button
+                                key={r}
+                                onClick={()=>updateReps(i,r)}
+                                style={{background:it.repsTarget===r?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',border:'1px solid '+(it.repsTarget===r?'rgba(227,27,35,.3)':'#2e2e38'),borderRadius:'4px',color:it.repsTarget===r?'#e31b23':'#484858',fontSize:'.45rem',fontWeight:800,cursor:'pointer',padding:'2px 4px',lineHeight:1,letterSpacing:'.02em',whiteSpace:'nowrap'}}
+                              >{r}</button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -355,18 +503,22 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
       {tab==='buscar' && (
         <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',overflow:'hidden',animation:'fadeUp .25s ease'}}>
           <div style={{padding:'.75rem .75rem .4rem'}}>
-            <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar exercício…" style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',color:'#f0f0f2',padding:'10px 13px',fontSize:'.9rem',outline:'none',marginBottom:'.5rem'}}/>
+            <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar exercício…"
+              style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',color:'#f0f0f2',padding:'10px 13px',fontSize:'.9rem',outline:'none',marginBottom:'.5rem'}}/>
             <div style={{display:'flex',gap:'.4rem',marginBottom:'.5rem'}}>
-              <select value={filtMuscle} onChange={e=>setFiltMuscle(e.target.value)} style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtMuscle?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
+              <select value={filtMuscle} onChange={e=>setFiltMuscle(e.target.value)}
+                style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtMuscle?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
                 <option value="">Músculo</option>
                 {MUSCLES.map(m=><option key={m} value={m}>{m}</option>)}
               </select>
-              <select value={filtEquip} onChange={e=>setFiltEquip(e.target.value)} style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtEquip?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
+              <select value={filtEquip} onChange={e=>setFiltEquip(e.target.value)}
+                style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtEquip?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
                 <option value="">Equipamento</option>
                 {EQUIPS.map(e=><option key={e} value={e}>{e}</option>)}
               </select>
               {(busca||filtMuscle||filtEquip) && (
-                <button onClick={()=>{setBusca('');setFiltMuscle('');setFiltEquip('');}} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.4rem .6rem',color:'#e31b23',fontSize:'.75rem',fontWeight:700,cursor:'pointer',flexShrink:0}}>✕</button>
+                <button onClick={()=>{setBusca('');setFiltMuscle('');setFiltEquip('');}}
+                  style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.4rem .6rem',color:'#e31b23',fontSize:'.75rem',fontWeight:700,cursor:'pointer',flexShrink:0}}>✕</button>
               )}
             </div>
             <div style={{fontSize:'.6rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',paddingBottom:'.4rem'}}>{exsFiltrados.length} exercício(s)</div>
@@ -386,7 +538,8 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
                 }
                 const added = dayItems.some(it=>it.exId===e.id);
                 rows.push(
-                  <button key={e.id} onClick={()=>!added&&addEx(e)} style={{width:'100%',display:'flex',alignItems:'center',gap:'.65rem',background:added?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:'1px solid '+(added?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:'10px',padding:'.5rem .65rem',textAlign:'left',cursor:added?'default':'pointer',marginBottom:'.3rem',transition:'all .15s'}}>
+                  <button key={e.id} onClick={()=>!added&&addEx(e)}
+                    style={{width:'100%',display:'flex',alignItems:'center',gap:'.65rem',background:added?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:'1px solid '+(added?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:'10px',padding:'.5rem .65rem',textAlign:'left',cursor:added?'default':'pointer',marginBottom:'.3rem',transition:'all .15s'}}>
                     <ExerciseGif name={e.name} size={56}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#4ade80':'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.name}</div>
@@ -404,7 +557,8 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         </div>
       )}
 
-      <button onClick={async()=>{setSaving(true);await onSave(local);setSaving(false);onBack();}} disabled={saving} style={{width:'100%',marginTop:'.85rem',background:saving?'rgba(227,27,35,.4)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'14px',padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:saving?'not-allowed':'pointer',boxShadow:saving?'none':'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',transition:'all .2s'}}>
+      <button onClick={async()=>{setSaving(true);await onSave(local);setSaving(false);onBack();}} disabled={saving}
+        style={{width:'100%',marginTop:'.85rem',background:saving?'rgba(227,27,35,.4)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'14px',padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:saving?'not-allowed':'pointer',boxShadow:saving?'none':'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',transition:'all .2s'}}>
         {saving && <div style={{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spinCw .6s linear infinite'}}/>}
         Salvar Ficha ✓
       </button>
@@ -413,17 +567,17 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
 }
 
 export default function TreinoPage() {
-  const [uid, setUid]           = useState<string|null>(null);
-  const [plans, setPlans]       = useState<Plan[]>([]);
-  const [activeId, setActiveId] = useState<string|null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [newName, setNewName]   = useState('');
-  const [editPlan, setEditPlan] = useState<Plan|null>(null);
-  const [tab, setTab]           = useState<'minhas'|'prontas'>('minhas');
+  const [uid, setUid]             = useState<string|null>(null);
+  const [plans, setPlans]         = useState<Plan[]>([]);
+  const [activeId, setActiveId]   = useState<string|null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [newName, setNewName]     = useState('');
+  const [editPlan, setEditPlan]   = useState<Plan|null>(null);
+  const [tab, setTab]             = useState<'minhas'|'prontas'>('minhas');
   const [previewId, setPreviewId] = useState<string|null>(null);
-  const [renameId, setRenameId] = useState<string|null>(null);
-  const [toast, setToast]       = useState('');
+  const [renameId, setRenameId]   = useState<string|null>(null);
+  const [toast, setToast]         = useState('');
   const [filtLevel, setFiltLevel] = useState('todos');
 
   useEffect(()=>{
@@ -517,8 +671,12 @@ export default function TreinoPage() {
       <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',marginBottom:'.75rem',animation:'fadeUp .35s ease'}}>
         <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Nova ficha</div>
         <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
-          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createPlan()} placeholder="Nome da ficha…" style={{flex:1,minWidth:0,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'11px 13px',fontSize:'.9rem',color:'#f0f0f2',outline:'none'}}/>
-          <button onClick={createPlan} disabled={saving} style={{flexShrink:0,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'11px 18px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',whiteSpace:'nowrap'}}>+ Criar</button>
+          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createPlan()} placeholder="Nome da ficha…"
+            style={{flex:1,minWidth:0,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'11px 13px',fontSize:'.9rem',color:'#f0f0f2',outline:'none'}}/>
+          <button onClick={createPlan} disabled={saving}
+            style={{flexShrink:0,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'11px 18px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',whiteSpace:'nowrap'}}>
+            + Criar
+          </button>
         </div>
       </div>
 
@@ -542,11 +700,16 @@ export default function TreinoPage() {
               return (
                 <div key={pl.id} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',borderLeft:'2px solid '+(isActive?'#e31b23':'transparent'),animation:`fadeUp ${.3+idx*.05}s ease`,transition:'border-color .2s'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'.6rem'}}>
-                    <button onClick={async()=>{const nA=isActive?null:pl.id;setActiveId(nA);await savePlans(plans,nA);}} style={{width:22,height:22,borderRadius:'50%',flexShrink:0,cursor:'pointer',background:isActive?'#e31b23':'transparent',border:'2px solid '+(isActive?'#e31b23':'#484858'),display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isActive?'0 0 10px rgba(227,27,35,.5)':'none',transition:'all .2s'}}>
+                    <button onClick={async()=>{const nA=isActive?null:pl.id;setActiveId(nA);await savePlans(plans,nA);}}
+                      style={{width:22,height:22,borderRadius:'50%',flexShrink:0,cursor:'pointer',background:isActive?'#e31b23':'transparent',border:'2px solid '+(isActive?'#e31b23':'#484858'),display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isActive?'0 0 10px rgba(227,27,35,.5)':'none',transition:'all .2s'}}>
                       {isActive && <div style={{width:8,height:8,borderRadius:'50%',background:'#fff'}}/>}
                     </button>
                     {renameId===pl.id ? (
-                      <input autoFocus value={pl.name} onChange={e=>setPlans(prev=>prev.map(p=>p.id===pl.id?{...p,name:e.target.value}:p))} onBlur={async()=>{setRenameId(null);await savePlans(plans,activeId);}} onKeyDown={e=>{if(e.key==='Enter'){setRenameId(null);savePlans(plans,activeId);}}} style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #e31b23',borderRadius:'8px',padding:'.4rem .7rem',fontSize:'.95rem',color:'#f0f0f2',fontWeight:600,outline:'none'}}/>
+                      <input autoFocus value={pl.name}
+                        onChange={e=>setPlans(prev=>prev.map(p=>p.id===pl.id?{...p,name:e.target.value}:p))}
+                        onBlur={async()=>{setRenameId(null);await savePlans(plans,activeId);}}
+                        onKeyDown={e=>{if(e.key==='Enter'){setRenameId(null);savePlans(plans,activeId);}}}
+                        style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #e31b23',borderRadius:'8px',padding:'.4rem .7rem',fontSize:'.95rem',color:'#f0f0f2',fontWeight:600,outline:'none'}}/>
                     ) : (
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -584,7 +747,8 @@ export default function TreinoPage() {
         <div style={{animation:'fadeUp .3s ease'}}>
           <div style={{display:'flex',gap:'.4rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.25rem'}}>
             {['todos','iniciante','intermediário','avançado'].map(l=>(
-              <button key={l} onClick={()=>setFiltLevel(l)} style={{flexShrink:0,padding:'.35rem .85rem',borderRadius:'999px',cursor:'pointer',background:filtLevel===l?NIVEL_COR[l]||'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(filtLevel===l?NIVEL_COR[l]||'#e31b23':'#2e2e38'),color:filtLevel===l?'#fff':(NIVEL_COR[l]||'#7a7a8a'),fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'capitalize',transition:'all .15s'}}>
+              <button key={l} onClick={()=>setFiltLevel(l)}
+                style={{flexShrink:0,padding:'.35rem .85rem',borderRadius:'999px',cursor:'pointer',background:filtLevel===l?NIVEL_COR[l]||'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(filtLevel===l?NIVEL_COR[l]||'#e31b23':'#2e2e38'),color:filtLevel===l?'#fff':(NIVEL_COR[l]||'#7a7a8a'),fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'capitalize',transition:'all .15s'}}>
                 {l==='todos'?'Todos':l}
               </button>
             ))}
@@ -609,20 +773,25 @@ export default function TreinoPage() {
                   ))}
                 </div>
                 <div style={{display:'flex',gap:'.5rem'}}>
-                  <button onClick={()=>setPreviewId(previewId===preset.id?null:preset.id)} style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.5rem',color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,cursor:'pointer',transition:'all .15s'}}>
+                  <button onClick={()=>setPreviewId(previewId===preset.id?null:preset.id)}
+                    style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.5rem',color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,cursor:'pointer',transition:'all .15s'}}>
                     {previewId===preset.id?'▲ Fechar':'▼ Ver exercícios'}
                   </button>
-                  <button onClick={()=>importPreset(preset)} style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>+ Usar ficha</button>
+                  <button onClick={()=>importPreset(preset)}
+                    style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>
+                    + Usar ficha
+                  </button>
                 </div>
                 {previewId===preset.id && (
-                  <div style={{marginTop:'.75rem',borderTop:'1px solid #2e2e38',paddingTop:'.75rem',display:'grid',gap:'.4rem',animation:'fadeUp .2s ease'}}>
+                  <div style={{marginTop:'.75rem',borderTop:'1px solid #2e2e38',paddingTop:'.75rem',display:'grid',gap:'.5rem',animation:'fadeUp .2s ease'}}>
                     {DAYS.filter(d=>preset.byDay[d]?.length>0).map(d=>(
                       <div key={d}>
-                        <div style={{fontSize:'.62rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.25rem'}}>{d}</div>
+                        <div style={{fontSize:'.62rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.3rem'}}>{d}</div>
                         {preset.byDay[d].map((it,i)=>(
-                          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.22rem 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-                            <span style={{fontSize:'.8rem',color:'#f0f0f2'}}>{it.name}</span>
-                            <span style={{fontSize:'.7rem',color:'#7a7a8a',fontWeight:600}}>{it.setsPlanned}x {it.repsTarget}</span>
+                          <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.3rem 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+                            <ExerciseGif name={it.name} size={36}/>
+                            <span style={{flex:1,fontSize:'.82rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</span>
+                            <span style={{fontSize:'.7rem',color:'#7a7a8a',fontWeight:600,flexShrink:0}}>{it.setsPlanned}x {it.repsTarget}</span>
                           </div>
                         ))}
                       </div>
@@ -638,6 +807,7 @@ export default function TreinoPage() {
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }
+        @keyframes spinCw { to{transform:rotate(360deg)} }
       `}</style>
     </PageShell>
   );
