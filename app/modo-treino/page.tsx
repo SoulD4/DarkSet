@@ -22,31 +22,66 @@ const todayKey = () => new Date().toISOString().slice(0,10);
 const vibrate = (ms: number|number[] = 40) => { try { navigator.vibrate?.(ms); } catch(_){} };
 
 // ── Web Audio beep ────────────────────────────────────────────────
-function playBeep(type: 'tick'|'done'|'warn') {
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const configs = {
-      tick: [{freq:880, dur:.08, vol:.15, delay:0}],
-      warn: [{freq:660, dur:.12, vol:.25, delay:0},{freq:660, dur:.12, vol:.25, delay:.18}],
+    if (!_audioCtx || _audioCtx.state === 'closed') {
+      _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return _audioCtx;
+  } catch(_){ return null; }
+}
+
+function playBeep(type: 'tick'|'done'|'warn') {
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+
+  // Resume se suspenso (política autoplay)
+  const play = () => {
+    const configs: Record<string,{freq:number;dur:number;vol:number;delay:number;wave:OscillatorType}[]> = {
+      tick: [
+        {freq:1200, dur:.1,  vol:1.2, delay:0,   wave:'square'},
+      ],
+      warn: [
+        {freq:900,  dur:.15, vol:1.4, delay:0,   wave:'square'},
+        {freq:900,  dur:.15, vol:1.4, delay:.22, wave:'square'},
+        {freq:900,  dur:.15, vol:1.4, delay:.44, wave:'square'},
+      ],
       done: [
-        {freq:523, dur:.12, vol:.35, delay:0},
-        {freq:659, dur:.12, vol:.35, delay:.15},
-        {freq:784, dur:.22, vol:.45, delay:.30},
+        {freq:600,  dur:.18, vol:1.5, delay:0,   wave:'square'},
+        {freq:800,  dur:.18, vol:1.5, delay:.22, wave:'square'},
+        {freq:1000, dur:.35, vol:1.6, delay:.44, wave:'square'},
       ],
     };
-    configs[type].forEach(({freq,dur,vol,delay})=>{
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
+
+    configs[type].forEach(({freq,dur,vol,delay,wave})=>{
+      const osc      = ctx.createOscillator();
+      const gain     = ctx.createGain();
+      const compressor = ctx.createDynamicsCompressor();
+
+      osc.connect(gain);
+      gain.connect(compressor);
+      compressor.connect(ctx.destination);
+
       osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0, ctx.currentTime+delay);
-      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime+delay+.01);
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime+delay+dur);
-      osc.start(ctx.currentTime+delay);
-      osc.stop(ctx.currentTime+delay+dur+.05);
+      osc.type = wave;
+
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + .01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+      osc.start(t);
+      osc.stop(t + dur + .05);
     });
-  } catch(_){}
+  };
+
+  if(ctx.state === 'suspended') {
+    ctx.resume().then(play).catch(()=>{});
+  } else {
+    play();
+  }
 }
 
 // ── Notificação push ──────────────────────────────────────────────
@@ -55,6 +90,11 @@ async function requestNotifPermission() {
   if(Notification.permission === 'default') {
     await Notification.requestPermission();
   }
+}
+
+function unlockAudio() {
+  const ctx = getAudioCtx();
+  if(ctx && ctx.state === 'suspended') ctx.resume().catch(()=>{});
 }
 
 function sendNotif(title: string, body: string) {
@@ -125,20 +165,23 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
 
       if(remaining <= 0) {
         clearInterval(t);
-        playBeep('done');
-        vibrate([200,100,200,100,400]);
-        sendNotif('DarkSet — Descanso encerrado! 💪', 'Hora da próxima série!');
+        // Som, vibração e notificação com pequeno delay para garantir execução
+        setTimeout(()=>{
+          playBeep('done');
+          try { navigator.vibrate?.([300,100,300,100,500]); } catch(_){}
+          sendNotif('DarkSet 💪', 'Descanso encerrado! Hora da próxima série!');
+        }, 50);
         onDone();
         return;
       }
       if(remaining === 10 && !warnedRef.current) {
         warnedRef.current = true;
         playBeep('warn');
-        vibrate([80,40,80]);
+        try { navigator.vibrate?.([100,50,100]); } catch(_){}
       }
-      if(remaining <= 5) {
+      if(remaining <= 5 && remaining > 0) {
         playBeep('tick');
-        vibrate(30);
+        try { navigator.vibrate?.(40); } catch(_){}
       }
     }, 500);
     return ()=>clearInterval(t);
@@ -530,7 +573,7 @@ export default function ModoTreino() {
                   </div>
 
                   <motion.button whileTap={{scale:.98}}
-                    onClick={()=>{vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}
+                    onClick={()=>{unlockAudio();vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}
                     disabled={planItems.length===0}
                     style={{width:'100%',background:planItems.length===0?'rgba(227,27,35,.3)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:planItems.length===0?'not-allowed':'pointer',boxShadow:planItems.length===0?'none':'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
                     Iniciar Treino →
@@ -551,7 +594,7 @@ export default function ModoTreino() {
                 </div>
                 <div style={{fontSize:'.82rem',color:'#7a7a8a',marginTop:'.5rem',lineHeight:1.6}}>Sem ficha? Sem problema.</div>
               </div>
-              <motion.button whileTap={{scale:.97}} onClick={()=>{vibrate(30);setStarted(true);}}
+              <motion.button whileTap={{scale:.97}} onClick={()=>{unlockAudio();vibrate(30);setStarted(true);}}
                 style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
                 Começar →
               </motion.button>
