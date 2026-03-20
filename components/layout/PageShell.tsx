@@ -18,6 +18,7 @@ export default function PageShell({
           paddingRight: '1rem',
           paddingBottom: '2rem',
           maxWidth: 480,
+            overflowX: 'hidden',
           margin: '0 auto',
         }}
       >
