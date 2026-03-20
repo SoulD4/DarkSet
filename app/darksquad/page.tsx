@@ -104,10 +104,11 @@ function DesafioIcon({tipo}:{tipo:string}) {
 // ── Página ─────────────────────────────────────────────────────
 export default function DarkSquadPage() {
   const [uid,         setUid]        = useState<string|null>(null);
-  const [userName,    setUserName]   = useState('Ryan');
-  const [userInitials,setUserInitials]= useState('RY');
+  const [userName,    setUserName]   = useState('');
+  const [userInitials,setUserInitials]= useState('');
   const [loading,     setLoading]    = useState(true);
-  const [temSquad,    setTemSquad]   = useState(true);
+  const [temSquad,    setTemSquad]   = useState(false);
+  const [squadData,   setSquadData]  = useState<Squad>(SQUAD);
   const [tab,         setTab]        = useState<Tab>('feed');
   const [checkinFeito,setCheckin]    = useState(false);
   const [msg,         setMsg]        = useState('');
@@ -115,10 +116,12 @@ export default function DarkSquadPage() {
   const [feedItems,   setFeedItems]  = useState<FeedItem[]>(FEED_INICIAL);
   const [showCodigo,  setShowCodigo] = useState(false);
   const [showEntrar,  setShowEntrar] = useState(false);
-  const [codigoInput, setCodigoInput]= useState('');
-  const [copiado,     setCopiado]    = useState(false);
   const [showCriar,   setShowCriar]  = useState(false);
-  const [nomeSquad,   setNomeSquad]  = useState('');
+  const [codigoInput, setCodigoInput]= useState('');
+  const [nomeSquadInput,setNomeSquadInput]= useState('');
+  const [erroCodigo,  setErroCodigo] = useState('');
+  const [copiado,     setCopiado]    = useState(false);
+  const [salvando,    setSalvando]   = useState(false);
   const [toast,       setToast]      = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
@@ -129,17 +132,29 @@ export default function DarkSquadPage() {
       if(!u){ setLoading(false); return; }
       setUid(u.uid);
       try {
-        const snap = await getDoc(doc(db,'users',u.uid));
-        if(snap.exists()){
-          const d = snap.data();
-          const name = d.name||u.displayName||'Atleta';
-          setUserName(name);
-          setUserInitials(name.slice(0,2).toUpperCase());
+        // Nome do usuário
+        const userSnap = await getDoc(doc(db,'users',u.uid));
+        let name = u.displayName||'Atleta';
+        if(userSnap.exists()){
+          const d = userSnap.data();
+          name = d.name||d.displayName||u.displayName||'Atleta';
         }
-        // Verifica se tem squad salvo
+        // pega só o primeiro nome
+        const firstName = name.split(' ')[0];
+        setUserName(firstName);
+        setUserInitials(firstName.slice(0,2).toUpperCase());
+
+        // Verifica squad no Firebase
         const squadSnap = await getDoc(doc(db,'users',u.uid,'data','squad'));
-        if(squadSnap.exists()) setTemSquad(true);
-        else setTemSquad(true); // demo: sempre tem squad
+        if(squadSnap.exists()){
+          const sd = squadSnap.data();
+          if(sd.squadId){
+            // tem squad — carrega dados
+            setTemSquad(true);
+            if(sd.squadData) setSquadData(sd.squadData);
+            // Atualiza membros mock com nome real do usuário
+          }
+        }
       } catch(e){ console.error(e); }
       setLoading(false);
     });
@@ -150,8 +165,86 @@ export default function DarkSquadPage() {
       chatRef.current.scrollTop=chatRef.current.scrollHeight;
   },[tab,chatMsgs]);
 
+  const gerarCodigo = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+  };
+
+  const criarSquad = async () => {
+    if(!nomeSquadInput.trim()||!uid) return;
+    setSalvando(true);
+    try {
+      const codigo = gerarCodigo();
+      const tag = '#'+nomeSquadInput.trim().toUpperCase().replace(/\s+/g,'').slice(0,8);
+      const novoSquad: Squad = {
+        id: uid+'_squad',
+        nome: nomeSquadInput.trim().toUpperCase(),
+        tag,
+        descricao: 'Treinamos juntos, evoluímos juntos.',
+        membros: 1,
+        maxMembros: 20,
+        dono: userName,
+        codigo,
+      };
+      await setDoc(doc(db,'users',uid,'data','squad'),{
+        squadId: novoSquad.id,
+        squadData: novoSquad,
+        entrou: Date.now(),
+        dono: true,
+      });
+      setSquadData(novoSquad);
+      setTemSquad(true);
+      setShowCriar(false);
+      setNomeSquadInput('');
+      showToast('Squad criado!');
+    } catch(e){ console.error(e); }
+    setSalvando(false);
+  };
+
+  const entrarSquad = async () => {
+    const code = codigoInput.trim().toUpperCase();
+    if(!code||!uid){ setErroCodigo('Digite um código válido'); return; }
+    // Código correto = DWAR2026 (demo) ou qualquer código de 8 chars
+    if(code.length < 4){ setErroCodigo('Código muito curto'); return; }
+    setSalvando(true);
+    try {
+      // Em produção buscaria o squad pelo código no Firestore
+      // Por ora usa o squad demo se código for DWAR2026, ou cria entry genérica
+      const squadEntrado = code === 'DWAR2026' ? SQUAD : {
+        ...SQUAD,
+        nome: 'SQUAD '+code,
+        tag: '#'+code.slice(0,6),
+        codigo: code,
+        dono: '',
+      };
+      await setDoc(doc(db,'users',uid,'data','squad'),{
+        squadId: squadEntrado.id,
+        squadData: squadEntrado,
+        entrou: Date.now(),
+        dono: false,
+      });
+      setSquadData(squadEntrado);
+      setTemSquad(true);
+      setShowEntrar(false);
+      setCodigoInput('');
+      setErroCodigo('');
+      showToast('Entrou no squad!');
+    } catch(e){ setErroCodigo('Erro ao entrar. Tente novamente.'); }
+    setSalvando(false);
+  };
+
+  const sairDoSquad = async () => {
+    if(!uid) return;
+    try {
+      await setDoc(doc(db,'users',uid,'data','squad'),{squadId:null});
+    } catch(e){}
+    setTemSquad(false);
+    setSquadData(SQUAD);
+    showToast('Saiu do squad');
+  };
+
   const copiarCodigo = () => {
-    navigator.clipboard?.writeText(SQUAD.codigo).catch(()=>{});
+    navigator.clipboard?.writeText(squadData.codigo).catch(()=>{});
     setCopiado(true);
     setTimeout(()=>setCopiado(false),2000);
     showToast('Código copiado!');
@@ -221,15 +314,50 @@ export default function DarkSquadPage() {
               </div>
               <input value={codigoInput} onChange={e=>setCodigoInput(e.target.value.toUpperCase())}
                 placeholder="Ex: DWAR2026"
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.2rem',outline:'none',fontFamily:'monospace',letterSpacing:'.15em',marginBottom:'1rem'}}/>
+                style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erroCodigo?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.2rem',outline:'none',fontFamily:'monospace',letterSpacing:'.15em',marginBottom:erroCodigo?'.4rem':'1rem'}}/>
+              {erroCodigo&&<div style={{fontSize:'.72rem',color:'#e31b23',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}><X size={13}/>{erroCodigo}</div>}
               <div style={{display:'flex',gap:'.5rem'}}>
                 <motion.button whileTap={{scale:.97}} onClick={()=>setShowEntrar(false)}
                   style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
                   Cancelar
                 </motion.button>
-                <motion.button whileTap={{scale:.97}} onClick={()=>{setTemSquad(true);setShowEntrar(false);showToast('Bem-vindo ao squad!');}}
+                <motion.button whileTap={{scale:.97}} onClick={entrarSquad} disabled={salvando}
                   style={{flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',boxShadow:'0 4px 16px rgba(227,27,35,.28)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
                   <UserPlus size={16}/> Entrar
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Modal criar squad */}
+        {showCriar && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.88)',backdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end'}}
+            onClick={e=>{if(e.target===e.currentTarget)setShowCriar(false);}}>
+            <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
+              transition={{type:'spring',stiffness:300,damping:32}}
+              style={{background:'#0f0f13',borderTop:'1px solid #2e2e38',borderRadius:'24px 24px 0 0',width:'100%',padding:'1.5rem'}}>
+              <div style={{width:40,height:4,background:'rgba(255,255,255,.15)',borderRadius:2,margin:'0 auto .85rem'}}/>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.5rem'}}>
+                <Sword size={18} color="#e31b23" weight="fill"/> Criar Squad
+              </div>
+              <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:5}}>Nome do Squad</label>
+              <input value={nomeSquadInput} onChange={e=>setNomeSquadInput(e.target.value)}
+                placeholder="Ex: Dark Warriors"
+                maxLength={24}
+                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.1rem',outline:'none',marginBottom:'1rem'}}/>
+              <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:10,padding:'.75rem',marginBottom:'1rem',fontSize:'.72rem',color:'#7a7a8a',lineHeight:1.6}}>
+                Um código de convite será gerado automaticamente para você compartilhar com seu grupo.
+              </div>
+              <div style={{display:'flex',gap:'.5rem'}}>
+                <motion.button whileTap={{scale:.97}} onClick={()=>setShowCriar(false)}
+                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                  Cancelar
+                </motion.button>
+                <motion.button whileTap={{scale:.97}} onClick={criarSquad} disabled={!nomeSquadInput.trim()||salvando}
+                  style={{flex:2,background:nomeSquadInput.trim()?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:nomeSquadInput.trim()?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+                  {salvando?<motion.div animate={{rotate:360}} transition={{duration:.6,repeat:Infinity,ease:'linear'}} style={{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>:<><Sword size={16} weight="fill"/> Criar</>}
                 </motion.button>
               </div>
             </motion.div>
@@ -251,7 +379,7 @@ export default function DarkSquadPage() {
           </div>
         </div>
         <div style={{display:'grid',gap:'.6rem',width:'100%',maxWidth:300}}>
-          <motion.button whileTap={{scale:.97}} onClick={()=>{setTemSquad(true);showToast('Squad criado!');}}
+          <motion.button whileTap={{scale:.97}} onClick={()=>setShowCriar(true)}
             style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',outline:'none',boxShadow:'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
             <Sword size={18} weight="fill"/> Criar Squad
           </motion.button>
@@ -289,7 +417,7 @@ export default function DarkSquadPage() {
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.25rem'}}>Código do Squad</div>
               <div style={{fontSize:'.78rem',color:'#7a7a8a',marginBottom:'1.25rem'}}>Compartilhe com seus amigos</div>
               <div style={{fontFamily:'monospace',fontWeight:900,fontSize:'2rem',letterSpacing:'.2em',color:'#e31b23',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
-                {SQUAD.codigo}
+                {squadData.codigo}
               </div>
               <div style={{display:'flex',gap:'.5rem'}}>
                 <motion.button whileTap={{scale:.95}} onClick={copiarCodigo}
@@ -315,19 +443,19 @@ export default function DarkSquadPage() {
           <CardContent style={{padding:'1rem 1.1rem',position:'relative'}}>
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.5rem'}}>
               <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#fff',lineHeight:1}}>{SQUAD.nome}</div>
-                <div style={{fontSize:'.65rem',color:'rgba(227,27,35,.7)',fontWeight:700,marginTop:'2px',letterSpacing:'.06em'}}>{SQUAD.tag}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#fff',lineHeight:1}}>{squadData.nome}</div>
+                <div style={{fontSize:'.65rem',color:'rgba(227,27,35,.7)',fontWeight:700,marginTop:'2px',letterSpacing:'.06em'}}>{squadData.tag}</div>
               </div>
               <motion.button whileTap={{scale:.95}} onClick={()=>setShowCodigo(true)}
                 style={{background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.1)',borderRadius:8,padding:'.35rem .7rem',color:'#9898a8',fontSize:'.72rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem'}}>
                 <Link2 size={13}/> Convidar
               </motion.button>
             </div>
-            <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.4)',marginBottom:'.6rem'}}>{SQUAD.descricao}</div>
+            <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.4)',marginBottom:'.6rem'}}>{squadData.descricao}</div>
             <Separator style={{background:'rgba(255,255,255,.08)',marginBottom:'.6rem'}}/>
             <div style={{display:'flex',gap:'1rem',alignItems:'center'}}>
               <div style={{display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'#9898a8'}}>
-                <Users size={13}/> {SQUAD.membros}/{SQUAD.maxMembros} membros
+                <Users size={13}/> {squadData.membros}/{squadData.maxMembros} membros
               </div>
               <div style={{display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'#9898a8'}}>
                 <CheckCircle2 size={13}/> {checkinCount} check-ins hoje
@@ -561,7 +689,7 @@ export default function DarkSquadPage() {
             <div style={{display:'grid',gap:'.5rem'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.25rem'}}>
                 <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <Users size={11}/> {SQUAD.membros}/{SQUAD.maxMembros} membros
+                  <Users size={11}/> {squadData.membros}/{squadData.maxMembros} membros
                 </div>
                 <motion.button whileTap={{scale:.95}} onClick={()=>setShowCodigo(true)}
                   style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:8,padding:'.3rem .7rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem'}}>
@@ -598,7 +726,7 @@ export default function DarkSquadPage() {
 
               <Separator style={{background:'rgba(255,255,255,.05)',margin:'.25rem 0'}}/>
 
-              <motion.button whileTap={{scale:.97}} onClick={()=>setTemSquad(false)}
+              <motion.button whileTap={{scale:.97}} onClick={sairDoSquad}
                 style={{width:'100%',background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:12,padding:'.75rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
                 <LogOut size={15}/> Sair do Squad
               </motion.button>
