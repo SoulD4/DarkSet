@@ -428,6 +428,64 @@ export default function HomePage() {
         </motion.div>
       )}
 
+
+        {/* Card Rank Global */}
+        {meuRank && (() => {
+          const liga = getLiga(meuRank.pontos);
+          const proximaLiga = LIGAS.find(l=>l.min>meuRank.pontos);
+          const pctProxima = proximaLiga
+            ? Math.round(((meuRank.pontos-liga.min)/(proximaLiga.min-liga.min))*100)
+            : 100;
+          return (
+            <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} style={{marginBottom:'.75rem'}}>
+              <div onClick={()=>window.location.href='/darksquad'}
+                style={{background:`linear-gradient(135deg,${liga.corBg},rgba(0,0,0,.2))`,border:`1px solid ${liga.corBorder}`,borderRadius:16,padding:'1rem 1.1rem',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+                {/* Glow de fundo */}
+                <div style={{position:'absolute',top:-30,right:-30,width:120,height:120,borderRadius:'50%',background:liga.cor,opacity:.06,pointerEvents:'none'}}/>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.65rem'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                    <Globe size={14} color={liga.cor}/>
+                    <div style={{fontSize:'.58rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Rank Global</div>
+                  </div>
+                  <div style={{fontSize:'.62rem',color:'#484858',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                    <TrendUp size={12}/> {fmtPontos(meuRank.pontos)} pts
+                  </div>
+                </div>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.65rem'}}>
+                  <div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:liga.cor,lineHeight:1,textTransform:'uppercase'}}>{liga.nome}</div>
+                    {meuRank.posicao&&<div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'2px'}}>#{meuRank.posicao} no ranking global</div>}
+                  </div>
+                  {/* Top 3 avatares */}
+                  <div style={{display:'flex',gap:'.25rem',alignItems:'center'}}>
+                    {top3.slice(0,3).map((r,i)=>{
+                      const cores=['#d97706','#9ca3af','#b45309'];
+                      return (
+                        <div key={r.uid} style={{width:28,height:28,borderRadius:'50%',background:`${cores[i]}22`,border:`1px solid ${cores[i]}55`,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.62rem',color:cores[i]}}>
+                          {r.initials}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Barra de progresso para próxima liga */}
+                {proximaLiga && (
+                  <div>
+                    <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:5,overflow:'hidden',marginBottom:'.3rem'}}>
+                      <motion.div animate={{width:`${pctProxima}%`}} transition={{duration:.6,ease:'easeOut'}}
+                        style={{height:'100%',borderRadius:4,background:liga.cor,boxShadow:`0 0 8px ${liga.cor}88`}}/>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858'}}>
+                      <span>{liga.nome}</span>
+                      <span>{proximaLiga.min - meuRank.pontos} pts para {proximaLiga.nome}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })()}
+
     </PageShell>
   );
 }

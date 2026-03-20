@@ -23,8 +23,10 @@ import {
 } from 'lucide-react';
 import {
   Sword, UsersThree, ChatCircle,
-  RocketLaunch, Flag
+  RocketLaunch, Flag, Globe
 } from '@phosphor-icons/react';
+import { getLiga, fmtPontos, LIGAS, type RankScore } from '@/lib/rankSystem';
+import { useRankSync } from '@/lib/useRankSync';
 
 // ── Tipos ─────────────────────────────────────────────────────
 type SquadInfo = {
@@ -46,7 +48,7 @@ type Desafio = {
   ativo: boolean; fim: string; lider: string; tipo: string;
 };
 type RankItem = { uid: string; nome: string; initials: string; treinos: number; isMe: boolean };
-type Tab = 'feed'|'ranking'|'chat'|'desafios'|'membros';
+type Tab = 'feed'|'ranking'|'chat'|'desafios'|'membros'|'global';
 
 // ── Pool de desafios semanais ──────────────────────────────────
 const POOL_DESAFIOS = [
@@ -145,10 +147,15 @@ export default function DarkSquadPage() {
   const [erro,         setErro]         = useState('');
   const [copiado,      setCopiado]      = useState(false);
   const [salvando,     setSalvando]     = useState(false);
+  const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
+  const [loadingRank,  setLoadingRank]  = useState(false);
   const [toast,        setToast]        = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
   const showToast = (m:string)=>{ setToast(m); setTimeout(()=>setToast(''),2500); };
+
+  // Sync rank global
+  useRankSync(uid, userName, userInitials);
 
   // ── Auth + carregar squad ──────────────────────────────────
   useEffect(()=>{
@@ -249,6 +256,22 @@ export default function DarkSquadPage() {
 
     return ()=>{ unsubSquad(); unsubMembros(); unsubChat(); };
   },[squadId,uid]);
+
+  // Carregar rank global
+  useEffect(()=>{
+    if(tab!=='global'||globalRank.length>0) return;
+    const load = async ()=>{
+      setLoadingRank(true);
+      try {
+        const { getDocs, collection, orderBy, query, limit } = await import('firebase/firestore');
+        const snap = await getDocs(query(collection(db,'globalRank'),orderBy('pontos','desc'),limit(50)));
+        const lista = snap.docs.map((d,i)=>({...d.data() as RankScore, posicao:i+1}));
+        setGlobalRank(lista);
+      } catch(e){ console.error(e); }
+      setLoadingRank(false);
+    };
+    load();
+  },[tab]);
 
   // Scroll chat
   useEffect(()=>{
@@ -429,6 +452,7 @@ export default function DarkSquadPage() {
     {id:'chat',     label:'Chat',    Icon:ChatCircle  },
     {id:'desafios', label:'Desafios',Icon:Flag        },
     {id:'membros',  label:'Time',    Icon:UsersThree  },
+    {id:'global',   label:'Global',  Icon:Globe       },
   ];
 
   // ── Loading ────────────────────────────────────────────────
