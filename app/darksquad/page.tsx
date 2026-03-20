@@ -149,10 +149,15 @@ export default function DarkSquadPage() {
   const [salvando,     setSalvando]     = useState(false);
   const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
   const [loadingRank,  setLoadingRank]  = useState(false);
+  const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
+  const [loadingRank,  setLoadingRank]  = useState(false);
   const [toast,        setToast]        = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
   const showToast = (m:string)=>{ setToast(m); setTimeout(()=>setToast(''),2500); };
+
+  // Sync rank global
+  useRankSync(uid, userName, userInitials);
 
   // Sync rank global
   useRankSync(uid, userName, userInitials);
@@ -256,6 +261,22 @@ export default function DarkSquadPage() {
 
     return ()=>{ unsubSquad(); unsubMembros(); unsubChat(); };
   },[squadId,uid]);
+
+  // Carregar rank global
+  useEffect(()=>{
+    if(tab!=='global'||globalRank.length>0) return;
+    const load = async ()=>{
+      setLoadingRank(true);
+      try {
+        const { getDocs, collection, orderBy, query, limit } = await import('firebase/firestore');
+        const snap = await getDocs(query(collection(db,'globalRank'),orderBy('pontos','desc'),limit(50)));
+        const lista = snap.docs.map((d,i)=>({...d.data() as RankScore, posicao:i+1}));
+        setGlobalRank(lista);
+      } catch(e){ console.error(e); }
+      setLoadingRank(false);
+    };
+    load();
+  },[tab]);
 
   // Carregar rank global
   useEffect(()=>{
