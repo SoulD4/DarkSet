@@ -261,13 +261,11 @@ export default function DarkSquadPage() {
   },[squadId,uid]);
 
   // Carregar rank global
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{
-    if(tab!=='global'||globalRank.length>0) return;
+    if(tab!=='global') return;
     const load = async ()=>{
       setLoadingRank(true);
       try {
-        const { getDocs, collection, orderBy, query, limit } = await import('firebase/firestore');
         const snap = await getDocs(query(collection(db,'globalRank'),orderBy('pontos','desc'),limit(50)));
         const lista = snap.docs.map((d,i)=>({...d.data() as RankScore, posicao:i+1}));
         setGlobalRank(lista);
@@ -275,16 +273,15 @@ export default function DarkSquadPage() {
       setLoadingRank(false);
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab]);
 
   // Carregar rank global
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{
-    if(tab!=='global'||globalRank.length>0) return;
+    if(tab!=='global') return;
     const load = async ()=>{
       setLoadingRank(true);
       try {
-        const { getDocs, collection, orderBy, query, limit } = await import('firebase/firestore');
         const snap = await getDocs(query(collection(db,'globalRank'),orderBy('pontos','desc'),limit(50)));
         const lista = snap.docs.map((d,i)=>({...d.data() as RankScore, posicao:i+1}));
         setGlobalRank(lista);
@@ -292,6 +289,7 @@ export default function DarkSquadPage() {
       setLoadingRank(false);
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab]);
 
   // Scroll chat
@@ -360,6 +358,11 @@ export default function DarkSquadPage() {
       });
       setSquadId(id);
       setShowCriar(false); setNomeInput(''); setSenhaNovoInput('');
+      // Adicionar criador localmente imediatamente
+      setMembros([{
+        uid, nome:userName, initials:userInitials,
+        treinos:0, checkinHoje:false, ultimo:'Hoje', dono:true,
+      }]);
       showToast('Squad criado!');
     } catch(e){ setErro('Erro ao criar squad. Tente novamente.'); }
     setSalvando(false);

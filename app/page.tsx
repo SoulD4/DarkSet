@@ -322,12 +322,21 @@ export default function HomePage() {
         </motion.button>
       </motion.div>
 
-      {/* Card Rank Global */}
-      {meuRank && (()=>{
-        const liga = getLiga(meuRank.pontos);
-        const proximaLiga = LIGAS.find(l=>l.min>meuRank.pontos);
+      {/* Card Rank Global — mostra sempre se tiver histórico */}
+      {(meuRank || Object.keys(history).length > 0) && (()=>{
+        const pontosLocal = meuRank?.pontos ?? (Object.keys(history).length * 10);
+        const rankLocal: RankScore = meuRank ?? {
+          uid: user?.uid??'', nome: userName, initials: userInitials,
+          pontos: pontosLocal, treinos: Object.keys(history).length,
+          volumeKg: 0, streak: streak, desafios: 0,
+          liga: getLiga(pontosLocal).nome,
+          ligaCor: getLiga(pontosLocal).cor,
+          updatedAt: Date.now(),
+        };
+        const liga = getLiga(rankLocal.pontos);
+        const proximaLiga = LIGAS.find(l=>l.min>rankLocal.pontos);
         const pctProxima = proximaLiga
-          ? Math.round(((meuRank.pontos-liga.min)/(proximaLiga.min-liga.min))*100)
+          ? Math.round(((rankLocal.pontos-liga.min)/(proximaLiga.min-liga.min))*100)
           : 100;
         return (
           <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.13}}
@@ -342,25 +351,33 @@ export default function HomePage() {
                   <span style={{fontSize:'.58rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Rank Global</span>
                 </div>
                 <div style={{fontSize:'.62rem',color:'#484858',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <TrendingUp size={11}/> {fmtPontos(meuRank.pontos)} pts
+                  <TrendingUp size={11}/> {fmtPontos(rankLocal.pontos)} pts
                 </div>
               </div>
               {/* Liga + top3 */}
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem'}}>
                 <div>
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:liga.cor,lineHeight:1,textTransform:'uppercase'}}>{liga.nome}</div>
-                  {meuRank.posicao&&<div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'2px'}}>#{meuRank.posicao} no ranking global</div>}
+                  {rankLocal.posicao&&<div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'2px'}}>#{rankLocal.posicao} no ranking global</div>}
                 </div>
-                {/* Top 3 avatares */}
-                <div style={{display:'flex',gap:'.25rem',alignItems:'center'}}>
-                  {top3.slice(0,3).map((r,i)=>{
-                    const cores=['#d97706','#9ca3af','#b45309'];
-                    return (
-                      <div key={r.uid} style={{width:28,height:28,borderRadius:'50%',background:`${cores[i]}22`,border:`1px solid ${cores[i]}55`,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.62rem',color:cores[i]}}>
-                        {r.initials}
-                      </div>
-                    );
-                  })}
+                {/* Top 3 avatares ou posição */}
+                <div style={{textAlign:'right'}}>
+                  {top3.length>0?(
+                    <div style={{display:'flex',gap:'.25rem',alignItems:'center'}}>
+                      {top3.slice(0,3).map((r,i)=>{
+                        const cores=['#d97706','#9ca3af','#b45309'];
+                        return (
+                          <div key={r.uid} style={{width:28,height:28,borderRadius:'50%',background:`${cores[i]}22`,border:`1px solid ${cores[i]}55`,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.62rem',color:cores[i]}}>
+                            {r.initials}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ):(
+                    <div style={{fontSize:'.65rem',color:'#484858',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                      <Globe size={12}/> #{rankLocal.posicao||'—'}
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Barra progresso */}
@@ -372,7 +389,7 @@ export default function HomePage() {
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858'}}>
                     <span>{liga.nome}</span>
-                    <span>{proximaLiga.min-meuRank.pontos} pts para {proximaLiga.nome}</span>
+                    <span>{proximaLiga.min-rankLocal.pontos} pts para {proximaLiga.nome}</span>
                   </div>
                 </div>
               )}
