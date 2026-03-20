@@ -149,8 +149,6 @@ export default function DarkSquadPage() {
   const [salvando,     setSalvando]     = useState(false);
   const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
   const [loadingRank,  setLoadingRank]  = useState(false);
-  const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
-  const [loadingRank,  setLoadingRank]  = useState(false);
   const [toast,        setToast]        = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
