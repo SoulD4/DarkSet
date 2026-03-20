@@ -13,8 +13,8 @@ import {
   Flame, Zap, ChevronRight, Play,
   History, Medal, Dumbbell, Salad,
   Users, Wind, TrendingUp, Trophy,
-  CalendarCheck, BarChart2
-  Globe, TrendingUp as TrendUp
+  CalendarCheck, BarChart2,
+  Globe
 } from 'lucide-react';
 import {
   PersonSimpleRun, Sword, Skull,
@@ -449,7 +449,7 @@ export default function HomePage() {
                     <div style={{fontSize:'.58rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Rank Global</div>
                   </div>
                   <div style={{fontSize:'.62rem',color:'#484858',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <TrendUp size={12}/> {fmtPontos(meuRank.pontos)} pts
+                    <TrendingUp size={12}/> {fmtPontos(meuRank.pontos)} pts
                   </div>
                 </div>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.65rem'}}>
@@ -507,7 +507,7 @@ export default function HomePage() {
                     <div style={{fontSize:'.58rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700}}>Rank Global</div>
                   </div>
                   <div style={{fontSize:'.62rem',color:'#484858',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <TrendUp size={12}/> {fmtPontos(meuRank.pontos)} pts
+                    <TrendingUp size={12}/> {fmtPontos(meuRank.pontos)} pts
                   </div>
                 </div>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.65rem'}}>
