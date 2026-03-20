@@ -115,30 +115,41 @@ export default function PersonalPage() {
         const d = userSnap.exists()?userSnap.data():{};
         setUserName(d.name||u.displayName||'Personal');
 
-        // Verificar se é personal aprovado
+        // Verificar se é personal — checa users/{uid}.role OU personals/{uid}
+        const isPersonalByRole = d.role === 'personal';
         const personalSnap = await getDoc(doc(db,'personals',u.uid));
-        if(personalSnap.exists()){
-          const pd = personalSnap.data() as PersonalData;
-          if(pd.aprovado){
-            setPersonalData(pd);
-            // Verificar se tem PIN salvo
-            const pinSnap = await getDoc(doc(db,'users',u.uid,'private','pin'));
-            if(pinSnap.exists()){
-              setPinSalvo(pinSnap.data().pin||'');
-              setStep('pin');
-            } else {
-              setStep('pin'); // vai criar PIN novo
-            }
-          } else {
-            setStep('pending');
+        const isPersonalByDoc = personalSnap.exists() && personalSnap.data().aprovado;
+
+        if(isPersonalByRole || isPersonalByDoc){
+          // Montar personalData de onde tiver
+          const pd: PersonalData = personalSnap.exists()
+            ? personalSnap.data() as PersonalData
+            : { cref: d.cref||'', uid: u.uid, nome: d.name||u.displayName||'Personal', aprovado: true };
+          setPersonalData(pd);
+
+          // Se não tem doc em personals ainda, criar
+          if(!personalSnap.exists()){
+            try {
+              await setDoc(doc(db,'personals',u.uid),{
+                uid: u.uid, cref: d.cref||'', nome: d.name||'Personal',
+                aprovado: true, criadoEm: Date.now(),
+              });
+            } catch(_){}
           }
+
+          // Verificar PIN salvo
+          const pinSnap = await getDoc(doc(db,'users',u.uid,'private','pin'));
+          if(pinSnap.exists()){
+            setPinSalvo(pinSnap.data().pin||'');
+          }
+          setStep('pin');
         } else {
           // Verificar se tem request pendente
           const reqSnap = await getDoc(doc(db,'personal_requests',u.uid));
           if(reqSnap.exists()&&reqSnap.data().status==='pending'){
             setStep('pending');
           } else {
-            setStep('pin'); // primeiro acesso
+            setStep('cref'); // primeiro acesso — pular pin e ir direto pro CREF
           }
         }
         // Carregar alunos vinculados
