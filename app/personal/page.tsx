@@ -1,98 +1,248 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  doc, getDoc, setDoc, addDoc, getDocs,
+  collection, query, where, orderBy,
+  deleteDoc, serverTimestamp, updateDoc
+} from 'firebase/firestore';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Lock, Eye, EyeOff, Plus, X, Trash2,
+  ChevronRight, Copy, Check, Send,
+  UserPlus, Users, Dumbbell, ClipboardList,
+  AlertCircle, CheckCircle2, Loader2,
+  ArrowLeft, Search, Settings, LogOut
+} from 'lucide-react';
+import {
+  Barbell, Student, UserCircle, Sword,
+  Certificate, Link as LinkIcon
+} from '@phosphor-icons/react';
 
+// ── Tipos ─────────────────────────────────────────────────────
+type ExFicha  = { nome:string; series:number; reps:string };
+type Ficha    = { id:string; nome:string; byDay:Record<string,ExFicha[]>; fromPersonal?:boolean; personalName?:string; criadoEm?:number };
+type Aluno    = { uid:string; nome:string; initials:string; ultimoTreino:string; linkId:string; fichas:Ficha[] };
+type PersonalData = { cref:string; uid:string; nome:string; aprovado:boolean };
+type Tab      = 'alunos'|'fichas'|'config';
+
+// ── Exercícios ─────────────────────────────────────────────────
 const EXERCICIOS = [
-  {nome:'Supino Reto',       grupo:'Peito',    equip:'Barra'},
-  {nome:'Supino Inclinado',  grupo:'Peito',    equip:'Barra'},
-  {nome:'Crucifixo',         grupo:'Peito',    equip:'Halteres'},
-  {nome:'Peck Deck',         grupo:'Peito',    equip:'Máquina'},
-  {nome:'Puxada Frontal',    grupo:'Costas',   equip:'Cabo'},
-  {nome:'Remada Curvada',    grupo:'Costas',   equip:'Barra'},
-  {nome:'Remada Unilateral', grupo:'Costas',   equip:'Halteres'},
-  {nome:'Barra Fixa',        grupo:'Costas',   equip:'Barra'},
-  {nome:'Desenvolvimento',   grupo:'Ombro',    equip:'Barra'},
-  {nome:'Elevação Lateral',  grupo:'Ombro',    equip:'Halteres'},
-  {nome:'Rosca Direta',      grupo:'Bíceps',   equip:'Barra'},
-  {nome:'Rosca Alternada',   grupo:'Bíceps',   equip:'Halteres'},
-  {nome:'Tríceps Pulley',    grupo:'Tríceps',  equip:'Cabo'},
-  {nome:'Tríceps Testa',     grupo:'Tríceps',  equip:'Barra'},
-  {nome:'Agachamento',       grupo:'Pernas',   equip:'Barra'},
-  {nome:'Leg Press',         grupo:'Pernas',   equip:'Máquina'},
-  {nome:'Cadeira Extensora', grupo:'Pernas',   equip:'Máquina'},
-  {nome:'Cadeira Flexora',   grupo:'Pernas',   equip:'Máquina'},
-  {nome:'Stiff',             grupo:'Pernas',   equip:'Barra'},
-  {nome:'Hip Thrust',        grupo:'Glúteos',  equip:'Barra'},
-  {nome:'Abdominal Crunch',  grupo:'Abdômen',  equip:'Peso Corpo'},
-  {nome:'Prancha',           grupo:'Abdômen',  equip:'Peso Corpo'},
+  {nome:'Supino Reto Barra',      grupo:'Peito',   equip:'Barra'    },
+  {nome:'Supino Inclinado Halteres',grupo:'Peito', equip:'Halteres' },
+  {nome:'Crucifixo Máquina',      grupo:'Peito',   equip:'Máquina'  },
+  {nome:'Crossover Polia Alta',   grupo:'Peito',   equip:'Cabo'     },
+  {nome:'Puxada Frontal Aberta',  grupo:'Costas',  equip:'Cabo'     },
+  {nome:'Remada Curvada Barra',   grupo:'Costas',  equip:'Barra'    },
+  {nome:'Remada Unilateral',      grupo:'Costas',  equip:'Halteres' },
+  {nome:'Barra Fixa',             grupo:'Costas',  equip:'Peso Corpo'},
+  {nome:'Desenvolvimento Barra',  grupo:'Ombro',   equip:'Barra'    },
+  {nome:'Elevação Lateral',       grupo:'Ombro',   equip:'Halteres' },
+  {nome:'Crucifixo Inverso',      grupo:'Ombro',   equip:'Halteres' },
+  {nome:'Rosca Direta Barra',     grupo:'Bíceps',  equip:'Barra'    },
+  {nome:'Rosca Martelo',          grupo:'Bíceps',  equip:'Halteres' },
+  {nome:'Rosca Concentrada',      grupo:'Bíceps',  equip:'Halteres' },
+  {nome:'Tríceps Pulley Corda',   grupo:'Tríceps', equip:'Cabo'     },
+  {nome:'Tríceps Testa Barra W',  grupo:'Tríceps', equip:'Barra'    },
+  {nome:'Agachamento Barra',      grupo:'Pernas',  equip:'Barra'    },
+  {nome:'Leg Press 45°',          grupo:'Pernas',  equip:'Máquina'  },
+  {nome:'Cadeira Extensora',      grupo:'Pernas',  equip:'Máquina'  },
+  {nome:'Cadeira Flexora',        grupo:'Pernas',  equip:'Máquina'  },
+  {nome:'Stiff Halteres',         grupo:'Pernas',  equip:'Halteres' },
+  {nome:'Hip Thrust Barra',       grupo:'Glúteos', equip:'Barra'    },
+  {nome:'Levantamento Terra',     grupo:'Costas',  equip:'Barra'    },
+  {nome:'Prancha',                grupo:'Abdômen', equip:'Peso Corpo'},
+  {nome:'Abdominal Crunch',       grupo:'Abdômen', equip:'Peso Corpo'},
 ];
 
-const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+const DIAS   = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const GRUPOS = Array.from(new Set(EXERCICIOS.map(e=>e.grupo)));
+const byDayVazio = () => Object.fromEntries(DIAS.map(d=>[d,[] as ExFicha[]]));
+const validarCref = (v:string) => /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase());
+const gerarCodigo = () => 'PT-'+Math.random().toString(36).slice(2,7).toUpperCase();
 
-type ExFicha = {nome:string; series:number; reps:string};
-type Ficha = {id:string; nome:string; byDay:Record<string,ExFicha[]>};
-type Aluno = {id:string; nome:string; avatar:string; ultimoTreino:string; fichas:Ficha[]};
-
-const ALUNOS_MOCK: Aluno[] = [
-  {id:'1', nome:'Lucas Ferreira',  avatar:'🔥', ultimoTreino:'Hoje',    fichas:[{id:'f1',nome:'Treino A — Peito',byDay:{Segunda:[{nome:'Supino Reto',series:4,reps:'8-12'},{nome:'Crucifixo',series:3,reps:'12'}],Quarta:[],Sexta:[]}}]},
-  {id:'2', nome:'Ana Paula',       avatar:'⚡', ultimoTreino:'Ontem',   fichas:[]},
-  {id:'3', nome:'Gabriel Souza',   avatar:'🏋️', ultimoTreino:'3d atrás', fichas:[]},
-];
-
-type Tab = 'alunos'|'fichas'|'graficos';
-
+// ── Página ─────────────────────────────────────────────────────
 export default function PersonalPage() {
-  const [unlocked, setUnlocked]     = useState(false);
-  const [pin, setPin]               = useState('');
-  const [pinSalvo, setPinSalvo]     = useState('');
-  const [cref, setCref]             = useState('');
-  const [crefSalvo, setCrefSalvo]   = useState('');
-  const [step, setStep]             = useState<'pin'|'cref'|'ok'>('pin');
-  const [erro, setErro]             = useState('');
-  const [tab, setTab]               = useState<Tab>('alunos');
-  const [alunos, setAlunos]         = useState<Aluno[]>(ALUNOS_MOCK);
-  const [alunoSel, setAlunoSel]     = useState<Aluno|null>(null);
-  const [inviteCode, setInviteCode] = useState('');
-  const [showInvite, setShowInvite] = useState(false);
+  const [uid,       setUid]       = useState<string|null>(null);
+  const [userName,  setUserName]  = useState('');
+  const [loading,   setLoading]   = useState(true);
+
+  // Auth personal
+  const [unlocked,  setUnlocked]  = useState(false);
+  const [step,      setStep]      = useState<'pin'|'cref'|'request'|'pending'|'ok'>('pin');
+  const [pin,       setPin]       = useState('');
+  const [pinSalvo,  setPinSalvo]  = useState('');
+  const [crefInput, setCrefInput] = useState('');
+  const [showPin,   setShowPin]   = useState(false);
+  const [erro,      setErro]      = useState('');
+  const [salvando,  setSalvando]  = useState(false);
+
+  // Dados personal
+  const [personalData, setPersonalData] = useState<PersonalData|null>(null);
+  const [alunos,   setAlunos]   = useState<Aluno[]>([]);
+  const [tab,      setTab]       = useState<Tab>('alunos');
+
+  // Convite
+  const [showConvite, setShowConvite] = useState(false);
+  const [codigoConvite,setCodigoConvite]= useState('');
+  const [copiado,  setCopiado]  = useState(false);
 
   // Ficha builder
-  const [nomeAluno, setNomeAluno]   = useState('');
-  const [nomeFicha, setNomeFicha]   = useState('');
-  const [diaAtivo, setDiaAtivo]     = useState('Segunda');
-  const [byDay, setByDay]           = useState<Record<string,ExFicha[]>>(
-    Object.fromEntries(DIAS.map(d=>[d,[]]))
-  );
-  const [busca, setBusca]           = useState('');
-  const [grupoFiltro, setGrupoFiltro] = useState('');
-  const [fichaView, setFichaView]   = useState<'builder'|'lista'>('lista');
+  const [alunoSel,  setAlunoSel]  = useState<Aluno|null>(null);
+  const [nomeFicha, setNomeFicha] = useState('');
+  const [diaAtivo,  setDiaAtivo]  = useState('Segunda');
+  const [byDay,     setByDay]     = useState<Record<string,ExFicha[]>>(byDayVazio());
+  const [busca,     setBusca]     = useState('');
+  const [grupoFiltro,setGrupoFiltro]=useState('');
+  const [fichaView, setFichaView] = useState<'lista'|'builder'>('lista');
+  const [fichasAluno,setFichasAluno]=useState<Ficha[]>([]);
+  const [toast,     setToast]     = useState('');
 
-  const validarCref = (v:string) => /^\d{6}-[GPTR]\/[A-Z]{2}$/.test(v.trim().toUpperCase());
+  const showToast = (m:string)=>{setToast(m);setTimeout(()=>setToast(''),2500);};
 
-  const entrarPin = () => {
-    if(!pin.trim()) { setErro('Digite seu PIN'); return; }
-    if(pinSalvo && pin !== pinSalvo) { setErro('PIN incorreto'); return; }
-    if(!pinSalvo) setPinSalvo(pin);
-    setErro(''); setPin('');
-    if(!crefSalvo) setStep('cref'); else { setStep('ok'); setUnlocked(true); }
+  // ── Auth ────────────────────────────────────────────────────
+  useEffect(()=>{
+    return onAuthStateChanged(auth, async u=>{
+      if(!u){setLoading(false);return;}
+      setUid(u.uid);
+      try {
+        const userSnap = await getDoc(doc(db,'users',u.uid));
+        const d = userSnap.exists()?userSnap.data():{};
+        setUserName(d.name||u.displayName||'Personal');
+
+        // Verificar se é personal aprovado
+        const personalSnap = await getDoc(doc(db,'personals',u.uid));
+        if(personalSnap.exists()){
+          const pd = personalSnap.data() as PersonalData;
+          if(pd.aprovado){
+            setPersonalData(pd);
+            // Verificar se tem PIN salvo
+            const pinSnap = await getDoc(doc(db,'users',u.uid,'private','pin'));
+            if(pinSnap.exists()){
+              setPinSalvo(pinSnap.data().pin||'');
+              setStep('pin');
+            } else {
+              setStep('pin'); // vai criar PIN novo
+            }
+          } else {
+            setStep('pending');
+          }
+        } else {
+          // Verificar se tem request pendente
+          const reqSnap = await getDoc(doc(db,'personal_requests',u.uid));
+          if(reqSnap.exists()&&reqSnap.data().status==='pending'){
+            setStep('pending');
+          } else {
+            setStep('pin'); // primeiro acesso
+          }
+        }
+        // Carregar alunos vinculados
+        await carregarAlunos(u.uid);
+      } catch(e){console.error(e);}
+      setLoading(false);
+    });
+  },[]);
+
+  const carregarAlunos = async (ptUid: string) => {
+    try {
+      const linksSnap = await getDocs(
+        query(collection(db,'personal_links'), where('personalUid','==',ptUid), where('active','==',true))
+      );
+      const lista: Aluno[] = [];
+      for(const linkDoc of linksSnap.docs){
+        const l = linkDoc.data();
+        const nome = l.studentName||'Aluno';
+        lista.push({
+          uid: l.studentUid||'', nome, initials:nome.slice(0,2).toUpperCase(),
+          ultimoTreino: l.ultimoTreino||'Nunca', linkId:linkDoc.id, fichas:[],
+        });
+      }
+      setAlunos(lista);
+    } catch(e){console.error(e);}
   };
 
-  const salvarCref = () => {
-    const v = cref.trim().toUpperCase();
-    if(!validarCref(v)) { setErro('Formato inválido. Ex: 123456-G/SP'); return; }
-    setCrefSalvo(v); setErro(''); setStep('ok'); setUnlocked(true);
+  // ── PIN ─────────────────────────────────────────────────────
+  const entrarPin = async () => {
+    if(!pin.trim()||pin.length<4){setErro('PIN deve ter ao menos 4 dígitos');return;}
+    setSalvando(true);
+    if(pinSalvo){
+      if(pin!==pinSalvo){setErro('PIN incorreto');setSalvando(false);return;}
+      setErro(''); setPin('');
+      // Se tem personal data aprovado, entrar direto
+      if(personalData?.aprovado){ setUnlocked(true); setStep('ok'); }
+      // Se não tem CREF ainda, ir para CREF
+      else setStep('cref');
+    } else {
+      // Criar PIN novo
+      try {
+        await setDoc(doc(db,'users',uid!,'private','pin'),{pin:pin.trim()});
+        setPinSalvo(pin.trim());
+      } catch(_){}
+      setErro(''); setPin('');
+      setStep('cref');
+    }
+    setSalvando(false);
   };
 
-  const gerarConvite = () => {
-    const code = 'PT-' + Math.random().toString(36).slice(2,7).toUpperCase();
-    setInviteCode(code); setShowInvite(true);
+  // ── CREF ────────────────────────────────────────────────────
+  const salvarCref = async () => {
+    const v = crefInput.trim().toUpperCase();
+    if(!validarCref(v)){setErro('Formato inválido. Ex: 123456-G/SP');return;}
+    setSalvando(true);
+    try {
+      // Verificar se CREF já está registrado
+      const existSnap = await getDocs(query(collection(db,'personals'),where('cref','==',v)));
+      if(!existSnap.empty&&existSnap.docs[0].id!==uid){
+        setErro('Este CREF já está cadastrado'); setSalvando(false); return;
+      }
+      // Enviar request para aprovação
+      await setDoc(doc(db,'personal_requests',uid!),{
+        uid, cref:v, nome:userName,
+        status:'pending', criadoEm:serverTimestamp(),
+      });
+      setStep('pending');
+    } catch(e){setErro('Erro ao enviar. Tente novamente.');}
+    setSalvando(false);
+  };
+
+  // ── Gerar convite ────────────────────────────────────────────
+  const gerarConvite = async () => {
+    if(!uid) return;
+    const code = gerarCodigo();
+    try {
+      await setDoc(doc(db,'personal_invites',code),{
+        personalUid:uid, personalName:userName,
+        code, active:true, criadoEm:serverTimestamp(),
+      });
+      setCodigoConvite(code);
+      setShowConvite(true);
+    } catch(e){showToast('Erro ao gerar convite');}
+  };
+
+  const copiarConvite = () => {
+    navigator.clipboard?.writeText(codigoConvite).catch(()=>{});
+    setCopiado(true); setTimeout(()=>setCopiado(false),2000);
+    showToast('Código copiado!');
+  };
+
+  // ── Ficha builder ─────────────────────────────────────────────
+  const carregarFichasAluno = async (aUid:string) => {
+    try {
+      const snap = await getDocs(collection(db,'personal_plans',aUid,'plans'));
+      setFichasAluno(snap.docs.map(d=>d.data() as Ficha));
+    } catch(e){setFichasAluno([]);}
   };
 
   const addEx = (exNome:string) => {
     setByDay(prev=>{
       const d = {...prev};
       if(!d[diaAtivo].find(e=>e.nome===exNome))
-        d[diaAtivo] = [...d[diaAtivo], {nome:exNome, series:3, reps:'10-12'}];
+        d[diaAtivo]=[...d[diaAtivo],{nome:exNome,series:3,reps:'10-12'}];
       return d;
     });
   };
@@ -101,314 +251,508 @@ export default function PersonalPage() {
     setByDay(prev=>({...prev,[diaAtivo]:prev[diaAtivo].filter((_,i)=>i!==idx)}));
   };
 
-  const salvarFicha = () => {
-    if(!nomeAluno) { setErro('Selecione um aluno'); return; }
-    if(!nomeFicha.trim()) { setErro('Dê um nome à ficha'); return; }
+  const salvarFicha = async () => {
+    if(!alunoSel){setErro('Selecione um aluno');return;}
+    if(!nomeFicha.trim()){setErro('Dê um nome à ficha');return;}
     const totalEx = Object.values(byDay).flat().length;
-    if(totalEx===0) { setErro('Adicione ao menos um exercício'); return; }
-    const ficha:Ficha = {id:'f'+Date.now(), nome:nomeFicha, byDay};
-    setAlunos(prev=>prev.map(a=>a.id===nomeAluno?{...a,fichas:[...a.fichas,ficha]}:a));
-    setNomeFicha(''); setByDay(Object.fromEntries(DIAS.map(d=>[d,[]]))); setFichaView('lista'); setErro('');
+    if(totalEx===0){setErro('Adicione ao menos um exercício');return;}
+    setSalvando(true);
+    try {
+      const ficha:Ficha = {
+        id:'pt_'+Date.now(), nome:nomeFicha.trim(), byDay,
+        fromPersonal:true, personalName:userName, criadoEm:Date.now(),
+      };
+      await setDoc(
+        doc(db,'personal_plans',alunoSel.uid,'plans',ficha.id),
+        ficha
+      );
+      showToast('Ficha salva!');
+      setNomeFicha(''); setByDay(byDayVazio()); setFichaView('lista');
+      carregarFichasAluno(alunoSel.uid);
+    } catch(e){setErro('Erro ao salvar ficha.');}
+    setSalvando(false);
+  };
+
+  const deletarFicha = async (fichaId:string) => {
+    if(!alunoSel) return;
+    try {
+      await deleteDoc(doc(db,'personal_plans',alunoSel.uid,'plans',fichaId));
+      setFichasAluno(f=>f.filter(x=>x.id!==fichaId));
+      showToast('Ficha removida');
+    } catch(_){}
   };
 
   const exFiltrados = EXERCICIOS.filter(e=>
     e.nome.toLowerCase().includes(busca.toLowerCase()) &&
-    (!grupoFiltro || e.grupo===grupoFiltro)
+    (!grupoFiltro||e.grupo===grupoFiltro)
   );
 
-  // ── LOGIN PIN ──────────────────────────────────────────────────────────
+  // ── LOADING ──────────────────────────────────────────────────
+  if(loading) return (
+    <PageShell>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
+        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
+          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
+      </div>
+    </PageShell>
+  );
+
+  // ── TELA PENDENTE ─────────────────────────────────────────────
+  if(step==='pending') return (
+    <PageShell>
+      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
+        style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'65vh',textAlign:'center',gap:'1rem',padding:'1rem'}}>
+        <motion.div animate={{scale:[1,1.05,1]}} transition={{duration:2,repeat:Infinity}}>
+          <Certificate size={64} color="#facc15" weight="fill"/>
+        </motion.div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
+          Aguardando<br/><span style={{color:'#facc15'}}>Aprovação</span>
+        </div>
+        <div style={{fontSize:'.88rem',color:'#7a7a8a',maxWidth:280,lineHeight:1.6}}>
+          Sua solicitação foi enviada. Você será notificado quando for aprovado pela administração.
+        </div>
+        <Card style={{background:'rgba(250,204,21,.06)',border:'1px solid rgba(250,204,21,.2)',borderRadius:12,width:'100%',maxWidth:300}}>
+          <CardContent style={{padding:'.85rem',textAlign:'center'}}>
+            <div style={{fontSize:'.65rem',color:'#facc15',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.3rem'}}>Status</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#facc15'}}>Em análise</div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </PageShell>
+  );
+
+  // ── LOGIN ─────────────────────────────────────────────────────
   if(!unlocked) return (
     <PageShell>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',padding:'1.5rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#fff',lineHeight:1,marginBottom:'.25rem',textAlign:'center'}}>
-          DARK<span style={{color:'#e31b23'}}>SET</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'#5a5a6a',letterSpacing:'.18em',textTransform:'uppercase',marginBottom:'2rem',textAlign:'center'}}>Modo Personal Trainer</div>
+      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
+        style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'65vh',padding:'1.5rem',gap:'1.5rem'}}>
 
-        <div style={{width:'100%',maxWidth:320,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',borderRadius:'16px',padding:'1.75rem'}}>
-          {step==='pin' && (
-            <>
-              <div style={{fontSize:'.78rem',color:'#9898a8',textAlign:'center',lineHeight:1.5,marginBottom:'1rem'}}>
-                {pinSalvo ? 'Digite seu PIN para acessar o modo Personal' : 'Crie um PIN de acesso para o modo Personal'}
-              </div>
-              <input type="password" value={pin} onChange={e=>{setPin(e.target.value);setErro('');}}
-                onKeyDown={e=>e.key==='Enter'&&entrarPin()}
-                placeholder={pinSalvo?'PIN':'Criar PIN (mín. 4 caracteres)'}
-                style={{width:'100%',background:'rgba(0,0,0,.35)',border:`1px solid ${erro?'#e31b23':'rgba(255,255,255,.08)'}`,borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none',marginBottom:'.7rem'}}/>
-              {erro&&<div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center',background:'rgba(227,27,35,.08)',borderRadius:'8px',padding:'.4rem .6rem',marginBottom:'.7rem'}}>{erro}</div>}
-              <button onClick={entrarPin} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.95rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer'}}>
-                {pinSalvo?'Entrar':'Criar PIN'}
-              </button>
-            </>
-          )}
-          {step==='cref' && (
-            <>
-              <div style={{textAlign:'center',marginBottom:'.75rem'}}>
-                <div style={{fontSize:'1.6rem',marginBottom:'.3rem'}}>🪪</div>
-                <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f2',marginBottom:'.3rem'}}>Registro CREF</div>
-                <div style={{fontSize:'.72rem',color:'#9898a8',lineHeight:1.5,marginBottom:'.75rem'}}>Digite seu número de registro no Conselho Regional de Educação Física</div>
-              </div>
-              <div style={{background:'rgba(0,0,0,.25)',borderRadius:'8px',padding:'.5rem .85rem',textAlign:'center',marginBottom:'.7rem'}}>
-                <div style={{fontFamily:'monospace',fontSize:'.9rem',color:'#555',marginBottom:'.1rem'}}>123456-G/SP</div>
-                <div style={{fontSize:'.62rem',color:'#333'}}>G=Graduado · P=Especialista · T=Mestre · R=Doutor</div>
-              </div>
-              <input type="text" value={cref} onChange={e=>{setCref(e.target.value.toUpperCase());setErro('');}}
-                onKeyDown={e=>e.key==='Enter'&&salvarCref()}
-                placeholder="000000-G/UF" maxLength={11}
-                style={{width:'100%',background:'rgba(0,0,0,.35)',border:`1px solid ${erro?'#e31b23':'rgba(255,255,255,.08)'}`,borderRadius:'10px',padding:'.8rem',color:'#fff',fontSize:'1rem',textAlign:'center',outline:'none',letterSpacing:'.12em',fontFamily:'monospace',marginBottom:'.7rem'}}/>
-              {erro&&<div style={{fontSize:'.75rem',color:'#e31b23',textAlign:'center',background:'rgba(227,27,35,.08)',borderRadius:'8px',padding:'.4rem .6rem',marginBottom:'.7rem'}}>{erro}</div>}
-              <button onClick={salvarCref} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'.8rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.95rem',textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer'}}>
-                Ativar Modo Personal
-              </button>
-            </>
-          )}
+        <div style={{textAlign:'center'}}>
+          <motion.div animate={{scale:[1,1.06,1]}} transition={{duration:2,repeat:Infinity,ease:'easeInOut'}}>
+            <Certificate size={56} color="#e31b23" weight="fill"/>
+          </motion.div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1,marginTop:'.5rem'}}>
+            DARK<span style={{color:'#e31b23'}}>PERSONAL</span>
+          </div>
+          <div style={{fontSize:'.78rem',color:'#7a7a8a',marginTop:'.4rem'}}>
+            {step==='pin'?'Área exclusiva para personal trainers':
+             step==='cref'?'Cadastre seu CREF para verificação':''}
+          </div>
         </div>
-      </div>
+
+        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,width:'100%',maxWidth:340}}>
+          <CardContent style={{padding:'1.25rem',display:'grid',gap:'1rem'}}>
+            {step==='pin'&&(
+              <>
+                <div>
+                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:5}}>
+                    <Lock size={11}/> {pinSalvo?'Digite seu PIN':'Crie um PIN de acesso'}
+                  </label>
+                  <div style={{position:'relative'}}>
+                    <input type={showPin?'text':'password'} value={pin}
+                      onChange={e=>{ setPin(e.target.value.replace(/\D/g,'')); setErro(''); }}
+                      onKeyDown={e=>e.key==='Enter'&&entrarPin()}
+                      placeholder={pinSalvo?'••••':'mínimo 4 dígitos'}
+                      maxLength={8} inputMode="numeric"
+                      style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'13px 44px 13px 13px',fontSize:'1.5rem',outline:'none',letterSpacing:'.3em',textAlign:'center'}}/>
+                    <button onClick={()=>setShowPin(v=>!v)}
+                      style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'#484858',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
+                      {showPin?<EyeOff size={16}/>:<Eye size={16}/>}
+                    </button>
+                  </div>
+                </div>
+                {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
+                <motion.button whileTap={{scale:.97}} onClick={entrarPin} disabled={salvando||!pin}
+                  style={{width:'100%',background:pin?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',cursor:pin?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+                  {salvando?<Loader2 size={16}/>:<><Lock size={15}/> {pinSalvo?'Entrar':'Criar PIN'}</>}
+                </motion.button>
+              </>
+            )}
+
+            {step==='cref'&&(
+              <>
+                <div>
+                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:5}}>
+                    <Certificate size={11} weight="fill"/> CREF
+                  </label>
+                  <input type="text" value={crefInput}
+                    onChange={e=>{setCrefInput(e.target.value.toUpperCase());setErro('');}}
+                    onKeyDown={e=>e.key==='Enter'&&salvarCref()}
+                    placeholder="000000-G/SP"
+                    maxLength={11}
+                    style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'13px',fontSize:'1.1rem',outline:'none',letterSpacing:'.1em',textAlign:'center',fontFamily:'monospace'}}/>
+                  <div style={{fontSize:'.6rem',color:'#484858',marginTop:'.4rem'}}>Sua solicitação será analisada pela administração</div>
+                </div>
+                {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
+                <motion.button whileTap={{scale:.97}} onClick={salvarCref} disabled={salvando||!crefInput.trim()}
+                  style={{width:'100%',background:crefInput?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',cursor:crefInput?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+                  {salvando?<Loader2 size={16}/>:<><Send size={15}/> Enviar para aprovação</>}
+                </motion.button>
+                <motion.button whileTap={{scale:.97}} onClick={()=>setStep('pin')}
+                  style={{background:'none',border:'none',color:'#484858',fontSize:'.75rem',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}>
+                  <ArrowLeft size={13}/> Voltar
+                </motion.button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
     </PageShell>
   );
 
-  // ── DETALHE DO ALUNO ──────────────────────────────────────────────────
-  if(alunoSel) return (
-    <PageShell>
-      <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1.25rem'}}>
-        <button onClick={()=>setAlunoSel(null)} style={{background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'8px',padding:'.4rem .8rem',color:'#9898a8',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{alunoSel.nome}</div>
-          <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'2px'}}>Último treino: {alunoSel.ultimoTreino}</div>
-        </div>
-      </div>
-
-      <div style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#5a5a6a',marginBottom:'.6rem'}}>Fichas enviadas</div>
-      {alunoSel.fichas.length===0 ? (
-        <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #202028',borderRadius:'12px'}}>
-          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📋</div>
-          <div style={{fontSize:'.85rem',color:'#5a5a6a'}}>Nenhuma ficha enviada ainda</div>
-        </div>
-      ) : (
-        <div style={{display:'grid',gap:'.6rem'}}>
-          {alunoSel.fichas.map(f=>(
-            <div key={f.id} style={{background:'#0e0e11',border:'1px solid #202028',borderLeft:'2px solid #e31b23',borderRadius:'12px',padding:'.9rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{f.nome}</div>
-                <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'2px'}}>{Object.values(f.byDay).flat().length} exercícios</div>
-              </div>
-              <button onClick={()=>setAlunos(prev=>prev.map(a=>a.id===alunoSel.id?{...a,fichas:a.fichas.filter(x=>x.id!==f.id)}:a))}
-                style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.35rem .6rem',color:'#e31b23',fontSize:'.8rem',cursor:'pointer'}}>✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-    </PageShell>
-  );
-
-  // ── PAINEL PRINCIPAL ───────────────────────────────────────────────────
-  const TABS: {id:Tab; label:string}[] = [
-    {id:'alunos', label:'👥 Alunos'},
-    {id:'fichas', label:'📋 Fichas'},
-    {id:'graficos',label:'📊 Gráficos'},
+  // ── ÁREA DO PERSONAL (desbloqueada) ───────────────────────────
+  const TABS: {id:Tab;label:string;Icon:any}[] = [
+    {id:'alunos', label:'Alunos',  Icon:Student    },
+    {id:'fichas', label:'Fichas',  Icon:ClipboardList},
+    {id:'config', label:'Config',  Icon:Settings   },
   ];
 
   return (
     <PageShell>
-      {/* Modal código convite */}
-      {showInvite && (
-        <div style={{position:'fixed',inset:0,zIndex:100,background:'rgba(0,0,0,.88)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}}>
-          <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'20px',padding:'1.5rem',width:'100%',maxWidth:340,textAlign:'center'}}>
-            <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>🔗</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.25rem'}}>Código de Convite</div>
-            <div style={{fontSize:'.75rem',color:'#9898a8',marginBottom:'1rem'}}>Válido por 7 dias · compartilhe com seu aluno</div>
-            <div style={{fontFamily:'monospace',fontWeight:900,fontSize:'2rem',letterSpacing:'.2em',color:'#e31b23',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>{inviteCode}</div>
-            <div style={{display:'flex',gap:'.5rem'}}>
-              <button onClick={()=>{navigator.clipboard?.writeText('Código DarkSet Personal: '+inviteCode);}} style={{flex:1,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'10px',padding:'10px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Copiar</button>
-              <button onClick={()=>setShowInvite(false)} style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'10px',padding:'10px',color:'#9898a8',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Fechar</button>
-            </div>
+      {/* Toast */}
+      <AnimatePresence>
+        {toast&&(
+          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+            style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:300,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',gap:'.4rem',pointerEvents:'none'}}>
+            <CheckCircle2 size={14}/>{toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal convite */}
+      <AnimatePresence>
+        {showConvite&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}}
+            onClick={e=>{if(e.target===e.currentTarget)setShowConvite(false);}}>
+            <motion.div initial={{scale:.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.9,opacity:0}}
+              style={{background:'#0f0f13',border:'1px solid #2e2e38',borderRadius:20,padding:'1.5rem',width:'100%',maxWidth:340,textAlign:'center'}}>
+              <UserPlus size={32} color="#e31b23" style={{margin:'0 auto .75rem'}}/>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.25rem'}}>Código de Convite</div>
+              <div style={{fontSize:'.75rem',color:'#7a7a8a',marginBottom:'1rem'}}>Compartilhe com seu aluno</div>
+              <div style={{fontFamily:'monospace',fontWeight:900,fontSize:'2rem',letterSpacing:'.2em',color:'#e31b23',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
+                {codigoConvite}
+              </div>
+              <div style={{fontSize:'.72rem',color:'#7a7a8a',marginBottom:'1rem',lineHeight:1.5}}>
+                O aluno deve ir em <strong style={{color:'#f0f0f2'}}>DarkPersonal → Entrar com código</strong> e digitar este código
+              </div>
+              <div style={{display:'flex',gap:'.5rem'}}>
+                <motion.button whileTap={{scale:.95}} onClick={copiarConvite}
+                  style={{flex:1,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'11px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+                  {copiado?<><Check size={15}/> Copiado!</>:<><Copy size={15}/> Copiar</>}
+                </motion.button>
+                <motion.button whileTap={{scale:.95}} onClick={()=>setShowConvite(false)}
+                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'11px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                  Fechar
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
+        style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
+            DARK<span style={{color:'#e31b23'}}>PERSONAL</span>
+          </div>
+          <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.3rem'}}>
+            <Certificate size={11} color="#e31b23" weight="fill"/>
+            {personalData?.cref||'Personal Trainer'} · {alunos.length} aluno{alunos.length!==1?'s':''}
           </div>
         </div>
-      )}
-
-      {/* Header Personal */}
-      <div style={{background:'linear-gradient(135deg,rgba(227,27,35,.1),rgba(227,27,35,.03))',border:'1px solid rgba(227,27,35,.18)',borderRadius:'16px',padding:'1rem',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.85rem'}}>
-        <div style={{width:44,height:44,borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#8b0000)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>👨‍💼</div>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2',letterSpacing:'.04em'}}>Modo Personal</div>
-          {crefSalvo&&<div style={{fontSize:'.72rem',color:'#e31b23',fontWeight:700,marginTop:'1px'}}>CREF {crefSalvo}</div>}
-          <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'1px'}}>{alunos.length}/20 alunos</div>
-        </div>
-        <button onClick={()=>setUnlocked(false)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.18)',borderRadius:'8px',padding:'.35rem .7rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer'}}>Sair</button>
-      </div>
+        <motion.button whileTap={{scale:.95}} onClick={gerarConvite}
+          style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'.5rem .9rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.35rem'}}>
+          <UserPlus size={15}/> Convidar
+        </motion.button>
+      </motion.div>
 
       {/* Tabs */}
-      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #202028',borderRadius:'12px',padding:'3px',gap:'3px',marginBottom:'1rem'}}>
-        {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:'.46rem .25rem',borderRadius:'9px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.75rem',letterSpacing:'.04em',textTransform:'uppercase',background:tab===t.id?'rgba(227,27,35,.15)':'transparent',color:tab===t.id?'#e31b23':'#5a5a6a',boxShadow:tab===t.id?'inset 0 0 0 1px rgba(227,27,35,.3)':'none'}}>
-            {t.label}
-          </button>
-        ))}
+      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:12,padding:'3px',gap:'3px',marginBottom:'1rem'}}>
+        {TABS.map(t=>{
+          const TIcon = t.Icon;
+          return (
+            <motion.button key={t.id} whileTap={{scale:.95}} onClick={()=>{setTab(t.id);setAlunoSel(null);setFichaView('lista');}} style={{
+              flex:1,padding:'.5rem',borderRadius:9,border:'none',cursor:'pointer',
+              background:tab===t.id?'rgba(227,27,35,.15)':'transparent',
+              color:tab===t.id?'#e31b23':'#484858',
+              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
+              fontSize:'.75rem',letterSpacing:'.04em',
+              boxShadow:tab===t.id?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',
+              outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',
+            }}>
+              <TIcon size={15} color={tab===t.id?'#e31b23':'#484858'}/>
+              {t.label}
+            </motion.button>
+          );
+        })}
       </div>
 
-      {/* ABA ALUNOS */}
-      {tab==='alunos'&&(
-        <div>
-          <div style={{marginBottom:'1rem'}}>
-            {alunos.length<20 ? (
-              <button onClick={gerarConvite} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'.75rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.92rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)'}}>
-                + Gerar Código de Convite
-              </button>
-            ) : (
-              <div style={{textAlign:'center',padding:'.75rem',background:'rgba(255,255,255,.04)',borderRadius:'12px',fontSize:'.8rem',color:'#5a5a6a'}}>Limite de 20 alunos atingido</div>
-            )}
-          </div>
+      <AnimatePresence mode="wait">
+        <motion.div key={tab+(alunoSel?.uid||'')+(fichaView)} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.15}}>
 
-          <div style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#5a5a6a',marginBottom:'.6rem'}}>Seus Alunos</div>
-          {alunos.length===0 ? (
-            <div style={{textAlign:'center',padding:'2.5rem',border:'1px dashed #202028',borderRadius:'12px'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:'.6rem'}}>👥</div>
-              <div style={{fontSize:'.85rem',color:'#5a5a6a',fontWeight:600}}>Nenhum aluno ainda</div>
-              <div style={{fontSize:'.75rem',color:'#323240',marginTop:'.3rem'}}>Gere um código e compartilhe</div>
-            </div>
-          ) : (
-            <div style={{display:'grid',gap:'.5rem'}}>
-              {alunos.map(a=>(
-                <div key={a.id} style={{background:'rgba(255,255,255,.02)',border:'1px solid #131313',borderRadius:'12px',padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                  <div style={{width:40,height:40,borderRadius:'50%',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',flexShrink:0}}>{a.avatar}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:'.9rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.nome}</div>
-                    <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'1px'}}>Último: {a.ultimoTreino} · {a.fichas.length} fichas</div>
-                  </div>
-                  <div style={{display:'flex',gap:'.35rem',flexShrink:0}}>
-                    <button onClick={()=>setAlunoSel(a)} style={{background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'8px',padding:'.35rem .65rem',color:'#9898a8',fontSize:'.75rem',fontWeight:700,cursor:'pointer'}}>Ver</button>
-                    <button onClick={()=>setAlunos(prev=>prev.filter(x=>x.id!==a.id))} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.35rem .55rem',color:'#e31b23',fontSize:'.75rem',cursor:'pointer'}}>✕</button>
-                  </div>
-                </div>
+          {/* ── ALUNOS ────────────────────────────────────────── */}
+          {tab==='alunos'&&(
+            <div style={{display:'grid',gap:'.55rem'}}>
+              {alunos.length===0&&(
+                <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:14}}>
+                  <CardContent style={{padding:'2.5rem 1rem',textAlign:'center'}}>
+                    <Student size={44} color="#484858" weight="fill" style={{margin:'0 auto .75rem'}}/>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#484858',textTransform:'uppercase'}}>Nenhum aluno ainda</div>
+                    <div style={{fontSize:'.78rem',color:'#484858',marginTop:'.4rem'}}>Gere um convite e compartilhe com seu aluno</div>
+                    <motion.button whileTap={{scale:.97}} onClick={gerarConvite}
+                      style={{marginTop:'1rem',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'.6rem 1.2rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.4rem',margin:'.75rem auto 0'}}>
+                      <UserPlus size={15}/> Gerar Convite
+                    </motion.button>
+                  </CardContent>
+                </Card>
+              )}
+              {alunos.map((a,i)=>(
+                <motion.div key={a.uid} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
+                  <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
+                    <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
+                      <div style={{width:42,height:42,borderRadius:'50%',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#e31b23'}}>
+                        {a.initials}
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{a.nome}</div>
+                        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'1px'}}>Último treino: {a.ultimoTreino}</div>
+                      </div>
+                      <motion.button whileTap={{scale:.9}} onClick={async()=>{setAlunoSel(a);setTab('fichas');await carregarFichasAluno(a.uid);}}
+                        style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .7rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
+                        <ClipboardList size={13}/> Fichas
+                      </motion.button>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               ))}
             </div>
           )}
-        </div>
-      )}
 
-      {/* ABA FICHAS */}
-      {tab==='fichas'&&(
-        <div>
-          <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem'}}>
-            {(['lista','builder'] as const).map(v=>(
-              <button key={v} onClick={()=>setFichaView(v)} style={{flex:1,background:fichaView===v?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',border:`1px solid ${fichaView===v?'rgba(227,27,35,.3)':'#202028'}`,borderRadius:'10px',padding:'.55rem',color:fichaView===v?'#e31b23':'#9898a8',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer'}}>
-                {v==='lista'?'📋 Fichas Enviadas':'➕ Nova Ficha'}
-              </button>
-            ))}
-          </div>
-
-          {fichaView==='lista' ? (
-            <div style={{display:'grid',gap:'.5rem'}}>
-              {alunos.flatMap(a=>a.fichas.map(f=>({...f,alunoNome:a.nome,alunoId:a.id}))).length===0 ? (
-                <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #202028',borderRadius:'12px'}}>
-                  <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>📋</div>
-                  <div style={{fontSize:'.85rem',color:'#5a5a6a'}}>Nenhuma ficha criada ainda</div>
-                </div>
-              ) : alunos.flatMap(a=>a.fichas.map(f=>({...f,alunoNome:a.nome,alunoId:a.id}))).map(f=>(
-                <div key={f.id} style={{background:'#0e0e11',border:'1px solid #202028',borderLeft:'2px solid #e31b23',borderRadius:'12px',padding:'.9rem 1rem'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                    <div>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{f.nome}</div>
-                      <div style={{fontSize:'.65rem',color:'#e31b23',fontWeight:700,marginTop:'2px'}}>👤 {f.alunoNome}</div>
-                      <div style={{fontSize:'.62rem',color:'#5a5a6a',marginTop:'1px'}}>{Object.values(f.byDay).flat().length} exercícios</div>
-                    </div>
-                    <button onClick={()=>setAlunos(prev=>prev.map(a=>a.id===f.alunoId?{...a,fichas:a.fichas.filter(x=>x.id!==f.id)}:a))}
-                      style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'8px',padding:'.35rem .6rem',color:'#e31b23',fontSize:'.8rem',cursor:'pointer'}}>✕</button>
+          {/* ── FICHAS ────────────────────────────────────────── */}
+          {tab==='fichas'&&(
+            <div>
+              {/* Selector de aluno */}
+              {!alunoSel?(
+                <div style={{display:'grid',gap:'.5rem'}}>
+                  <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.25rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                    <Student size={12} weight="fill"/> Selecione o aluno
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{display:'grid',gap:'.75rem'}}>
-              {/* Selecionar aluno */}
-              <div>
-                <label style={{fontSize:'.65rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.08em',display:'block',marginBottom:'5px'}}>Aluno</label>
-                <select value={nomeAluno} onChange={e=>setNomeAluno(e.target.value)}
-                  style={{width:'100%',background:'#111115',border:'1px solid #222227',borderRadius:'10px',color:nomeAluno?'#eaeaea':'#5a5a6a',padding:'10px 13px',fontSize:'.9rem',outline:'none'}}>
-                  <option value="">Selecione um aluno...</option>
-                  {alunos.map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}
-                </select>
-              </div>
-
-              {/* Nome da ficha */}
-              <div>
-                <label style={{fontSize:'.65rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.08em',display:'block',marginBottom:'5px'}}>Nome da ficha</label>
-                <input value={nomeFicha} onChange={e=>setNomeFicha(e.target.value)}
-                  placeholder="Ex: Treino A — Peito e Tríceps"
-                  style={{width:'100%',background:'#111115',border:'1px solid #222227',borderRadius:'10px',color:'#eaeaea',padding:'10px 13px',fontSize:'.9rem',outline:'none'}}/>
-              </div>
-
-              {/* Seletor de dia */}
-              <div>
-                <label style={{fontSize:'.65rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.08em',display:'block',marginBottom:'5px'}}>Dia da semana</label>
-                <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
-                  {DIAS.map(d=>(
-                    <button key={d} onClick={()=>setDiaAtivo(d)} style={{padding:'.32rem .65rem',borderRadius:'8px',cursor:'pointer',border:`1px solid ${diaAtivo===d?'rgba(227,27,35,.4)':'#202028'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',color:diaAtivo===d?'#e31b23':'#9898a8',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.75rem'}}>
-                      {d.slice(0,3)} {byDay[d].length>0&&`(${byDay[d].length})`}
-                    </button>
+                  {alunos.length===0?(
+                    <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
+                      <CardContent style={{padding:'2rem',textAlign:'center'}}>
+                        <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhum aluno vinculado ainda</div>
+                      </CardContent>
+                    </Card>
+                  ):alunos.map((a,i)=>(
+                    <motion.button key={a.uid} whileTap={{scale:.98}} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}
+                      onClick={async()=>{setAlunoSel(a);await carregarFichasAluno(a.uid);}}
+                      style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12,padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',outline:'none',textAlign:'left'}}>
+                      <div style={{width:38,height:38,borderRadius:'50%',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',color:'#e31b23'}}>
+                        {a.initials}
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{a.nome}</div>
+                        <div style={{fontSize:'.65rem',color:'#7a7a8a'}}>Ver e criar fichas</div>
+                      </div>
+                      <ChevronRight size={16} color="#484858"/>
+                    </motion.button>
                   ))}
                 </div>
-              </div>
-
-              {/* Exercícios do dia */}
-              {byDay[diaAtivo].length>0&&(
-                <div style={{background:'rgba(227,27,35,.05)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'12px',padding:'.85rem'}}>
-                  <div style={{fontSize:'.62rem',color:'#e31b23',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Exercícios — {diaAtivo}</div>
-                  {byDay[diaAtivo].map((ex,i)=>(
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.4rem'}}>
-                      <span style={{flex:1,fontSize:'.85rem',color:'#f0f0f2'}}>{ex.nome}</span>
-                      <input type="number" value={ex.series} onChange={e=>setByDay(prev=>({...prev,[diaAtivo]:prev[diaAtivo].map((x,j)=>j===i?{...x,series:parseInt(e.target.value)||3}:x)}))}
-                        style={{width:38,background:'#111115',border:'1px solid #222227',borderRadius:'6px',color:'#fff',padding:'4px',fontSize:'.78rem',textAlign:'center',outline:'none'}}/>
-                      <span style={{fontSize:'.62rem',color:'#5a5a6a'}}>x</span>
-                      <input type="text" value={ex.reps} onChange={e=>setByDay(prev=>({...prev,[diaAtivo]:prev[diaAtivo].map((x,j)=>j===i?{...x,reps:e.target.value}:x)}))}
-                        style={{width:48,background:'#111115',border:'1px solid #222227',borderRadius:'6px',color:'#fff',padding:'4px',fontSize:'.78rem',textAlign:'center',outline:'none'}}/>
-                      <button onClick={()=>removeEx(i)} style={{background:'none',border:'none',color:'#323240',cursor:'pointer',fontSize:'1rem'}}>✕</button>
+              ):fichaView==='lista'?(
+                /* Lista de fichas do aluno */
+                <div style={{display:'grid',gap:'.55rem'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.25rem'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                      <motion.button whileTap={{scale:.9}} onClick={()=>{setAlunoSel(null);setFichasAluno([]);}}
+                        style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.3rem .65rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
+                        <ArrowLeft size={13}/> Voltar
+                      </motion.button>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{alunoSel.nome}</div>
                     </div>
-                  ))}
+                    <motion.button whileTap={{scale:.95}} onClick={()=>{setNomeFicha('');setByDay(byDayVazio());setFichaView('builder');}}
+                      style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:8,padding:'.35rem .75rem',color:'#e31b23',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase'}}>
+                      <Plus size={14}/> Nova Ficha
+                    </motion.button>
+                  </div>
+                  {fichasAluno.length===0?(
+                    <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
+                      <CardContent style={{padding:'2rem',textAlign:'center'}}>
+                        <ClipboardList size={36} color="#484858" style={{margin:'0 auto .5rem'}}/>
+                        <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhuma ficha criada ainda</div>
+                      </CardContent>
+                    </Card>
+                  ):fichasAluno.map((f,i)=>{
+                    const totalEx = Object.values(f.byDay||{}).flat().length;
+                    const dias = Object.entries(f.byDay||{}).filter(([,v])=>v.length>0).map(([k])=>k.slice(0,3));
+                    return (
+                      <motion.div key={f.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
+                        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
+                          <CardContent style={{padding:'.85rem 1rem'}}>
+                            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.4rem'}}>
+                              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#f0f0f2',textTransform:'uppercase'}}>{f.nome}</div>
+                              <motion.button whileTap={{scale:.9}} onClick={()=>deletarFicha(f.id)}
+                                style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:6,padding:'4px 7px',color:'#e31b23',cursor:'pointer',outline:'none',flexShrink:0}}>
+                                <Trash2 size={13}/>
+                              </motion.button>
+                            </div>
+                            <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
+                              <Badge variant="outline" style={{borderColor:'rgba(227,27,35,.2)',color:'#7a7a8a',fontSize:'.55rem'}}>{totalEx} exercícios</Badge>
+                              {dias.map(d=>(
+                                <Badge key={d} style={{background:'rgba(227,27,35,.1)',color:'#e31b23',border:'1px solid rgba(227,27,35,.2)',fontSize:'.55rem'}}>{d}</Badge>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ):(
+                /* Builder de ficha */
+                <div style={{display:'grid',gap:'.75rem'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                    <motion.button whileTap={{scale:.9}} onClick={()=>setFichaView('lista')}
+                      style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.3rem .65rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
+                      <ArrowLeft size={13}/> Voltar
+                    </motion.button>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:'#f0f0f2'}}>Nova Ficha — {alunoSel?.nome}</div>
+                  </div>
+
+                  {/* Nome da ficha */}
+                  <div>
+                    <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4}}>Nome da ficha</label>
+                    <input value={nomeFicha} onChange={e=>setNomeFicha(e.target.value)}
+                      placeholder="Ex: Treino A — Peito e Tríceps"
+                      style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'11px 13px',fontSize:'.95rem',outline:'none'}}/>
+                  </div>
+
+                  {/* Seletor de dia */}
+                  <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem'}}>
+                    {DIAS.map(d=>(
+                      <motion.button key={d} whileTap={{scale:.9}} onClick={()=>setDiaAtivo(d)}
+                        style={{flexShrink:0,padding:'.35rem .7rem',borderRadius:8,border:`1px solid ${diaAtivo===d?'#e31b23':'#2e2e38'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'transparent',color:diaAtivo===d?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none',position:'relative'}}>
+                        {d.slice(0,3)}
+                        {byDay[d].length>0&&<span style={{position:'absolute',top:-4,right:-4,width:14,height:14,borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.5rem',color:'#fff',fontWeight:900}}>{byDay[d].length}</span>}
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  {/* Exercícios do dia */}
+                  {byDay[diaAtivo].length>0&&(
+                    <div style={{display:'grid',gap:'.35rem'}}>
+                      {byDay[diaAtivo].map((ex,i)=>(
+                        <div key={i} style={{display:'flex',alignItems:'center',gap:'.5rem',background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:10,padding:'.5rem .75rem'}}>
+                          <Barbell size={14} color="#e31b23" weight="fill"/>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:'.82rem',color:'#f0f0f2',fontWeight:600}}>{ex.nome}</div>
+                            <div style={{fontSize:'.6rem',color:'#7a7a8a'}}>{ex.series} séries × {ex.reps}</div>
+                          </div>
+                          <motion.button whileTap={{scale:.9}} onClick={()=>removeEx(i)}
+                            style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:6,padding:'3px 6px',color:'#e31b23',cursor:'pointer',outline:'none'}}>
+                            <X size={12}/>
+                          </motion.button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Busca exercícios */}
+                  <div>
+                    <div style={{position:'relative',marginBottom:'.5rem'}}>
+                      <Search size={14} color="#484858" style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)'}}/>
+                      <input value={busca} onChange={e=>setBusca(e.target.value)}
+                        placeholder="Buscar exercício..."
+                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none'}}/>
+                    </div>
+                    {/* Filtro por grupo */}
+                    <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem',marginBottom:'.5rem'}}>
+                      <motion.button whileTap={{scale:.9}} onClick={()=>setGrupoFiltro('')}
+                        style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${!grupoFiltro?'#e31b23':'#2e2e38'}`,background:!grupoFiltro?'rgba(227,27,35,.15)':'transparent',color:!grupoFiltro?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+                        Todos
+                      </motion.button>
+                      {GRUPOS.map(g=>(
+                        <motion.button key={g} whileTap={{scale:.9}} onClick={()=>setGrupoFiltro(g)}
+                          style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${grupoFiltro===g?'#e31b23':'#2e2e38'}`,background:grupoFiltro===g?'rgba(227,27,35,.15)':'transparent',color:grupoFiltro===g?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+                          {g}
+                        </motion.button>
+                      ))}
+                    </div>
+                    {/* Lista */}
+                    <div style={{maxHeight:240,overflowY:'auto',display:'grid',gap:'.3rem'}}>
+                      {exFiltrados.map((e,i)=>{
+                        const jaAdicionado = byDay[diaAtivo].some(x=>x.nome===e.nome);
+                        return (
+                          <motion.button key={i} whileTap={{scale:.98}} onClick={()=>addEx(e.nome)} disabled={jaAdicionado}
+                            style={{display:'flex',alignItems:'center',gap:'.6rem',background:jaAdicionado?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:`1px solid ${jaAdicionado?'rgba(34,197,94,.2)':'#1a1a20'}`,borderRadius:9,padding:'.5rem .75rem',cursor:jaAdicionado?'default':'pointer',outline:'none',textAlign:'left'}}>
+                            <div style={{width:28,height:28,borderRadius:7,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                              <Barbell size={14} color={jaAdicionado?'#4ade80':'#7a7a8a'} weight="fill"/>
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:'.82rem',color:jaAdicionado?'#4ade80':'#f0f0f2',fontWeight:600}}>{e.nome}</div>
+                              <div style={{fontSize:'.58rem',color:'#484858'}}>{e.grupo} · {e.equip}</div>
+                            </div>
+                            {jaAdicionado?<CheckCircle2 size={14} color="#4ade80"/>:<Plus size={14} color="#484858"/>}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Erro + salvar */}
+                  {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
+                  <motion.button whileTap={{scale:.97}} onClick={salvarFicha} disabled={salvando}
+                    style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
+                    {salvando?<Loader2 size={16}/>:<><CheckCircle2 size={16}/> Salvar Ficha</>}
+                  </motion.button>
                 </div>
               )}
-
-              {/* Busca exercício */}
-              <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'12px',padding:'.85rem'}}>
-                <div style={{fontSize:'.62rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.5rem'}}>Adicionar exercício</div>
-                <input value={busca} onChange={e=>setBusca(e.target.value)}
-                  placeholder="Buscar..."
-                  style={{width:'100%',background:'#111115',border:'1px solid #222227',borderRadius:'8px',color:'#eaeaea',padding:'8px 12px',fontSize:'.88rem',outline:'none',marginBottom:'.5rem'}}/>
-                <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem',marginBottom:'.5rem'}}>
-                  <button onClick={()=>setGrupoFiltro('')} style={{flexShrink:0,padding:'.28rem .65rem',borderRadius:'999px',cursor:'pointer',border:`1px solid ${!grupoFiltro?'rgba(227,27,35,.4)':'#202028'}`,background:!grupoFiltro?'rgba(227,27,35,.15)':'transparent',color:!grupoFiltro?'#e31b23':'#9898a8',fontSize:'.7rem',fontWeight:700}}>Todos</button>
-                  {GRUPOS.map(g=>(
-                    <button key={g} onClick={()=>setGrupoFiltro(g===grupoFiltro?'':g)} style={{flexShrink:0,padding:'.28rem .65rem',borderRadius:'999px',cursor:'pointer',border:`1px solid ${grupoFiltro===g?'rgba(227,27,35,.4)':'#202028'}`,background:grupoFiltro===g?'rgba(227,27,35,.15)':'transparent',color:grupoFiltro===g?'#e31b23':'#9898a8',fontSize:'.7rem',fontWeight:700}}>{g}</button>
-                  ))}
-                </div>
-                <div style={{maxHeight:200,overflowY:'auto',display:'grid',gap:'.3rem'}}>
-                  {exFiltrados.map((ex,i)=>(
-                    <button key={i} onClick={()=>addEx(ex.nome)} style={{background:byDay[diaAtivo].find(e=>e.nome===ex.nome)?'rgba(34,197,94,.06)':'rgba(255,255,255,.03)',border:`1px solid ${byDay[diaAtivo].find(e=>e.nome===ex.nome)?'rgba(34,197,94,.2)':'#202028'}`,borderRadius:'8px',padding:'.55rem .85rem',textAlign:'left',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:'.85rem',color:'#f0f0f2'}}>{ex.nome}</span>
-                      <span style={{fontSize:'.62rem',color:'#5a5a6a'}}>{ex.grupo}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {erro&&<div style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'8px',padding:'9px 12px',fontSize:'.78rem',color:'#f87171'}}>{erro}</div>}
-
-              <button onClick={salvarFicha} style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
-                Enviar Ficha para Aluno ✓
-              </button>
             </div>
           )}
-        </div>
-      )}
 
-      {/* ABA GRÁFICOS */}
-      {tab==='graficos'&&(
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'40vh',textAlign:'center',gap:'1rem'}}>
-          <div style={{fontSize:'3rem'}}>📊</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#f0f0f2'}}>Gráficos do Aluno</div>
-          <div style={{fontSize:'.82rem',color:'#5a5a6a',maxWidth:260}}>Selecione um aluno na aba Alunos para ver seus gráficos de evolução</div>
-          <button onClick={()=>setTab('alunos')} style={{background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'10px',padding:'.6rem 1.5rem',color:'#9898a8',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer'}}>Ver Alunos</button>
-        </div>
-      )}
+          {/* ── CONFIG ────────────────────────────────────────── */}
+          {tab==='config'&&(
+            <div style={{display:'grid',gap:'.75rem'}}>
+              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
+                <CardContent style={{padding:'1rem'}}>
+                  <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                    <Certificate size={12} weight="fill" color="#e31b23"/> Perfil Professional
+                  </div>
+                  <div style={{display:'grid',gap:'.5rem'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>CREF</span>
+                      <span style={{fontFamily:'monospace',fontWeight:700,color:'#f0f0f2',fontSize:'.88rem'}}>{personalData?.cref||'—'}</span>
+                    </div>
+                    <Separator style={{background:'rgba(255,255,255,.05)'}}/>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>Status</span>
+                      <Badge style={{background:'rgba(34,197,94,.1)',color:'#4ade80',border:'1px solid rgba(34,197,94,.3)',fontSize:'.6rem'}}>Aprovado</Badge>
+                    </div>
+                    <Separator style={{background:'rgba(255,255,255,.05)'}}/>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>Alunos ativos</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,color:'#f0f0f2',fontSize:'1rem'}}>{alunos.length}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <motion.button whileTap={{scale:.97}} onClick={gerarConvite}
+                style={{width:'100%',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'13px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+                <UserPlus size={16}/> Gerar Novo Convite
+              </motion.button>
+
+              <motion.button whileTap={{scale:.97}} onClick={()=>{setUnlocked(false);setStep('pin');setPin('');}}
+                style={{width:'100%',background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:12,padding:'13px',color:'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+                <Lock size={16}/> Bloquear Área
+              </motion.button>
+            </div>
+          )}
+
+        </motion.div>
+      </AnimatePresence>
     </PageShell>
   );
 }
