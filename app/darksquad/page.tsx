@@ -261,6 +261,7 @@ export default function DarkSquadPage() {
   },[squadId,uid]);
 
   // Carregar rank global
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{
     if(tab!=='global'||globalRank.length>0) return;
     const load = async ()=>{
@@ -277,6 +278,7 @@ export default function DarkSquadPage() {
   },[tab]);
 
   // Carregar rank global
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{
     if(tab!=='global'||globalRank.length>0) return;
     const load = async ()=>{

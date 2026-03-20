@@ -14,6 +14,7 @@ import {
   History, Medal, Dumbbell, Salad,
   Users, Wind, TrendingUp, Trophy,
   CalendarCheck, BarChart2
+  Globe, TrendingUp as TrendUp
 } from 'lucide-react';
 import {
   PersonSimpleRun, Sword, Skull,
