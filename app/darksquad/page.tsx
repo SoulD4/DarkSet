@@ -292,6 +292,24 @@ export default function DarkSquadPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab]);
 
+  // Carregar rank global
+  useEffect(()=>{
+    if(tab!=='global') return;
+    const load = async ()=>{
+      setLoadingRank(true);
+      try {
+        const snap = await getDocs(
+          query(collection(db,'globalRank'), orderBy('pontos','desc'), limit(50))
+        );
+        const lista = snap.docs.map((d,i)=>({...d.data() as RankScore, posicao:i+1}));
+        setGlobalRank(lista);
+      } catch(e){ console.error('globalRank error',e); }
+      setLoadingRank(false);
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[tab]);
+
   // Scroll chat
   useEffect(()=>{
     if(tab==='chat'&&chatRef.current)
