@@ -646,7 +646,7 @@ export default function PersonalPage() {
                   </div>
 
                   {/* Seletor de dia */}
-                  <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.3rem',WebkitOverflowScrolling:'touch' as any}}>
+                  <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
                     {DIAS.map(d=>(
                       <motion.button key={d} whileTap={{scale:.9}} onClick={()=>setDiaAtivo(d)}
                         style={{flexShrink:0,padding:'.3rem .55rem',borderRadius:8,border:`1px solid ${diaAtivo===d?'#e31b23':'#2e2e38'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'transparent',color:diaAtivo===d?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.7rem',cursor:'pointer',outline:'none',position:'relative'}}>
@@ -681,10 +681,10 @@ export default function PersonalPage() {
                       <Search size={14} color="#484858" style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)'}}/>
                       <input value={busca} onChange={e=>setBusca(e.target.value)}
                         placeholder="Buscar exercício..."
-                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none'}}/>
+                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none',boxSizing:'border-box' as const}}/>
                     </div>
                     {/* Filtro por grupo */}
-                    <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.3rem',marginBottom:'.5rem',WebkitOverflowScrolling:'touch' as any}}>
+                    <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.5rem'}}>
                       <motion.button whileTap={{scale:.9}} onClick={()=>setGrupoFiltro('')}
                         style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${!grupoFiltro?'#e31b23':'#2e2e38'}`,background:!grupoFiltro?'rgba(227,27,35,.15)':'transparent',color:!grupoFiltro?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
                         Todos
