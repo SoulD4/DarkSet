@@ -501,7 +501,7 @@ export default function DarkSquadPage() {
               <input value={nomeInput} onChange={e=>{setNomeInput(e.target.value);setErro('');}}
                 placeholder="Ex: Dark Warriors" maxLength={24}
                 style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.1rem',outline:'none',marginBottom:'.75rem'}}/>
-              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4,display:'flex',alignItems:'center',gap:'.4rem'}}>
+              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.4rem',marginBottom:4}}>
                 <Lock size={11}/> Senha <span style={{color:'#484858',fontWeight:400,fontSize:'.58rem',textTransform:'none'}}>(opcional)</span>
               </label>
               <div style={{position:'relative',marginBottom:'1rem'}}>
