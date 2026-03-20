@@ -646,10 +646,10 @@ export default function PersonalPage() {
                   </div>
 
                   {/* Seletor de dia */}
-                  <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem'}}>
+                  <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem',margin:'0 -1rem',padding:'0 1rem .25rem',width:'calc(100% + 2rem)'}}>
                     {DIAS.map(d=>(
                       <motion.button key={d} whileTap={{scale:.9}} onClick={()=>setDiaAtivo(d)}
-                        style={{flexShrink:0,padding:'.35rem .7rem',borderRadius:8,border:`1px solid ${diaAtivo===d?'#e31b23':'#2e2e38'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'transparent',color:diaAtivo===d?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none',position:'relative'}}>
+                        style={{flexShrink:0,padding:'.3rem .55rem',borderRadius:8,border:`1px solid ${diaAtivo===d?'#e31b23':'#2e2e38'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'transparent',color:diaAtivo===d?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.7rem',cursor:'pointer',outline:'none',position:'relative'}}>
                         {d.slice(0,3)}
                         {byDay[d].length>0&&<span style={{position:'absolute',top:-4,right:-4,width:14,height:14,borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.5rem',color:'#fff',fontWeight:900}}>{byDay[d].length}</span>}
                       </motion.button>
@@ -681,10 +681,10 @@ export default function PersonalPage() {
                       <Search size={14} color="#484858" style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)'}}/>
                       <input value={busca} onChange={e=>setBusca(e.target.value)}
                         placeholder="Buscar exercício..."
-                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none'}}/>
+                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none',boxSizing:'border-box' as const}}/>
                     </div>
                     {/* Filtro por grupo */}
-                    <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem',marginBottom:'.5rem'}}>
+                    <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.25rem',marginBottom:'.5rem',margin:'0 -1rem .5rem',padding:'0 1rem .25rem',width:'calc(100% + 2rem)'}}>
                       <motion.button whileTap={{scale:.9}} onClick={()=>setGrupoFiltro('')}
                         style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${!grupoFiltro?'#e31b23':'#2e2e38'}`,background:!grupoFiltro?'rgba(227,27,35,.15)':'transparent',color:!grupoFiltro?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
                         Todos
@@ -697,7 +697,7 @@ export default function PersonalPage() {
                       ))}
                     </div>
                     {/* Lista */}
-                    <div style={{maxHeight:240,overflowY:'auto',display:'grid',gap:'.3rem'}}>
+                    <div style={{maxHeight:220,overflowY:'auto',display:'grid',gap:'.3rem',width:'100%'}}>
                       {exFiltrados.map((e,i)=>{
                         const jaAdicionado = byDay[diaAtivo].some(x=>x.nome===e.nome);
                         return (
@@ -707,7 +707,7 @@ export default function PersonalPage() {
                               <Barbell size={14} color={jaAdicionado?'#4ade80':'#7a7a8a'} weight="fill"/>
                             </div>
                             <div style={{flex:1}}>
-                              <div style={{fontSize:'.82rem',color:jaAdicionado?'#4ade80':'#f0f0f2',fontWeight:600}}>{e.nome}</div>
+                              <div style={{fontSize:'.82rem',color:jaAdicionado?'#4ade80':'#f0f0f2',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.nome}</div>
                               <div style={{fontSize:'.58rem',color:'#484858'}}>{e.grupo} · {e.equip}</div>
                             </div>
                             {jaAdicionado?<CheckCircle2 size={14} color="#4ade80"/>:<Plus size={14} color="#484858"/>}
