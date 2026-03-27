@@ -9,8 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Star, Lock, ChevronRight, Flame, Zap } from 'lucide-react';
 import {
-  ShieldStar, Sword, Skull, Crown,
-  Lightning, Medal, SealCheck, Star as PStar
+  SealCheck, Lightning, Medal, Crown
 } from '@phosphor-icons/react';
 
 // ── Tipos ─────────────────────────────────────────────────────
@@ -49,16 +48,6 @@ function RaridadeIcon({r,size=14}:{r:Raridade;size?:number}) {
   if(r==='raro')     return <Medal size={size} color={cor} weight="fill"/>;
   return <SealCheck size={size} color={cor} weight="fill"/>;
 }
-
-// ── Níveis/Ranks ───────────────────────────────────────────────
-const NIVEIS = [
-  {id:'mortal',   label:'MORTAL',   minSelos:0,  cor:'#6b7280', Icon:Skull    },
-  {id:'guerreiro',label:'GUERREIRO',minSelos:5,  cor:'#cd7f32', Icon:Sword    },
-  {id:'poseidon', label:'POSEIDON', minSelos:12, cor:'#60a5fa', Icon:ShieldStar},
-  {id:'hades',    label:'HADES',    minSelos:20, cor:'#a78bfa', Icon:Skull    },
-  {id:'cronos',   label:'CRONOS',   minSelos:30, cor:'#facc15', Icon:Crown    },
-  {id:'darkgod',  label:'DARKGOD',  minSelos:42, cor:'#e31b23', Icon:Lightning},
-];
 
 // ── Helpers de cálculo ─────────────────────────────────────────
 function calcStreak(h:Record<string,HistEntry>, trainDays:number[]): number {
@@ -354,9 +343,6 @@ export default function DarkSelosPage() {
   const totalSelos  = SELOS.length;
   const totalUnlock = unlocked.size;
   const pct         = Math.round(totalUnlock/totalSelos*100);
-
-  const nivel     = [...NIVEIS].reverse().find(n=>totalUnlock>=n.minSelos)||NIVEIS[0];
-  const proxNivel = NIVEIS.find(n=>n.minSelos>totalUnlock);
   const nivelPct  = proxNivel
     ? Math.round((totalUnlock-nivel.minSelos)/(proxNivel.minSelos-nivel.minSelos)*100)
     : 100;
@@ -390,44 +376,6 @@ export default function DarkSelosPage() {
           <Trophy size={11} color="#7a7a8a"/> {totalUnlock}/{totalSelos} selos · {pct}% completo
         </div>
       </motion.div>
-
-      {/* Card de nível */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.06}}
-        style={{marginBottom:'.75rem'}}>
-        <Card style={{background:`linear-gradient(135deg,${nivel.cor}18,rgba(0,0,0,.3))`,border:`1px solid ${nivel.cor}44`,borderRadius:16,overflow:'hidden',position:'relative'}}>
-          <div style={{position:'absolute',top:-20,right:-20,opacity:.08,pointerEvents:'none'}}>
-            <NivelIcon size={120} color={nivel.cor} weight="fill"/>
-          </div>
-          <CardContent style={{padding:'1rem',position:'relative'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'.6rem'}}>
-                <div style={{width:48,height:48,borderRadius:12,background:`${nivel.cor}22`,border:`1px solid ${nivel.cor}44`,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <NivelIcon size={26} color={nivel.cor} weight="fill"/>
-                </div>
-                <div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:nivel.cor,textTransform:'uppercase',lineHeight:1}}>{nivel.label}</div>
-                  <div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'2px'}}>{totalUnlock} selos desbloqueados</div>
-                </div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:nivel.cor,lineHeight:1}}>{nivelPct}%</div>
-                {proxNivel&&<div style={{fontSize:'.55rem',color:'#484858',marginTop:'1px'}}>para {proxNivel.label}</div>}
-              </div>
-            </div>
-            <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:6,overflow:'hidden'}}>
-              <motion.div animate={{width:`${nivelPct}%`}} transition={{duration:.8,ease:'easeOut'}}
-                style={{height:'100%',borderRadius:4,background:nivel.cor,boxShadow:`0 0 10px ${nivel.cor}88`}}/>
-            </div>
-            {proxNivel&&(
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858',marginTop:'.3rem'}}>
-                <span>{nivel.label}</span>
-                <span>{proxNivel.minSelos-totalUnlock} selos para {proxNivel.label}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-
       {/* Stats rápidos */}
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.1}}
         style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>

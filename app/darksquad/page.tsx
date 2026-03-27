@@ -23,10 +23,8 @@ import {
 } from 'lucide-react';
 import {
   Sword, UsersThree, ChatCircle,
-  RocketLaunch, Flag, Globe
+  RocketLaunch, Flag
 } from '@phosphor-icons/react';
-import { getLiga, fmtPontos, LIGAS, type RankScore } from '@/lib/rankSystem';
-import { useRankSync } from '@/lib/useRankSync';
 
 // ── Tipos ─────────────────────────────────────────────────────
 type SquadInfo = {
@@ -48,7 +46,7 @@ type Desafio = {
   ativo: boolean; fim: string; lider: string; tipo: string;
 };
 type RankItem = { uid: string; nome: string; initials: string; treinos: number; isMe: boolean };
-type Tab = 'feed'|'ranking'|'chat'|'desafios'|'membros'|'global';
+type Tab = 'feed'|'ranking'|'chat'|'desafios'|'membros';
 
 // ── Pool de desafios semanais ──────────────────────────────────
 const POOL_DESAFIOS = [
@@ -147,18 +145,10 @@ export default function DarkSquadPage() {
   const [erro,         setErro]         = useState('');
   const [copiado,      setCopiado]      = useState(false);
   const [salvando,     setSalvando]     = useState(false);
-  const [globalRank,   setGlobalRank]   = useState<RankScore[]>([]);
-  const [loadingRank,  setLoadingRank]  = useState(false);
   const [toast,        setToast]        = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
   const showToast = (m:string)=>{ setToast(m); setTimeout(()=>setToast(''),2500); };
-
-  // Sync rank global
-  useRankSync(uid, userName, userInitials);
-
-  // Sync rank global
-  useRankSync(uid, userName, userInitials);
 
   // ── Auth + carregar squad ──────────────────────────────────
   useEffect(()=>{
@@ -494,7 +484,6 @@ export default function DarkSquadPage() {
     {id:'chat',     label:'Chat',    Icon:ChatCircle  },
     {id:'desafios', label:'Desafios',Icon:Flag        },
     {id:'membros',  label:'Time',    Icon:UsersThree  },
-    {id:'global',   label:'Global',  Icon:Globe       },
   ];
 
   // ── Loading ────────────────────────────────────────────────

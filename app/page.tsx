@@ -45,6 +45,7 @@ const ATALHOS = [
   {Icon:PersonSimpleRun,  label:'Cardio',    href:'/cardio'     },
   {Icon:ForkKnife,        label:'DarkDiet',  href:'/darkdiet'   },
   {Icon:Sword,            label:'Squad',     href:'/darksquad'  },
+  {Icon:Trophy,           label:'DarkRank',  href:'/darkrank'   },
   {Icon:Heartbeat,        label:'DarkZen',   href:'/darkzen'    },
 ];
 
