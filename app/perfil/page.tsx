@@ -6,6 +6,7 @@ import PageShell from '@/components/layout/PageShell';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getLiga, LIGAS } from '@/lib/rankSystem';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -79,6 +80,7 @@ export default function PerfilPage() {
   const [userData,  setUserData]  = useState<UserData>({name:'',photoURL:null,weeklyGoal:5,trainDays:[1,2,3,4,5,6],notifications:true,vibration:true,weightUnit:'kg'});
   const [history,   setHistory]   = useState<Record<string,HistEntry>>({});
   const [selos,     setSelos]     = useState<Record<string,boolean>>({});
+  const [meuRank,   setMeuRank]   = useState<any>(null);
   const [loading,   setLoading]   = useState(true);
   const [saving,    setSaving]    = useState(false);
   const [tab,       setTab]       = useState<'config'|'stats'|'plano'>('config');
@@ -110,6 +112,10 @@ export default function PerfilPage() {
         }
         const histSnap = await getDoc(doc(db,'users',u.uid,'data','history'));
         if(histSnap.exists()) setHistory(JSON.parse(histSnap.data().payload||'{}'));
+        // Rank global
+        const rankSnap = await getDoc(doc(db,'globalRank',u.uid));
+        if(rankSnap.exists()) setMeuRank(rankSnap.data());
+
         const selosSnap = await getDoc(doc(db,'users',u.uid,'data','selos'));
         if(selosSnap.exists()) setSelos(selosSnap.data() as Record<string,boolean>);
       } catch(e){ console.error(e); }
@@ -242,27 +248,32 @@ export default function PerfilPage() {
                     {tier==='darkgod'?<Lightning size={10} weight="fill"/>:tier==='elite'?<Zap size={10}/>:<Star size={10}/>}
                     {tier==='darkgod'?'DarkGod':tier==='elite'?'Elite':'Gratuito'}
                   </Badge>
-                  <Badge style={{background:`${rank.cor}15`,color:rank.cor,border:`1px solid ${rank.cor}30`,fontSize:'.58rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <ShieldStar size={10} weight="fill"/>
-                    {rank.label}
+                  <Badge style={{background:`${getLiga(meuRank?.pontos||0).corBg}`,color:getLiga(meuRank?.pontos||0).cor,border:`1px solid ${getLiga(meuRank?.pontos||0).corBorder}`,fontSize:'.58rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                    <Globe size={10}/>
+                    {getLiga(meuRank?.pontos||0).nome}
                   </Badge>
                 </div>
               </div>
             </div>
-
-            {/* Barra rank */}
-            {proxRank&&(
-              <div style={{marginTop:'.85rem'}}>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858',marginBottom:'.3rem'}}>
-                  <span>{rank.label}</span>
-                  <span>{selosCount}/{proxRank.minSelos} selos para {proxRank.label}</span>
+            {/* Barra rank global */}
+            {(() => {
+              const liga = getLiga(meuRank?.pontos||0);
+              const proxLiga = LIGAS.find((l:any)=>l.min>(meuRank?.pontos||0));
+              const pct = proxLiga ? Math.min(100,Math.round(((meuRank?.pontos||0)-liga.min)/(proxLiga.min-liga.min)*100)) : 100;
+              return (
+                <div style={{marginTop:'.85rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858',marginBottom:'.3rem'}}>
+                    <span style={{color:liga.cor,fontWeight:700}}>{liga.nome}</span>
+                    <span>{proxLiga?`${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}`:'Rank máximo'}</span>
+                  </div>
+                  <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:4,overflow:'hidden'}}>
+                    <motion.div animate={{width:`${pct}%`}} transition={{duration:.6,ease:'easeOut'}}
+                      style={{height:'100%',borderRadius:4,background:liga.cor,boxShadow:`0 0 8px ${liga.cor}88`}}/>
+                  </div>
                 </div>
-                <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:4,overflow:'hidden'}}>
-                  <motion.div animate={{width:`${rankPct}%`}} transition={{duration:.6,ease:'easeOut'}}
-                    style={{height:'100%',borderRadius:4,background:rank.cor,boxShadow:`0 0 8px ${rank.cor}88`}}/>
-                </div>
-              </div>
-            )}
+              );
+            })()}
+          )}
           </CardContent>
         </Card>
       </motion.div>
