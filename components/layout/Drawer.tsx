@@ -1,8 +1,8 @@
 'use client';
-import { Trophy, useState, useEffect } from 'react';
-import { Trophy, usePathname, useRouter } from 'next/navigation';
-import { Trophy, auth } from '@/lib/firebase';
-import { Trophy, onAuthStateChanged } from 'firebase/auth';
+import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const MENU = [
   {
