@@ -271,9 +271,6 @@ export default function PerfilPage() {
                       style={{height:'100%',borderRadius:4,background:liga.cor,boxShadow:`0 0 8px ${liga.cor}88`}}/>
                   </div>
                 </div>
-              );
-            })()}
-          )}
           </CardContent>
         </Card>
       </motion.div>
