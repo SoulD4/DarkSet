@@ -30,15 +30,6 @@ type Ficha       = { id:string; name:string; byDay:Record<string,{name:string}[]
 const DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const DIAS_LABEL = ['S','T','Q','Q','S','S','D'];
 
-const RANK_NIVEIS = [
-  {label:'MORTAL',    minSelos:0,  cor:'#7a7a8a'},
-  {label:'GUERREIRO', minSelos:3,  cor:'#cd7f32'},
-  {label:'POSEIDON',  minSelos:8,  cor:'#60a5fa'},
-  {label:'HADES',     minSelos:15, cor:'#a78bfa'},
-  {label:'CRONOS',    minSelos:25, cor:'#facc15'},
-  {label:'DARKGOD',   minSelos:40, cor:'#e31b23'},
-];
-
 const ATALHOS = [
   {Icon:History,          label:'Histórico', href:'/historico'  },
   {Icon:ShieldStar,       label:'Selos',     href:'/darkselos'  },
