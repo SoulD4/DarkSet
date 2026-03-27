@@ -193,9 +193,6 @@ export default function HomePage() {
   const activeFicha = fichas.find(f=>f.id===activeId)||fichas[0]||null;
   const nextTreino  = getNextTrainDay(activeFicha);
   const ultimosTreinos = Object.entries(history).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,3);
-  const rank     = [...RANK_NIVEIS].reverse().find(n=>selosCount>=n.minSelos)||RANK_NIVEIS[0];
-  const nextRank = RANK_NIVEIS.find(n=>n.minSelos>selosCount);
-  const rankPct  = nextRank ? Math.round((selosCount-rank.minSelos)/(nextRank.minSelos-rank.minSelos)*100) : 100;
   const nome     = userData.name||user?.displayName||'Atleta';
   const initials = nome.slice(0,2).toUpperCase();
 
