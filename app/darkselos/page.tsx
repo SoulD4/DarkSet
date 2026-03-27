@@ -356,7 +356,6 @@ export default function DarkSelosPage() {
     </PageShell>
   );
 
-  const NivelIcon = nivel.Icon;
 
   return (
     <PageShell>
