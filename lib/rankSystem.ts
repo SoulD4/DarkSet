@@ -10,12 +10,12 @@ export type Liga = {
 };
 
 export const LIGAS: Liga[] = [
-  { nome:'Novato',    min:0,    max:99,   cor:'#9ca3af', corBg:'rgba(156,163,175,.1)', corBorder:'rgba(156,163,175,.25)' },
-  { nome:'Ferro',     min:100,  max:249,  cor:'#b45309', corBg:'rgba(180,83,9,.1)',    corBorder:'rgba(180,83,9,.25)'    },
-  { nome:'Suor',      min:250,  max:499,  cor:'#1d4ed8', corBg:'rgba(29,78,216,.1)',   corBorder:'rgba(29,78,216,.25)'   },
-  { nome:'Veterano',  min:500,  max:999,  cor:'#7c3aed', corBg:'rgba(124,58,237,.1)',  corBorder:'rgba(124,58,237,.25)'  },
-  { nome:'Lenda',     min:1000, max:1999, cor:'#dc2626', corBg:'rgba(220,38,38,.1)',   corBorder:'rgba(220,38,38,.25)'   },
-  { nome:'Old School',min:2000, max:99999,cor:'#d97706', corBg:'rgba(217,119,6,.1)',   corBorder:'rgba(217,119,6,.25)'   },
+  { nome:'Frango',    min:0,    max:99,   cor:'#9ca3af', corBg:'rgba(156,163,175,.1)', corBorder:'rgba(156,163,175,.25)' },
+  { nome:'Iniciante',     min:100,  max:249,  cor:'#b45309', corBg:'rgba(180,83,9,.1)',    corBorder:'rgba(180,83,9,.25)'    },
+  { nome:'Dedicado',      min:250,  max:499,  cor:'#1d4ed8', corBg:'rgba(29,78,216,.1)',   corBorder:'rgba(29,78,216,.25)'   },
+  { nome:'Bruto',  min:500,  max:999,  cor:'#7c3aed', corBg:'rgba(124,58,237,.1)',  corBorder:'rgba(124,58,237,.25)'  },
+  { nome:'Monstro',     min:1000, max:1999, cor:'#dc2626', corBg:'rgba(220,38,38,.1)',   corBorder:'rgba(220,38,38,.25)'   },
+  { nome:'Mutante',min:2000, max:99999,cor:'#d97706', corBg:'rgba(217,119,6,.1)',   corBorder:'rgba(217,119,6,.25)'   },
 ];
 
 export type RankScore = {
