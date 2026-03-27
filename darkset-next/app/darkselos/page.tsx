@@ -1,405 +1,462 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Trophy, Star, Lock, ChevronRight, Flame, Zap } from 'lucide-react';
+import {
+  SealCheck, Lightning, Medal, Crown
+} from '@phosphor-icons/react';
 
+// ── Tipos ─────────────────────────────────────────────────────
+type HistEntry = { entries:{name?:string;sets:{w:string;r:string}[]}[]; startTime?:string };
+type Raridade  = 'comum'|'raro'|'epico'|'lendario';
 type Selo = {
-  id: string;
-  cat: string;
-  title: string;
-  icon: string;
-  desc: string;
-  desbloqueado: boolean;
-  progresso?: number; // 0-100
-  progressoLabel?: string;
-  raridade: 'comum'|'raro'|'epico'|'lendario';
+  id:string; cat:string; title:string; desc:string;
+  raridade:Raridade; check:(h:Record<string,HistEntry>,extra:Extra)=>boolean;
 };
+type Extra = {
+  streak:number; totalTreinos:number; volTotal:number;
+  prCount:number; uniqueEx:number; cardioCount:number;
+  zenCount:number; dietDias:number; dietStreak:number;
+  earlyCount:number; planTier:string; squadWins:number;
+  runCount:number; bikeCount:number;
+};
+
+// ── Cores por raridade ─────────────────────────────────────────
+const RCOR:Record<Raridade,string> = {
+  comum:'#9898a8', raro:'#60a5fa', epico:'#a78bfa', lendario:'#facc15'
+};
+const RBG:Record<Raridade,string> = {
+  comum:'rgba(152,152,168,.1)', raro:'rgba(96,165,250,.12)',
+  epico:'rgba(167,139,250,.14)', lendario:'rgba(250,204,21,.14)'
+};
+const RBORDER:Record<Raridade,string> = {
+  comum:'rgba(152,152,168,.2)', raro:'rgba(96,165,250,.25)',
+  epico:'rgba(167,139,250,.3)', lendario:'rgba(250,204,21,.3)'
+};
+
+// ── Ícone por raridade ─────────────────────────────────────────
+function RaridadeIcon({r,size=14}:{r:Raridade;size?:number}) {
+  const cor = RCOR[r];
+  if(r==='lendario') return <Crown size={size} color={cor} weight="fill"/>;
+  if(r==='epico')    return <Lightning size={size} color={cor} weight="fill"/>;
+  if(r==='raro')     return <Medal size={size} color={cor} weight="fill"/>;
+  return <SealCheck size={size} color={cor} weight="fill"/>;
+}
+
+// ── Helpers de cálculo ─────────────────────────────────────────
+function calcStreak(h:Record<string,HistEntry>, trainDays:number[]): number {
+  let s=0; const today=new Date();
+  const todayKey=today.toISOString().slice(0,10);
+  const d=new Date(today);
+  if(trainDays.includes(today.getDay())&&!h[todayKey]) d.setDate(d.getDate()-1);
+  for(let i=0;i<800;i++){
+    const k=d.toISOString().slice(0,10);
+    const isTrain=trainDays.includes(d.getDay());
+    if(!isTrain){d.setDate(d.getDate()-1);continue;}
+    if(h[k]){s++;d.setDate(d.getDate()-1);}else break;
+  }
+  return s;
+}
+function calcVol(h:Record<string,HistEntry>): number {
+  const n=(v:any)=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:0;};
+  return Object.values(h).reduce((a,obj)=>
+    a+(obj.entries||[]).reduce((b,en)=>b+(en.sets||[]).reduce((c,s)=>c+n(s.w)*n(s.r),0),0),0);
+}
+function calcPRs(h:Record<string,HistEntry>): number {
+  const best:Record<string,number>={};
+  const n=(v:any)=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:0;};
+  let prs=0;
+  Object.entries(h).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([,obj])=>{
+    (obj.entries||[]).forEach(en=>{
+      (en.sets||[]).forEach(s=>{
+        const w=n(s.w),r=n(s.r);if(!w||!r)return;
+        const est=w*(1+r/30);
+        if(!best[en.name||'']||est>best[en.name||'']+0.01){best[en.name||'']=est;prs++;}
+      });
+    });
+  });
+  return prs;
+}
+function countUniqueEx(h:Record<string,HistEntry>): number {
+  const ex=new Set<string>();
+  Object.values(h).forEach(obj=>(obj.entries||[]).forEach(en=>en.name&&ex.add(en.name)));
+  return ex.size;
+}
+function countEarly(h:Record<string,HistEntry>): number {
+  return Object.values(h).filter(obj=>{
+    const d=new Date(obj.startTime||'');return !isNaN(d.getTime())&&d.getHours()<7;
+  }).length;
+}
+function hasPerfectWeek(h:Record<string,HistEntry>, trainDays:number[]): boolean {
+  for(let w=0;w<12;w++){
+    const d=new Date();d.setDate(d.getDate()-d.getDay()-w*7+1);
+    let perfect=true;
+    for(let i=0;i<7;i++){
+      const dd=new Date(d);dd.setDate(d.getDate()+i);
+      if(!trainDays.includes(dd.getDay()))continue;
+      if(!h[dd.toISOString().slice(0,10)]){perfect=false;break;}
+    }
+    if(perfect&&trainDays.some(td=>{const dd=new Date(d);dd.setDate(d.getDate()+td);return h[dd.toISOString().slice(0,10)];}))return true;
+  }
+  return false;
+}
+
+// ── Definição dos selos ────────────────────────────────────────
+const SELOS: Selo[] = [
+  // Assiduidade
+  {id:'ferro_1',    cat:'assiduidade', title:'Primeira Gota de Sangue', desc:'Primeiro treino registrado',              raridade:'comum',   check:(_,e)=>e.totalTreinos>=1},
+  {id:'ferro_20',   cat:'assiduidade', title:'Iniciado',                desc:'20 treinos completados',                  raridade:'comum',   check:(_,e)=>e.totalTreinos>=20},
+  {id:'ferro_50',   cat:'assiduidade', title:'Meio Caminho',            desc:'50 treinos — o começo ficou pra trás',    raridade:'raro',    check:(_,e)=>e.totalTreinos>=50},
+  {id:'ferro_150',  cat:'assiduidade', title:'Veterano de Ferro',       desc:'150 treinos — dedicação real',            raridade:'raro',    check:(_,e)=>e.totalTreinos>=150},
+  {id:'ferro_365',  cat:'assiduidade', title:'Um Ano de Ferro',         desc:'365 treinos ao longo da vida',            raridade:'epico',   check:(_,e)=>e.totalTreinos>=365},
+  {id:'ferro_730',  cat:'assiduidade', title:'O Ferro É Meu Lar',       desc:'730 treinos — isso é estilo de vida',     raridade:'lendario',check:(_,e)=>e.totalTreinos>=730},
+  {id:'streak_14',  cat:'assiduidade', title:'Chama Acesa',             desc:'14 dias consecutivos de treino',          raridade:'comum',   check:(_,e)=>e.streak>=14},
+  {id:'streak_30',  cat:'assiduidade', title:'Mês Inquebrável',         desc:'30 dias de streak consecutivos',          raridade:'epico',   check:(_,e)=>e.streak>=30},
+  {id:'streak_60',  cat:'assiduidade', title:'Fogo Que Não Apaga',      desc:'60 dias de streak — quase impossível',    raridade:'epico',   check:(_,e)=>e.streak>=60},
+  {id:'streak_180', cat:'assiduidade', title:'Eterno',                  desc:'180 dias consecutivos. Você é diferente.', raridade:'lendario',check:(_,e)=>e.streak>=180},
+  // Volume
+  {id:'vol_5t',     cat:'volume',      title:'Primeiros Quilos',        desc:'5 toneladas de volume acumulado',         raridade:'comum',   check:(_,e)=>e.volTotal>=5000},
+  {id:'vol_50t',    cat:'volume',      title:'Carregador',              desc:'50 toneladas — você move montanhas',      raridade:'raro',    check:(_,e)=>e.volTotal>=50000},
+  {id:'vol_250t',   cat:'volume',      title:'Máquina de Guerra',       desc:'250 toneladas totais',                    raridade:'epico',   check:(_,e)=>e.volTotal>=250000},
+  {id:'vol_1000t',  cat:'volume',      title:'Colossus',                desc:'1.000 toneladas. Humano? Duvido.',        raridade:'lendario',check:(_,e)=>e.volTotal>=1000000},
+  // Força
+  {id:'pr_5',       cat:'forca',       title:'Quebrador',               desc:'5 PRs batidos',                           raridade:'comum',   check:(_,e)=>e.prCount>=5},
+  {id:'pr_25',      cat:'forca',       title:'Obliterador',             desc:'25 PRs ao longo da carreira',             raridade:'raro',    check:(_,e)=>e.prCount>=25},
+  {id:'pr_100',     cat:'forca',       title:'Lenda do Ferro',          desc:'100 PRs — apenas os melhores chegam aqui',raridade:'epico',   check:(_,e)=>e.prCount>=100},
+  {id:'pr_300',     cat:'forca',       title:'Imortal',                 desc:'300 PRs. Você redefiniu seus limites.',   raridade:'lendario',check:(_,e)=>e.prCount>=300},
+  {id:'ex_15',      cat:'forca',       title:'Explorador',              desc:'15 exercícios diferentes treinados',      raridade:'comum',   check:(_,e)=>e.uniqueEx>=15},
+  {id:'ex_40',      cat:'forca',       title:'Arsenal Completo',        desc:'40 exercícios diferentes',                raridade:'raro',    check:(_,e)=>e.uniqueEx>=40},
+  {id:'ex_80',      cat:'forca',       title:'Mestre do Movimento',     desc:'80 exercícios únicos treinados',          raridade:'epico',   check:(_,e)=>e.uniqueEx>=80},
+  // Cardio
+  {id:'run_first',  cat:'cardio',      title:'Primeira Corrida',        desc:'Primeira sessão de corrida registrada',   raridade:'comum',   check:(_,e)=>e.runCount>=1},
+  {id:'run_10',     cat:'cardio',      title:'DarkRunner',              desc:'10 sessões de corrida completadas',       raridade:'comum',   check:(_,e)=>e.runCount>=10},
+  {id:'cardio_20',  cat:'cardio',      title:'Pulmão de Aço',           desc:'20 sessões de cardio registradas',        raridade:'raro',    check:(_,e)=>e.cardioCount>=20},
+  {id:'cardio_50',  cat:'cardio',      title:'Cardio Intenso',          desc:'50 sessões de cardio no total',           raridade:'epico',   check:(_,e)=>e.cardioCount>=50},
+  {id:'bike_first', cat:'cardio',      title:'DarkBiker',               desc:'Primeira sessão de ciclismo registrada',  raridade:'comum',   check:(_,e)=>e.bikeCount>=1},
+  // Squad
+  {id:'squad_win_1', cat:'squad',      title:'Conquistador',            desc:'Vença o ranking do squad 1 vez',          raridade:'raro',    check:(_,e)=>e.squadWins>=1},
+  {id:'squad_win_6', cat:'squad',      title:'Dominador',               desc:'Vença o ranking do squad 6 vezes',        raridade:'epico',   check:(_,e)=>e.squadWins>=6},
+  {id:'squad_win_12',cat:'squad',      title:'Rei do Squad',            desc:'Vença o ranking do squad 12 vezes',       raridade:'lendario',check:(_,e)=>e.squadWins>=12},
+  // DarkDiet
+  {id:'diet_first',  cat:'darkdiet',   title:'Nutrição Ativada',        desc:'Primeiro registro de dieta no DarkDiet',  raridade:'comum',   check:(_,e)=>e.dietDias>=1},
+  {id:'diet_streak', cat:'darkdiet',   title:'Consistência Alimentar',  desc:'7 dias consecutivos com dieta registrada',raridade:'raro',    check:(_,e)=>e.dietStreak>=7},
+  {id:'diet_iron',   cat:'darkdiet',   title:'Vontade de Ferro',        desc:'30 dias consecutivos dentro da meta',     raridade:'epico',   check:(_,e)=>e.dietStreak>=30},
+  {id:'diet_ascetic',cat:'darkdiet',   title:'Asceta da Fome',          desc:'90 dias de dieta registrada',             raridade:'lendario',check:(_,e)=>e.dietDias>=90},
+  // DarkZen
+  {id:'zen_first',   cat:'darkzen',    title:'Corpo Preparado',         desc:'Primeira sessão de DarkZen completa',     raridade:'comum',   check:(_,e)=>e.zenCount>=1},
+  {id:'zen_10',      cat:'darkzen',    title:'Corpo Flexível',          desc:'10 sessões de DarkZen completadas',       raridade:'raro',    check:(_,e)=>e.zenCount>=10},
+  {id:'zen_50',      cat:'darkzen',    title:'Guardião da Mobilidade',  desc:'50 sessões — disciplina absoluta',        raridade:'epico',   check:(_,e)=>e.zenCount>=50},
+  {id:'zen_100',     cat:'darkzen',    title:'Lenda da Flexibilidade',  desc:'100 sessões — um entre mil',              raridade:'lendario',check:(_,e)=>e.zenCount>=100},
+  // Especial
+  {id:'madrugador',  cat:'especial',   title:'Enquanto o Mundo Dorme',  desc:'5 treinos antes das 7h da manhã',         raridade:'epico',   check:(_,e)=>e.earlyCount>=5},
+  {id:'semana_full', cat:'especial',   title:'Semana Perfeita',         desc:'Treinou todos os dias programados na semana',raridade:'raro', check:(h,e)=>hasPerfectWeek(h,[1,2,3,4,5,6])},
+  {id:'elite_badge', cat:'especial',   title:'DarkSet Elite',           desc:'Assinante Elite ativo',                   raridade:'epico',   check:(_,e)=>['elite','darkgod'].includes(e.planTier)},
+  {id:'darkgod_badge',cat:'especial',  title:'DarkGod Founder',         desc:'Fundador do DarkSet — edição limitada',   raridade:'lendario',check:(_,e)=>e.planTier==='darkgod'},
+];
 
 const CATS = [
-  {id:'todos',      label:'Todos',      icon:'🏅'},
-  {id:'assiduidade',label:'Assiduidade',icon:'🔥'},
-  {id:'volume',     label:'Volume',     icon:'⚖️'},
-  {id:'forca',      label:'Força',      icon:'💪'},
-  {id:'cardio',     label:'Cardio',     icon:'🏃'},
-  {id:'squad',      label:'Squad',      icon:'⚔️'},
-  {id:'darkdiet',   label:'DarkDiet',   icon:'🥗'},
-  {id:'darkzen',    label:'DarkZen',    icon:'🧘'},
-  {id:'especial',   label:'Especial',   icon:'👑'},
+  {id:'todos',      label:'Todos'    },
+  {id:'assiduidade',label:'Assiduidade'},
+  {id:'volume',     label:'Volume'   },
+  {id:'forca',      label:'Força'    },
+  {id:'cardio',     label:'Cardio'   },
+  {id:'squad',      label:'Squad'    },
+  {id:'darkdiet',   label:'DarkDiet' },
+  {id:'darkzen',    label:'DarkZen'  },
+  {id:'especial',   label:'Especial' },
 ];
 
-const RARIDADE_COR: Record<string, string> = {
-  comum:    '#9898a8',
-  raro:     '#60a5fa',
-  epico:    '#a78bfa',
-  lendario: '#facc15',
-};
-
-const RARIDADE_BG: Record<string, string> = {
-  comum:    'rgba(152,152,168,.1)',
-  raro:     'rgba(96,165,250,.1)',
-  epico:    'rgba(167,139,250,.12)',
-  lendario: 'rgba(250,204,21,.12)',
-};
-
-const SELOS_DATA: Selo[] = [
-  // ── Assiduidade ────────────────────────────────────────────
-  {id:'ferro_1',       cat:'assiduidade', title:'Primeira Gota de Sangue', icon:'🩸', desc:'Primeiro treino registrado',                          desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'ferro_20',      cat:'assiduidade', title:'Iniciado',                icon:'⛓️', desc:'20 treinos — apenas o começo',                        desbloqueado:true,  progresso:100, progressoLabel:'20/20', raridade:'comum'},
-  {id:'ferro_50',      cat:'assiduidade', title:'Meio Ano de Dor',         icon:'🔩', desc:'50 treinos sem parar',                                desbloqueado:true,  progresso:100, progressoLabel:'50/50', raridade:'raro'},
-  {id:'ferro_150',     cat:'assiduidade', title:'Veterano de Ferro',       icon:'⚔️', desc:'150 treinos — isso é dedicação real',                 desbloqueado:false, progresso:85,  progressoLabel:'128/150', raridade:'raro'},
-  {id:'ferro_365',     cat:'assiduidade', title:'Um Ano de Ferro',         icon:'🏴', desc:'365 treinos ao longo da vida',                        desbloqueado:false, progresso:35,  progressoLabel:'128/365', raridade:'epico'},
-  {id:'streak_14',     cat:'assiduidade', title:'Chama Acesa',             icon:'🔥', desc:'14 dias consecutivos de treino',                      desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'streak_60',     cat:'assiduidade', title:'Fogo Que Não Apaga',      icon:'🌋', desc:'60 dias de streak — quase impossível',                desbloqueado:false, progresso:20,  progressoLabel:'12/60', raridade:'epico'},
-  {id:'streak_180',    cat:'assiduidade', title:'Eterno',                  icon:'♾️', desc:'180 dias consecutivos. Você é diferente.',            desbloqueado:false, progresso:7,   progressoLabel:'12/180', raridade:'lendario'},
-  {id:'mes_perfeito',  cat:'assiduidade', title:'Mês Inquebrável',         icon:'🔐', desc:'30 dias consecutivos sem falhar um dia de treino',     desbloqueado:false, progresso:40,  progressoLabel:'12/30', raridade:'epico'},
-  {id:'2anos',         cat:'assiduidade', title:'O Ferro É Meu Lar',       icon:'🏠', desc:'730 treinos ao longo da vida — isso é estilo de vida', desbloqueado:false, progresso:18,  progressoLabel:'128/730', raridade:'lendario'},
-  // ── Volume ────────────────────────────────────────────────
-  {id:'vol_5t',        cat:'volume', title:'Primeiros Quilos',     icon:'⚖️', desc:'5 toneladas de volume acumulado',                     desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'vol_50t',       cat:'volume', title:'Carregador',           icon:'🏗️', desc:'50 toneladas — você literalmente move montanhas',    desbloqueado:true,  progresso:100, raridade:'raro'},
-  {id:'vol_250t',      cat:'volume', title:'Máquina de Guerra',    icon:'⚙️', desc:'250 toneladas totais',                               desbloqueado:false, progresso:60,  progressoLabel:'150t/250t', raridade:'epico'},
-  {id:'vol_1000t',     cat:'volume', title:'Colossus',             icon:'🗿', desc:'1.000 toneladas. Humano? Duvido.',                    desbloqueado:false, progresso:15,  progressoLabel:'150t/1000t', raridade:'lendario'},
-  // ── Força ─────────────────────────────────────────────────
-  {id:'pr_5',          cat:'forca', title:'Quebrador',             icon:'📍', desc:'5 PRs batidos',                                       desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'pr_25',         cat:'forca', title:'Obliterador',           icon:'💥', desc:'25 PRs ao longo da carreira',                         desbloqueado:true,  progresso:100, raridade:'raro'},
-  {id:'pr_100',        cat:'forca', title:'Lenda do Ferro',        icon:'🏅', desc:'100 PRs — apenas os melhores chegam aqui',            desbloqueado:false, progresso:30,  progressoLabel:'30/100', raridade:'epico'},
-  {id:'pr_300',        cat:'forca', title:'Imortal',               icon:'🔱', desc:'300 PRs. Você redefiniu seus limites 300 vezes.',      desbloqueado:false, progresso:10,  progressoLabel:'30/300', raridade:'lendario'},
-  {id:'ex_15',         cat:'forca', title:'Explorador',            icon:'🗺️', desc:'15 exercícios diferentes treinados',                  desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'ex_40',         cat:'forca', title:'Arsenal Completo',      icon:'🧰', desc:'40 exercícios diferentes — você conhece o ferro',     desbloqueado:false, progresso:62,  progressoLabel:'25/40', raridade:'raro'},
-  {id:'ex_80',         cat:'forca', title:'Mestre do Movimento',   icon:'🎯', desc:'80 exercícios únicos treinados',                      desbloqueado:false, progresso:31,  progressoLabel:'25/80', raridade:'epico'},
-  // ── Cardio ────────────────────────────────────────────────
-  {id:'run_first',     cat:'cardio', title:'Primeira Corrida',     icon:'👟', desc:'Primeira sessão de corrida registrada',               desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'run_10k',       cat:'cardio', title:'DarkRunner',           icon:'🏃', desc:'10 sessões de corrida completadas',                   desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'cardio_20',     cat:'cardio', title:'Pulmão de Aço',        icon:'💨', desc:'20 sessões de cardio registradas',                    desbloqueado:false, progresso:65,  progressoLabel:'13/20', raridade:'raro'},
-  {id:'cardio_king',   cat:'cardio', title:'Cardio Intenso',       icon:'❤️‍🔥', desc:'50 sessões de cardio no total',                   desbloqueado:false, progresso:26,  progressoLabel:'13/50', raridade:'epico'},
-  {id:'bike_first',    cat:'cardio', title:'DarkBiker',            icon:'🚴', desc:'Primeira sessão de ciclismo registrada',              desbloqueado:false, progresso:0,   raridade:'comum'},
-  // ── Squad ─────────────────────────────────────────────────
-  {id:'squad_win_1',   cat:'squad', title:'Conquistador',          icon:'🥉', desc:'Vença o ranking do squad 1 vez',                      desbloqueado:true,  progresso:100, raridade:'raro'},
-  {id:'squad_win_6',   cat:'squad', title:'Dominador',             icon:'🥈', desc:'Vença o ranking do squad 6 vezes',                    desbloqueado:false, progresso:17,  progressoLabel:'1/6', raridade:'epico'},
-  {id:'squad_win_12',  cat:'squad', title:'Rei do Squad',          icon:'🏆', desc:'Vença o ranking do squad 12 vezes',                   desbloqueado:false, progresso:8,   progressoLabel:'1/12', raridade:'lendario'},
-  {id:'squad_win_24',  cat:'squad', title:'Lenda do Squad',        icon:'👑', desc:'Vença o ranking do squad 24 vezes',                   desbloqueado:false, progresso:4,   progressoLabel:'1/24', raridade:'lendario'},
-  // ── DarkDiet ──────────────────────────────────────────────
-  {id:'diet_first',    cat:'darkdiet', title:'Nutrição Ativada',      icon:'🥗', desc:'Primeiro registro de dieta no DarkDiet',            desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'diet_streak',   cat:'darkdiet', title:'Consistência Alimentar', icon:'🔋', desc:'7 dias consecutivos com dieta registrada',         desbloqueado:false, progresso:43,  progressoLabel:'3/7', raridade:'raro'},
-  {id:'diet_iron_will',cat:'darkdiet', title:'Vontade de Ferro',       icon:'🥩', desc:'30 dias consecutivos dentro da meta calórica',     desbloqueado:false, progresso:10,  progressoLabel:'3/30', raridade:'epico'},
-  {id:'diet_ascetic',  cat:'darkdiet', title:'Asceta da Fome',         icon:'💀', desc:'90 dias de dieta registrada sem interrupção',      desbloqueado:false, progresso:3,   progressoLabel:'3/90', raridade:'lendario'},
-  // ── DarkZen ───────────────────────────────────────────────
-  {id:'stretch_first', cat:'darkzen', title:'Corpo Preparado',         icon:'🧘', desc:'Primeira sessão de alongamento completa',          desbloqueado:true,  progresso:100, raridade:'comum'},
-  {id:'stretch_zen',   cat:'darkzen', title:'Corpo Flexível',          icon:'🌸', desc:'10 sessões de DarkZen completadas',                desbloqueado:false, progresso:40,  progressoLabel:'4/10', raridade:'raro'},
-  {id:'stretch_guardian',cat:'darkzen',title:'Guardião da Mobilidade', icon:'🦅', desc:'50 sessões de alongamento — disciplina absoluta',  desbloqueado:false, progresso:8,   progressoLabel:'4/50', raridade:'epico'},
-  {id:'stretch_legend',cat:'darkzen', title:'Lenda da Flexibilidade',  icon:'🐉', desc:'100 sessões de alongamento — um entre mil',        desbloqueado:false, progresso:4,   progressoLabel:'4/100', raridade:'lendario'},
-  // ── Especial ──────────────────────────────────────────────
-  {id:'madrugador',    cat:'especial', title:'Enquanto o Mundo Dorme', icon:'🌅', desc:'5 treinos antes das 7h da manhã',                  desbloqueado:true,  progresso:100, raridade:'epico'},
-  {id:'semana_full',   cat:'especial', title:'Semana Perfeita',        icon:'📅', desc:'Treinou todos os dias programados em uma semana',   desbloqueado:true,  progresso:100, raridade:'raro'},
-  {id:'elite_badge',   cat:'especial', title:'DarkSet Elite',          icon:'⚡', desc:'Assinante Elite ativo',                            desbloqueado:false, progresso:0,   raridade:'epico'},
-  {id:'darkgod_badge', cat:'especial', title:'DarkGod Founder',        icon:'👑', desc:'Fundador do DarkSet — edição limitada',            desbloqueado:false, progresso:0,   raridade:'lendario'},
-];
-
-// ── Animação de desbloqueio ───────────────────────────────────────────────
-function AnimacaoDesbloqueio({selo, onClose}:{selo:Selo; onClose:()=>void}) {
+// ── Animação de desbloqueio ────────────────────────────────────
+function AnimUnlock({selo, onClose}:{selo:Selo&{desbloqueado:boolean};onClose:()=>void}) {
   const [fase, setFase] = useState(0);
   useEffect(()=>{
-    const t1 = setTimeout(()=>setFase(1), 300);
-    const t2 = setTimeout(()=>setFase(2), 800);
-    const t3 = setTimeout(()=>setFase(3), 1500);
-    return ()=>{ clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    const t1=setTimeout(()=>setFase(1),300);
+    const t2=setTimeout(()=>setFase(2),800);
+    const t3=setTimeout(()=>setFase(3),1500);
+    return()=>{clearTimeout(t1);clearTimeout(t2);clearTimeout(t3);};
+  },[]);
+  const cor = RCOR[selo.raridade];
+  return (
+    <motion.div initial={{opacity:0}} animate={{opacity:1}}
+      style={{position:'fixed',inset:0,zIndex:300,background:'rgba(6,6,8,.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}
+      onClick={onClose}>
+      {/* Partículas */}
+      {fase>=2&&Array.from({length:12}).map((_,i)=>(
+        <motion.div key={i}
+          initial={{opacity:.8,x:0,y:0,scale:1}}
+          animate={{opacity:0,x:(Math.random()-.5)*200,y:(Math.random()-.5)*200,scale:0}}
+          transition={{duration:1.2,delay:i*.05}}
+          style={{position:'absolute',width:Math.random()*8+3,height:Math.random()*8+3,borderRadius:'50%',background:[cor,'#e31b23','#facc15','#fff'][i%4],pointerEvents:'none'}}/>
+      ))}
+      <motion.div initial={{scale:.5,opacity:0}} animate={{scale:fase>=1?1:.5,opacity:fase>=1?1:0}}
+        transition={{type:'spring',stiffness:200,damping:15}}
+        style={{textAlign:'center',zIndex:1}}>
+        <div style={{width:120,height:120,borderRadius:'50%',background:RBG[selo.raridade],border:`2px solid ${cor}`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 1.5rem',boxShadow:`0 0 40px ${cor}55,0 0 80px ${cor}22`,fontSize:'3.5rem'}}>
+          <RaridadeIcon r={selo.raridade} size={48}/>
+        </div>
+        <motion.div initial={{opacity:0}} animate={{opacity:fase>=2?1:0}} transition={{delay:.3}}
+          style={{fontSize:'.7rem',color:cor,textTransform:'uppercase',letterSpacing:'.2em',fontWeight:700,marginBottom:'.5rem'}}>
+          Selo Desbloqueado!
+        </motion.div>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:fase>=2?1:0,y:fase>=2?0:10}} transition={{delay:.4}}
+          style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',textTransform:'uppercase',color:'#fff',lineHeight:1,marginBottom:'.5rem'}}>
+          {selo.title}
+        </motion.div>
+        <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:.6}}
+          style={{fontSize:'.88rem',color:'#9898a8',maxWidth:260,lineHeight:1.5,margin:'0 auto 1.5rem'}}>
+          {selo.desc}
+        </motion.div>
+        <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:.8}}
+          style={{display:'inline-block',background:RBG[selo.raridade],border:`1px solid ${RBORDER[selo.raridade]}`,borderRadius:999,padding:'.35rem .9rem',fontSize:'.65rem',color:cor,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>
+          {selo.raridade}
+        </motion.div>
+        <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:1.2}}
+          style={{marginTop:'2rem',fontSize:'.75rem',color:'#484858'}}>
+          Toque para continuar
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Página ─────────────────────────────────────────────────────
+export default function DarkSelosPage() {
+  const [uid,       setUid]       = useState<string|null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [history,   setHistory]   = useState<Record<string,HistEntry>>({});
+  const [trainDays, setTrainDays] = useState<number[]>([1,2,3,4,5,6]);
+  const [extra,     setExtra]     = useState<Extra>({
+    streak:0,totalTreinos:0,volTotal:0,prCount:0,uniqueEx:0,
+    cardioCount:0,zenCount:0,dietDias:0,dietStreak:0,
+    earlyCount:0,planTier:'free',squadWins:0,runCount:0,bikeCount:0,
+  });
+  const [selosFirebase, setSelosFirebase] = useState<Record<string,boolean>>({});
+  const [catAtiva,  setCatAtiva]  = useState('todos');
+  const [seloAnim,  setSeloAnim]  = useState<(Selo&{desbloqueado:boolean})|null>(null);
+  const [featuredId,setFeaturedId]= useState<string|null>(null);
+
+  useEffect(()=>{
+    return onAuthStateChanged(auth, async u=>{
+      if(!u){setLoading(false);return;}
+      setUid(u.uid);
+      try {
+        // User prefs
+        const userSnap = await getDoc(doc(db,'users',u.uid));
+        const ud = userSnap.exists()?userSnap.data():{} as any;
+        setTrainDays(ud.trainDays||[1,2,3,4,5,6]);
+
+        // Histórico
+        const histSnap = await getDoc(doc(db,'users',u.uid,'data','history'));
+        const hist: Record<string,HistEntry> = histSnap.exists()
+          ? JSON.parse(histSnap.data().payload||'{}') : {};
+        setHistory(hist);
+
+        // Cardio
+        const cardioSnap = await getDoc(doc(db,'users',u.uid,'data','cardio'));
+        const cardioData = cardioSnap.exists()
+          ? JSON.parse(cardioSnap.data().payload||'[]') : [];
+        const cardioCount = Array.isArray(cardioData)?cardioData.length:0;
+        const runCount  = cardioData.filter((s:any)=>s.tipo==='corrida'||s.tipo==='Corrida').length;
+        const bikeCount = cardioData.filter((s:any)=>s.tipo==='ciclismo'||s.tipo==='Ciclismo').length;
+
+        // DarkZen
+        const zenSnap = await getDoc(doc(db,'users',u.uid,'data','darkzen'));
+        const zenData = zenSnap.exists()
+          ? JSON.parse(zenSnap.data().payload||'[]') : [];
+        const zenCount = Array.isArray(zenData)?zenData.length:0;
+
+        // DarkDiet
+        const dietSnap = await getDoc(doc(db,'users',u.uid,'data','diet'));
+        const dietData = dietSnap.exists()
+          ? JSON.parse(dietSnap.data().payload||'{}') : {};
+        const dietHist = dietData.historico||[];
+        const dietDias = Array.isArray(dietHist)?dietHist.length:0;
+        const dietStreak = (() => {
+          if(!Array.isArray(dietHist)||dietHist.length===0) return 0;
+          const datas = dietHist.map((d:any)=>d.data||d.date).filter(Boolean).sort().reverse();
+          let s=0;
+          const hoje=new Date();
+          for(let i=0;i<365;i++){
+            const d=new Date(hoje);d.setDate(d.getDate()-i);
+            const k=d.toISOString().slice(0,10);
+            if(datas.includes(k))s++;else if(i>0)break;
+          }
+          return s;
+        })();
+
+        // Plan tier
+        const planTier = ud.planData?.tier||'free';
+
+        // Squad wins (do doc do squad)
+        const userSquadSnap = await getDoc(doc(db,'users',u.uid,'data','squad'));
+        const squadWins = userSquadSnap.exists()
+          ? (userSquadSnap.data().wins||0) : 0;
+
+        // Calcular extra
+        const totalTreinos = Object.keys(hist).length;
+        const streak    = calcStreak(hist, ud.trainDays||[1,2,3,4,5,6]);
+        const volTotal  = calcVol(hist);
+        const prCount   = calcPRs(hist);
+        const uniqueEx  = countUniqueEx(hist);
+        const earlyCount= countEarly(hist);
+
+        setExtra({
+          streak,totalTreinos,volTotal,prCount,uniqueEx,
+          cardioCount,zenCount,dietDias,dietStreak,
+          earlyCount,planTier,squadWins,runCount,bikeCount,
+        });
+
+        // Selos do Firebase
+        const selosSnap = await getDoc(doc(db,'users',u.uid,'data','selos'));
+        if(selosSnap.exists()) setSelosFirebase(selosSnap.data());
+
+      } catch(e){console.error(e);}
+      setLoading(false);
+    });
   },[]);
 
-  const cor = RARIDADE_COR[selo.raridade];
+  // Calcular selos desbloqueados
+  const unlocked = useMemo(()=>{
+    const set = new Set<string>();
+    SELOS.forEach(s=>{
+      try{ if(s.check(history,extra)) set.add(s.id); }catch(_){}
+    });
+    // Selos manuais do Firebase
+    Object.entries(selosFirebase).forEach(([id,on])=>{ if(on) set.add(id); });
+    return set;
+  },[history,extra,selosFirebase]);
 
-  return (
-    <div style={{
-      position:'fixed',inset:0,zIndex:200,
-      background:'rgba(6,6,8,.96)',
-      display:'flex',flexDirection:'column',
-      alignItems:'center',justifyContent:'center',
-      padding:'2rem',
-    }} onClick={onClose}>
-      {/* Partículas */}
-      {fase>=2 && Array.from({length:16}).map((_,i)=>(
-        <div key={i} style={{
-          position:'absolute',
-          left:`${20+Math.random()*60}%`,
-          top:`${20+Math.random()*60}%`,
-          width: Math.random()*8+3,
-          height: Math.random()*8+3,
-          borderRadius:'50%',
-          background: [cor,'#e31b23','#facc15','#fff'][i%4],
-          opacity: fase>=3?0:0.8,
-          transform:`translateY(${fase>=3?-80:0}px) scale(${fase>=3?0:1})`,
-          transition:'all 1s ease',
-          pointerEvents:'none',
-        }}/>
-      ))}
+  // Salvar selos desbloqueados no Firebase
+  useEffect(()=>{
+    if(!uid||unlocked.size===0) return;
+    const data: Record<string,boolean> = {};
+    unlocked.forEach(id=>{data[id]=true;});
+    setDoc(doc(db,'users',uid,'data','selos'),data,{merge:true}).catch(()=>{});
+  },[uid,unlocked]);
 
-      {/* Card do selo */}
-      <div style={{
-        textAlign:'center',zIndex:1,
-        transform: fase>=1?'scale(1)':'scale(0.5)',
-        opacity: fase>=1?1:0,
-        transition:'all .5s cubic-bezier(.34,1.56,.64,1)',
-      }}>
-        {/* Anel brilhante */}
-        <div style={{
-          width:120,height:120,borderRadius:'50%',
-          background:`radial-gradient(circle,${RARIDADE_BG[selo.raridade]} 0%,transparent 70%)`,
-          border:`2px solid ${cor}`,
-          display:'flex',alignItems:'center',justifyContent:'center',
-          margin:'0 auto 1.5rem',
-          boxShadow:`0 0 40px ${cor}55, 0 0 80px ${cor}22`,
-          fontSize:'3.5rem',
-          transition:'all .5s',
-        }}>
-          {selo.icon}
-        </div>
+  const totalSelos  = SELOS.length;
+  const totalUnlock = unlocked.size;
+  const pct         = Math.round(totalUnlock/totalSelos*100);
 
-        <div style={{
-          fontSize:'.7rem',color:cor,textTransform:'uppercase',
-          letterSpacing:'.2em',fontWeight:700,marginBottom:'.5rem',
-          opacity:fase>=2?1:0,transition:'opacity .4s .3s',
-        }}>
-          Selo Desbloqueado!
-        </div>
+  const selosFiltrados = SELOS.filter(s=>catAtiva==='todos'||s.cat===catAtiva);
 
-        <div style={{
-          fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-          fontSize:'2.2rem',textTransform:'uppercase',color:'#fff',
-          lineHeight:1,marginBottom:'.5rem',letterSpacing:'.04em',
-          opacity:fase>=2?1:0,transition:'opacity .4s .4s',
-        }}>{selo.title}</div>
-
-        <div style={{
-          fontSize:'.85rem',color:'#9898a8',maxWidth:260,
-          lineHeight:1.5,marginBottom:'2rem',
-          opacity:fase>=2?1:0,transition:'opacity .4s .5s',
-        }}>{selo.desc}</div>
-
-        <div style={{
-          display:'inline-flex',alignItems:'center',gap:'.4rem',
-          background:`${cor}22`,border:`1px solid ${cor}55`,
-          borderRadius:'999px',padding:'.4rem 1rem',
-          fontSize:'.72rem',fontWeight:700,color:cor,
-          textTransform:'uppercase',letterSpacing:'.08em',
-          opacity:fase>=3?1:0,transition:'opacity .4s .6s',
-        }}>
-          {selo.raridade}
-        </div>
-
-        <div style={{
-          marginTop:'2rem',fontSize:'.72rem',color:'#323240',
-          opacity:fase>=3?1:0,transition:'opacity .4s .8s',
-        }}>Toque para fechar</div>
+  // ── LOADING ──────────────────────────────────────────────────
+  if(loading) return (
+    <PageShell>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
+        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
+          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
       </div>
-    </div>
+    </PageShell>
   );
-}
 
-// ── Card do selo ──────────────────────────────────────────────────────────
-function SeloCard({selo, onClick}:{selo:Selo; onClick:()=>void}) {
-  const cor = RARIDADE_COR[selo.raridade];
-  const bg  = RARIDADE_BG[selo.raridade];
 
   return (
-    <button onClick={onClick} style={{
-      background: selo.desbloqueado ? bg : 'rgba(255,255,255,.03)',
-      border: `1px solid ${selo.desbloqueado ? cor+'55' : '#202028'}`,
-      borderRadius:'14px',padding:'1rem',
-      textAlign:'left',cursor:'pointer',
-      position:'relative',overflow:'hidden',
-      transition:'all .15s',
-      opacity: selo.desbloqueado ? 1 : 0.6,
-    }}>
-      {/* Brilho no topo */}
-      {selo.desbloqueado && (
-        <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${cor}55,transparent)`,pointerEvents:'none'}}/>
-      )}
+    <PageShell>
+      <AnimatePresence>
+        {seloAnim&&<AnimUnlock selo={seloAnim} onClose={()=>setSeloAnim(null)}/>}
+      </AnimatePresence>
 
-      {/* Ícone */}
-      <div style={{
-        width:48,height:48,borderRadius:'12px',
-        background: selo.desbloqueado ? `${cor}22` : 'rgba(255,255,255,.06)',
-        border: `1px solid ${selo.desbloqueado ? cor+'44' : '#202028'}`,
-        display:'flex',alignItems:'center',justifyContent:'center',
-        fontSize:'1.5rem',marginBottom:'.65rem',
-        filter: selo.desbloqueado ? 'none' : 'grayscale(1)',
-      }}>
-        {selo.desbloqueado ? selo.icon : '🔒'}
+      {/* Header */}
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{marginBottom:'1.25rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
+          DARK<span style={{color:'#e31b23'}}>SELOS</span>
+        </div>
+        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.4rem'}}>
+          <Trophy size={11} color="#7a7a8a"/> {totalUnlock}/{totalSelos} selos · {pct}% completo
+        </div>
+      </motion.div>
+      {/* Stats rápidos */}
+      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.1}}
+        style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>
+        {[
+          {val:extra.totalTreinos, lbl:'Treinos',  cor:'#e31b23'},
+          {val:extra.streak,       lbl:'Streak',   cor:'#f97316'},
+          {val:extra.prCount,      lbl:'PRs',      cor:'#a78bfa'},
+          {val:extra.cardioCount,  lbl:'Cardio',   cor:'#34d399'},
+        ].map((s,i)=>(
+          <motion.div key={i} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:.12+i*.04}}>
+            <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:10}}>
+              <CardContent style={{padding:'.5rem',textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:s.cor,lineHeight:1}}>{s.val}</div>
+                <div style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.lbl}</div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Filtros de categoria */}
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.14}}
+        style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'1rem'}}>
+        {CATS.map(cat=>(
+          <motion.button key={cat.id} whileTap={{scale:.92}} onClick={()=>setCatAtiva(cat.id)}
+            style={{padding:'.3rem .65rem',borderRadius:8,border:`1px solid ${catAtiva===cat.id?'#e31b23':'#2e2e38'}`,background:catAtiva===cat.id?'rgba(227,27,35,.15)':'transparent',color:catAtiva===cat.id?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none',textTransform:'uppercase' as const}}>
+            {cat.label}
+          </motion.button>
+        ))}
+      </motion.div>
+
+      {/* Grid de selos */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'.5rem'}}>
+        {selosFiltrados.map((selo,i)=>{
+          const done = unlocked.has(selo.id);
+          const cor  = RCOR[selo.raridade];
+          return (
+            <motion.div key={selo.id}
+              initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.03,.3)}}
+              whileTap={{scale:.97}}
+              onClick={()=>done&&setSeloAnim({...selo,desbloqueado:done})}
+              style={{cursor:done?'pointer':'default'}}>
+              <Card style={{
+                background:done?RBG[selo.raridade]:'rgba(255,255,255,.02)',
+                border:`1px solid ${done?RBORDER[selo.raridade]:'#1a1a20'}`,
+                borderRadius:14,
+                opacity:done?1:.55,
+                height:'100%',
+              }}>
+                <CardContent style={{padding:'.85rem .75rem'}}>
+                  {/* Ícone + raridade */}
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
+                    <div style={{width:40,height:40,borderRadius:10,background:done?`${cor}22`:'rgba(255,255,255,.04)',border:`1px solid ${done?`${cor}44`:'#2e2e38'}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      {done
+                        ? <RaridadeIcon r={selo.raridade} size={20}/>
+                        : <Lock size={16} color="#484858"/>
+                      }
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:'.2rem',background:done?RBG[selo.raridade]:'rgba(255,255,255,.04)',border:`1px solid ${done?RBORDER[selo.raridade]:'#2e2e38'}`,borderRadius:6,padding:'2px 6px'}}>
+                      <RaridadeIcon r={selo.raridade} size={10}/>
+                      <span style={{fontSize:'.52rem',color:done?cor:'#484858',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.06em'}}>{selo.raridade}</span>
+                    </div>
+                  </div>
+                  {/* Título */}
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',color:done?'#f0f0f2':'#484858',textTransform:'uppercase' as const,lineHeight:1.1,marginBottom:'.3rem'}}>
+                    {selo.title}
+                  </div>
+                  {/* Desc */}
+                  <div style={{fontSize:'.62rem',color:done?'#9898a8':'#2e2e38',lineHeight:1.4}}>
+                    {selo.desc}
+                  </div>
+                  {/* Badge desbloqueado */}
+                  {done&&(
+                    <div style={{marginTop:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                      <SealCheck size={12} color={cor} weight="fill"/>
+                      <span style={{fontSize:'.58rem',color:cor,fontWeight:700}}>Desbloqueado</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* Raridade badge */}
-      <div style={{
-        position:'absolute',top:'.6rem',right:'.6rem',
-        fontSize:'.52rem',fontWeight:700,
-        padding:'.15rem .45rem',borderRadius:'999px',
-        background:`${cor}22`,color:cor,
-        textTransform:'uppercase',letterSpacing:'.06em',
-        border:`1px solid ${cor}33`,
-      }}>{selo.raridade}</div>
-
-      {/* Título */}
-      <div style={{
-        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-        fontSize:'.95rem',textTransform:'uppercase',
-        color: selo.desbloqueado ? '#f0f0f2' : '#5a5a6a',
-        lineHeight:1,marginBottom:'.3rem',
-        letterSpacing:'.03em',
-      }}>{selo.title}</div>
-
-      {/* Descrição */}
-      <div style={{fontSize:'.65rem',color:'#5a5a6a',lineHeight:1.4,marginBottom:'.6rem'}}>{selo.desc}</div>
-
-      {/* Barra de progresso */}
-      {!selo.desbloqueado && selo.progresso !== undefined && (
-        <div>
-          <div style={{background:'#16161c',borderRadius:'3px',height:'3px',marginBottom:'3px'}}>
-            <div style={{height:'100%',borderRadius:'3px',background:cor,width:`${selo.progresso}%`,boxShadow:`0 0 6px ${cor}66`}}/>
-          </div>
-          <div style={{fontSize:'.55rem',color:'#323240'}}>{selo.progressoLabel||`${selo.progresso}%`}</div>
-        </div>
-      )}
-
-      {/* Check desbloqueado */}
-      {selo.desbloqueado && (
-        <div style={{fontSize:'.65rem',color:cor,fontWeight:700}}>✓ Desbloqueado</div>
-      )}
-    </button>
-  );
-}
-
-// ── Página principal ──────────────────────────────────────────────────────
-export default function DarkSelosPage() {
-  const [catSel, setCatSel]       = useState('todos');
-  const [animSelo, setAnimSelo]   = useState<Selo|null>(null);
-  const [detalhe, setDetalhe]     = useState<Selo|null>(null);
-  const [busca, setBusca]         = useState('');
-
-  const total        = SELOS_DATA.length;
-  const desbloqueados= SELOS_DATA.filter(s=>s.desbloqueado).length;
-  const pct          = Math.round((desbloqueados/total)*100);
-
-  const selosFiltrados = SELOS_DATA.filter(s=>{
-    const catOk  = catSel==='todos' || s.cat===catSel;
-    const buscaOk= !busca || s.title.toLowerCase().includes(busca.toLowerCase()) || s.desc.toLowerCase().includes(busca.toLowerCase());
-    return catOk && buscaOk;
-  });
-
-  // Ordena: desbloqueados primeiro, depois por progresso
-  const selosOrdenados = [...selosFiltrados].sort((a,b)=>{
-    if(a.desbloqueado && !b.desbloqueado) return -1;
-    if(!a.desbloqueado && b.desbloqueado) return 1;
-    return (b.progresso||0) - (a.progresso||0);
-  });
-
-  const handleClick = (selo:Selo) => {
-    if(selo.desbloqueado) setAnimSelo(selo);
-    else setDetalhe(selo);
-  };
-
-  return (
-    <>
-      {animSelo && <AnimacaoDesbloqueio selo={animSelo} onClose={()=>setAnimSelo(null)}/>}
-
-      {/* Modal detalhe (bloqueado) */}
-      {detalhe && (
-        <div style={{position:'fixed',inset:0,zIndex:100,background:'rgba(0,0,0,.88)',backdropFilter:'blur(4px)',display:'flex',alignItems:'flex-end'}} onClick={()=>setDetalhe(null)}>
-          <div style={{background:'#0e0e11',borderTop:'1px solid #202028',borderRadius:'20px 20px 0 0',width:'100%',padding:'1.5rem'}} onClick={e=>e.stopPropagation()}>
-            <div style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1rem'}}>
-              <div style={{width:56,height:56,borderRadius:'14px',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.8rem',filter:'grayscale(1)'}}>🔒</div>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{detalhe.title}</div>
-                <div style={{fontSize:'.65rem',color:RARIDADE_COR[detalhe.raridade],fontWeight:700,marginTop:'2px',textTransform:'uppercase',letterSpacing:'.06em'}}>{detalhe.raridade}</div>
-              </div>
-            </div>
-            <div style={{fontSize:'.85rem',color:'#9898a8',lineHeight:1.5,marginBottom:'1rem'}}>{detalhe.desc}</div>
-            {detalhe.progresso !== undefined && detalhe.progresso > 0 && (
-              <div style={{marginBottom:'1rem'}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
-                  <span style={{fontSize:'.65rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.07em'}}>Progresso</span>
-                  <span style={{fontSize:'.65rem',color:RARIDADE_COR[detalhe.raridade],fontWeight:700}}>{detalhe.progressoLabel||`${detalhe.progresso}%`}</span>
-                </div>
-                <div style={{background:'#16161c',borderRadius:'4px',height:'6px'}}>
-                  <div style={{height:'100%',borderRadius:'4px',background:RARIDADE_COR[detalhe.raridade],width:`${detalhe.progresso}%`,boxShadow:`0 0 10px ${RARIDADE_COR[detalhe.raridade]}66`}}/>
-                </div>
-              </div>
-            )}
-            <button onClick={()=>setDetalhe(null)} style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'12px',padding:'12px',color:'#9898a8',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>Fechar</button>
-          </div>
-        </div>
-      )}
-
-      <PageShell>
-        {/* Header */}
-        <div style={{marginBottom:'1.25rem'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-            DARK<span style={{color:'#facc15'}}>SELOS</span>
-          </div>
-          <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'3px',letterSpacing:'.06em'}}>Suas conquistas</div>
-        </div>
-
-        {/* Progresso geral */}
-        <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'16px',padding:'1.1rem',marginBottom:'1.25rem'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:'.75rem'}}>
-            <div>
-              <div style={{fontSize:'.62rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'2px'}}>Progresso geral</div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:'#facc15',lineHeight:1}}>
-                {desbloqueados}<span style={{fontSize:'1rem',color:'#5a5a6a',marginLeft:'4px'}}>/ {total}</span>
-              </div>
-            </div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:'#facc15'}}>{pct}%</div>
-          </div>
-          <div style={{background:'#16161c',borderRadius:'4px',height:'6px',marginBottom:'.75rem'}}>
-            <div style={{height:'100%',borderRadius:'4px',background:'linear-gradient(90deg,#facc15,#f59e0b)',width:`${pct}%`,transition:'width .6s',boxShadow:'0 0 12px rgba(250,204,21,.4)'}}/>
-          </div>
-          {/* Contagem por raridade */}
-          <div style={{display:'flex',gap:'.5rem'}}>
-            {(['comum','raro','epico','lendario'] as const).map(r=>{
-              const count = SELOS_DATA.filter(s=>s.raridade===r&&s.desbloqueado).length;
-              const total = SELOS_DATA.filter(s=>s.raridade===r).length;
-              return(
-                <div key={r} style={{flex:1,textAlign:'center',background:RARIDADE_BG[r],border:`1px solid ${RARIDADE_COR[r]}33`,borderRadius:'8px',padding:'.4rem .2rem'}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:RARIDADE_COR[r],lineHeight:1}}>{count}</div>
-                  <div style={{fontSize:'.48rem',color:RARIDADE_COR[r],textTransform:'uppercase',letterSpacing:'.05em',marginTop:'2px',opacity:.7}}>{r}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Busca */}
-        <input value={busca} onChange={e=>setBusca(e.target.value)}
-          placeholder="Buscar selo..."
-          style={{width:'100%',background:'#0e0e11',border:'1px solid #202028',borderRadius:'10px',color:'#eaeaea',padding:'9px 13px',fontSize:'.88rem',outline:'none',marginBottom:'.75rem'}}/>
-
-        {/* Filtro categorias */}
-        <div style={{display:'flex',gap:'.35rem',overflowX:'auto',paddingBottom:'.35rem',marginBottom:'1rem'}}>
-          {CATS.map(c=>(
-            <button key={c.id} onClick={()=>setCatSel(c.id)} style={{
-              flexShrink:0,padding:'.38rem .75rem',borderRadius:'999px',cursor:'pointer',
-              background:catSel===c.id?'rgba(250,204,21,.15)':'rgba(255,255,255,.04)',
-              border:`1px solid ${catSel===c.id?'rgba(250,204,21,.45)':'#202028'}`,
-              color:catSel===c.id?'#facc15':'#9898a8',
-              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.75rem',
-              display:'flex',alignItems:'center',gap:'.3rem',
-            }}>
-              <span>{c.icon}</span>{c.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Contagem filtrada */}
-        <div style={{fontSize:'.62rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.6rem'}}>
-          {selosOrdenados.filter(s=>s.desbloqueado).length} desbloqueados de {selosOrdenados.length}
-        </div>
-
-        {/* Grade de selos */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem'}}>
-          {selosOrdenados.map(s=>(
-            <SeloCard key={s.id} selo={s} onClick={()=>handleClick(s)}/>
-          ))}
-        </div>
-
-        <div style={{fontSize:'.62rem',color:'#323240',textAlign:'center',marginTop:'1rem'}}>
-          Toque em um selo desbloqueado para ver a animação ✨
-        </div>
-      </PageShell>
-    </>
+    </PageShell>
   );
 }

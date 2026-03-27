@@ -1,554 +1,858 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import ShareWorkoutModal from '@/components/ShareWorkoutModal';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getGifUrls } from '@/lib/exerciseGifs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// ── Dados mock ────────────────────────────────────────────────────────────
-const FICHAS_MOCK = [
-  {
-    id:'1', nome:'Treino A - Peito', dia:'Segunda',
-    exercicios:[
-      {nome:'Supino Reto',     series:4, reps:'8-12', cargaAnterior:'77.5'},
-      {nome:'Crucifixo',       series:3, reps:'12',   cargaAnterior:'14'},
-      {nome:'Peck Deck',       series:3, reps:'12',   cargaAnterior:'40'},
-      {nome:'Supino Inclinado',series:3, reps:'10',   cargaAnterior:'70'},
-    ],
-  },
-  {
-    id:'2', nome:'Treino B - Costas', dia:'Quarta',
-    exercicios:[
-      {nome:'Puxada Frontal', series:4, reps:'10', cargaAnterior:'60'},
-      {nome:'Remada Curvada', series:3, reps:'10', cargaAnterior:'68'},
-      {nome:'Barra Fixa',     series:3, reps:'8',  cargaAnterior:'0'},
-    ],
-  },
-  {
-    id:'3', nome:'Treino C - Pernas', dia:'Sexta',
-    exercicios:[
-      {nome:'Agachamento',       series:5, reps:'8',  cargaAnterior:'95'},
-      {nome:'Leg Press',         series:4, reps:'12', cargaAnterior:'150'},
-      {nome:'Cadeira Extensora', series:3, reps:'15', cargaAnterior:'50'},
-      {nome:'Stiff',             series:3, reps:'12', cargaAnterior:'58'},
-    ],
-  },
+const DAYS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+type SetLog = { w: string; r: string; done: boolean };
+type Item   = { exId: string; name: string; setsPlanned: number; repsTarget: string };
+type Plan   = { id: string; name: string; byDay: Record<string, Item[]> };
+type ShareSession = { planName?: string; day?: string; entries: {name:string;sets:{w:string;r:string}[]}[]; duration?: number };
+
+const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+const todayDayName = () => DAYS[(new Date().getDay()||7)-1];
+const todayKey = () => new Date().toISOString().slice(0,10);
+const vibrate = (ms: number|number[] = 40) => { try { navigator.vibrate?.(ms); } catch(_){} };
+
+// ── Web Audio beep ────────────────────────────────────────────────
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
+  try {
+    if (!_audioCtx || _audioCtx.state === 'closed') {
+      _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return _audioCtx;
+  } catch(_){ return null; }
+}
+
+function playBeep(type: 'tick'|'done'|'warn') {
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+
+  // Resume se suspenso (política autoplay)
+  const play = () => {
+    const configs: Record<string,{freq:number;dur:number;vol:number;delay:number;wave:OscillatorType}[]> = {
+      tick: [
+        {freq:1200, dur:.1,  vol:1.2, delay:0,   wave:'square'},
+      ],
+      warn: [
+        {freq:900,  dur:.15, vol:1.4, delay:0,   wave:'square'},
+        {freq:900,  dur:.15, vol:1.4, delay:.22, wave:'square'},
+        {freq:900,  dur:.15, vol:1.4, delay:.44, wave:'square'},
+      ],
+      done: [
+        {freq:600,  dur:.18, vol:1.5, delay:0,   wave:'square'},
+        {freq:800,  dur:.18, vol:1.5, delay:.22, wave:'square'},
+        {freq:1000, dur:.35, vol:1.6, delay:.44, wave:'square'},
+      ],
+    };
+
+    configs[type].forEach(({freq,dur,vol,delay,wave})=>{
+      const osc      = ctx.createOscillator();
+      const gain     = ctx.createGain();
+      const compressor = ctx.createDynamicsCompressor();
+
+      osc.connect(gain);
+      gain.connect(compressor);
+      compressor.connect(ctx.destination);
+
+      osc.frequency.value = freq;
+      osc.type = wave;
+
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + .01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+      osc.start(t);
+      osc.stop(t + dur + .05);
+    });
+  };
+
+  if(ctx.state === 'suspended') {
+    ctx.resume().then(play).catch(()=>{});
+  } else {
+    play();
+  }
+}
+
+// ── Notificação push ──────────────────────────────────────────────
+async function requestNotifPermission() {
+  if(typeof Notification === 'undefined') return;
+  if(Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+function unlockAudio() {
+  const ctx = getAudioCtx();
+  if(ctx && ctx.state === 'suspended') ctx.resume().catch(()=>{});
+}
+
+function sendNotif(title: string, body: string) {
+  if(typeof Notification === 'undefined') return;
+  if(Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, {
+      body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'darkset-timer',
+    });
+  } catch(_){}
+}
+
+const ALL_EXS = [
+  'Supino reto barra','Supino reto halteres','Supino inclinado barra','Supino inclinado halteres',
+  'Crucifixo reto halteres','Crucifixo Máquina','Crossover polia alta','Flexão de braço',
+  'Desenvolvimento barra','Desenvolvimento halteres','Elevação lateral halteres','Face Pull corda',
+  'Arnold press halteres','Encolhimento barra','Barra fixa','Pulldown','Puxada alta aberta',
+  'Remada curvada barra','Remada serrote halteres','Remada baixa polia','Levantamento terra',
+  'Rosca direta barra','Rosca direta halteres','Rosca alternada halteres','Rosca martelo halteres',
+  'Rosca concentrada halteres','Rosca Scott máquina','Tríceps pulley corda','Tríceps pulley barra reta',
+  'Tríceps francês halteres','Tríceps testa barra W','Paralelas','Mergulho no banco',
+  'Agachamento livre','Agachamento hack máquina','Leg press 45','Cadeira extensora',
+  'Afundo com halteres','Stiff','Stiff com halteres','Cadeira flexora','Mesa flexora',
+  'Hip Thrust barra','Elevação pélvica com barra','Cadeira abdutora',
+  'Panturrilha em pé máquina','Panturrilha sentado','Abdominal crunch','Prancha',
 ];
 
-const EXERCICIOS_LIVRE = [
-  'Supino Reto','Supino Inclinado','Crucifixo','Peck Deck',
-  'Puxada Frontal','Remada Curvada','Barra Fixa','Remada Unilateral',
-  'Desenvolvimento','Elevação Lateral','Rosca Direta','Rosca Martelo',
-  'Tríceps Pulley','Tríceps Testa','Agachamento','Leg Press',
-  'Cadeira Extensora','Cadeira Flexora','Stiff','Hip Thrust',
-];
-
-const fmt = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-
-type Serie = {carga:string; reps:string; feita:boolean};
-type ExAtivo = {nome:string; seriesPlanned:number; reps:string; cargaAnterior:string; series:Serie[]};
-
-// ── Tela de conclusão ─────────────────────────────────────────────────────
-function TelaConclusao({duracao, totalSeries, onClose}:{duracao:number;totalSeries:number;onClose:()=>void}) {
+// ── ExGif ─────────────────────────────────────────────────────────
+function ExGif({name, size=64}:{name:string;size?:number}) {
+  const urls = getGifUrls(name);
   const [frame, setFrame] = useState(0);
+  const [img1Ok, setImg1Ok] = useState(true);
   useEffect(()=>{
-    const t = setInterval(()=>setFrame(f=>f+1), 80);
-    setTimeout(()=>clearInterval(t), 3000);
+    setFrame(0); setImg1Ok(true);
+    if(!urls) return;
+    const t = setInterval(()=>setFrame(f=>f===0?1:0), 900);
+    return ()=>clearInterval(t);
+  },[name]);
+  if(!urls) return (
+    <div style={{width:size,height:size,borderRadius:10,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:size>50?'1.5rem':'1rem'}}>🏋️</div>
+  );
+  const src = frame===0 ? urls.url0 : (img1Ok ? urls.url1 : urls.url0);
+  return <img src={src} alt={name} onError={()=>{if(frame===1)setImg1Ok(false);}} style={{width:size,height:size,borderRadius:10,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}/>;
+}
+
+// ── RestTimer ─────────────────────────────────────────────────────
+function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>void}) {
+  const [total, setTotal] = useState(initialSeconds);
+  const [left,  setLeft]  = useState(initialSeconds);
+  const leftRef = useRef(initialSeconds);
+  const totalRef = useRef(initialSeconds);
+
+  const restStartRef = useRef(Date.now());
+  const endTimeRef   = useRef(Date.now() + initialSeconds * 1000);
+  const warnedRef    = useRef(false);
+
+  useEffect(()=>{
+    restStartRef.current = Date.now();
+    endTimeRef.current   = Date.now() + leftRef.current * 1000;
+
+    const t = setInterval(()=>{
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+      leftRef.current = remaining;
+      setLeft(remaining);
+
+      if(remaining <= 0) {
+        clearInterval(t);
+        // Som, vibração e notificação com pequeno delay para garantir execução
+        setTimeout(()=>{
+          playBeep('done');
+          try { navigator.vibrate?.([300,100,300,100,500]); } catch(_){}
+          sendNotif('DarkSet 💪', 'Descanso encerrado! Hora da próxima série!');
+        }, 50);
+        onDone();
+        return;
+      }
+      if(remaining === 10 && !warnedRef.current) {
+        warnedRef.current = true;
+        playBeep('warn');
+        try { navigator.vibrate?.([100,50,100]); } catch(_){}
+      }
+      if(remaining <= 5 && remaining > 0) {
+        playBeep('tick');
+        try { navigator.vibrate?.(40); } catch(_){}
+      }
+    }, 500);
     return ()=>clearInterval(t);
   },[]);
 
+  const adjust = (delta: number) => {
+    const newTotal = Math.max(10, totalRef.current + delta);
+    const newLeft  = Math.max(1, leftRef.current + delta);
+    totalRef.current = newTotal;
+    leftRef.current  = newLeft;
+    endTimeRef.current = Date.now() + newLeft * 1000;
+    setTotal(newTotal);
+    setLeft(newLeft);
+    vibrate(20);
+  };
+
+  const pct   = Math.max(0, (left / total) * 100);
+  const color = left <= 5 ? '#e31b23' : left <= 10 ? '#facc15' : '#22c55e';
+
   return (
-    <div style={{
-      position:'fixed',inset:0,zIndex:200,
-      background:'#060608',
-      display:'flex',flexDirection:'column',
-      alignItems:'center',justifyContent:'center',
-      padding:'2rem',
-    }}>
-      {/* Partículas */}
-      <div style={{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}}>
-        {Array.from({length:20}).map((_,i)=>(
-          <div key={i} style={{
-            position:'absolute',
-            left:`${Math.random()*100}%`,
-            top:`${Math.random()*100}%`,
-            width:Math.random()*8+4,
-            height:Math.random()*8+4,
-            borderRadius:'50%',
-            background:['#e31b23','#facc15','#22c55e','#38bdf8'][i%4],
-            opacity: frame>5?0:1,
-            transform:`translateY(${-frame*3}px)`,
-            transition:'all .08s',
-          }}/>
-        ))}
-      </div>
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{position:'fixed',inset:0,zIndex:150,background:'rgba(0,0,0,.96)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.25rem',padding:'2rem'}}>
 
-      <div style={{textAlign:'center',zIndex:1}}>
-        <div style={{fontSize:'5rem',marginBottom:'1rem',animation:'checkPop .4s ease'}}>🏆</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#fff',lineHeight:1,marginBottom:'.5rem'}}>
-          TREINO<br/><span style={{color:'#e31b23'}}>CONCLUÍDO!</span>
-        </div>
-        <div style={{fontSize:'.88rem',color:'#9898a8',marginBottom:'2rem'}}>Excelente trabalho! 💪</div>
+      <motion.div initial={{scale:.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{type:'spring',stiffness:200}}>
+        <span style={{display:'inline-block',fontSize:'.65rem',color:'#7a7a8a',fontWeight:700,letterSpacing:'.15em',border:'1px solid rgba(255,255,255,.1)',borderRadius:999,padding:'3px 12px'}}>DESCANSO</span>
+      </motion.div>
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginBottom:'2rem',maxWidth:280,margin:'0 auto 2rem'}}>
-          {[
-            {val:fmt(duracao), label:'Duração',   icon:'⏱'},
-            {val:String(totalSeries), label:'Séries feitas', icon:'✅'},
-          ].map((s,i)=>(
-            <div key={i} style={{background:'rgba(255,255,255,.05)',border:'1px solid #202028',borderRadius:'14px',padding:'1rem',textAlign:'center'}}>
-              <div style={{fontSize:'1.4rem',marginBottom:'.25rem'}}>{s.icon}</div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#e31b23',lineHeight:1}}>{s.val}</div>
-              <div style={{fontSize:'.6rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'3px'}}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <button onClick={onClose} style={{
-          background:'linear-gradient(135deg,#e31b23,#b31217)',
-          border:'none',borderRadius:'14px',padding:'14px 48px',color:'#fff',
-          fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',
-          textTransform:'uppercase',letterSpacing:'.06em',cursor:'pointer',
-          boxShadow:'0 4px 28px rgba(227,27,35,.4)',
-        }}>Finalizar</button>
-      </div>
-    </div>
-  );
-}
-
-// ── Timer de descanso ─────────────────────────────────────────────────────
-function TimerDescanso({segundos, onEnd}:{segundos:number;onEnd:()=>void}) {
-  const [restante, setRestante] = useState(segundos);
-  useEffect(()=>{
-    if(restante<=0){onEnd();return;}
-    const t = setTimeout(()=>setRestante(r=>r-1),1000);
-    return ()=>clearTimeout(t);
-  },[restante]);
-
-  const pct = (restante/segundos)*100;
-  return (
-    <div style={{
-      position:'fixed',inset:0,zIndex:100,
-      background:'rgba(6,6,8,.96)',
-      display:'flex',flexDirection:'column',
-      alignItems:'center',justifyContent:'center',
-      gap:'1.5rem',
-    }}>
-      <div style={{fontSize:'.72rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.14em'}}>Descanso</div>
-
-      {/* Círculo */}
-      <div style={{position:'relative',width:180,height:180}}>
-        <svg width={180} height={180} style={{position:'absolute',top:0,left:0,transform:'rotate(-90deg)'}}>
-          <circle cx={90} cy={90} r={80} fill="none" stroke="#202028" strokeWidth={8}/>
-          <circle cx={90} cy={90} r={80} fill="none" stroke="#e31b23" strokeWidth={8}
-            strokeDasharray={`${2*Math.PI*80}`}
-            strokeDashoffset={`${2*Math.PI*80*(1-pct/100)}`}
+      {/* Círculo SVG */}
+      <div style={{position:'relative',width:200,height:200}}>
+        <svg width="200" height="200" style={{transform:'rotate(-90deg)'}}>
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#1e1e24" strokeWidth="10"/>
+          <motion.circle cx="100" cy="100" r="88" fill="none" stroke={color} strokeWidth="10"
             strokeLinecap="round"
-            style={{transition:'stroke-dashoffset .9s linear'}}/>
+            strokeDasharray={`${2*Math.PI*88}`}
+            animate={{strokeDashoffset: 2*Math.PI*88*(1-pct/100), stroke: color}}
+            transition={{duration:.9, ease:'linear'}}/>
         </svg>
         <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'4rem',color:restante<=5?'#e31b23':'#fff',lineHeight:1,transition:'color .3s'}}>
-            {restante}
-          </div>
-          <div style={{fontSize:'.6rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.1em'}}>segundos</div>
+          <motion.div key={left} initial={{scale:1.15,opacity:.7}} animate={{scale:1,opacity:1}} transition={{duration:.2}}
+            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.8rem',color:'#fff',lineHeight:1}}>
+            {fmtTime(left)}
+          </motion.div>
+          <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'4px',textTransform:'uppercase',letterSpacing:'.1em'}}>restante</div>
         </div>
       </div>
 
-      <div style={{display:'flex',gap:'.6rem'}}>
-        {[30,60,90].map(s=>(
-          <button key={s} onClick={()=>setRestante(r=>r+s)} style={{
-            background:'rgba(255,255,255,.06)',border:'1px solid #202028',
-            borderRadius:'10px',padding:'.45rem .85rem',color:'#9898a8',
-            fontSize:'.8rem',fontWeight:700,cursor:'pointer',
-          }}>+{s}s</button>
-        ))}
-        <button onClick={onEnd} style={{
-          background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',
-          borderRadius:'10px',padding:'.45rem .85rem',color:'#e31b23',
-          fontSize:'.8rem',fontWeight:700,cursor:'pointer',
-        }}>Pular</button>
+      {/* Controles +/- 30s */}
+      <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
+        <motion.button whileTap={{scale:.9}}
+          onClick={()=>adjust(-30)}
+          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:12,width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',color:'#f0f0f2',fontSize:'1.1rem',fontWeight:700,cursor:'pointer',outline:'none',flexDirection:'column',gap:0}}>
+          <span style={{fontSize:'1rem',lineHeight:1}}>−</span>
+          <span style={{fontSize:'.5rem',color:'#7a7a8a',lineHeight:1.2}}>30s</span>
+        </motion.button>
+
+        <motion.button whileTap={{scale:.95}} onClick={()=>{vibrate(20);onDone();}}
+          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'999px',padding:'.55rem 2rem',color:'#7a7a8a',fontSize:'.85rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+          Pular
+        </motion.button>
+
+        <motion.button whileTap={{scale:.9}}
+          onClick={()=>adjust(30)}
+          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:12,width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',color:'#f0f0f2',fontSize:'1.1rem',fontWeight:700,cursor:'pointer',outline:'none',flexDirection:'column',gap:0}}>
+          <span style={{fontSize:'1rem',lineHeight:1}}>+</span>
+          <span style={{fontSize:'.5rem',color:'#7a7a8a',lineHeight:1.2}}>30s</span>
+        </motion.button>
       </div>
-    </div>
+
+      {/* Total configurado */}
+      <div style={{fontSize:'.65rem',color:'#484858',letterSpacing:'.06em'}}>
+        Total: {fmtTime(total)}
+      </div>
+    </motion.div>
   );
 }
 
-// ── Página principal ──────────────────────────────────────────────────────
-export default function ModoTreinoPage() {
-  const [view, setView]               = useState<'escolha'|'selFicha'|'treino'|'fim'>('escolha');
-  const [exercicios, setExercicios]   = useState<ExAtivo[]>([]);
-  const [exIdx, setExIdx]             = useState(0);
-  const [elapsed, setElapsed]         = useState(0);
-  const [running, setRunning]         = useState(false);
-  const [descansando, setDescansando] = useState(false);
-  const [tempoDescanso, setTempoDescanso] = useState(60);
-  const [showTrocar, setShowTrocar]   = useState(false);
-  const [buscaTroca, setBuscaTroca]   = useState('');
-  const tsRef   = useRef<number|null>(null);
-  const timerRef= useRef<any>(null);
-
-  // Timer geral
-  useEffect(()=>{
-    if(running){
-      if(!tsRef.current) tsRef.current = Date.now()-elapsed*1000;
-      timerRef.current = setInterval(()=>setElapsed(Math.floor((Date.now()-tsRef.current!)/1000)),500);
-    } else clearInterval(timerRef.current);
-    return ()=>clearInterval(timerRef.current);
-  },[running]);
-
-  const exAtual = exercicios[exIdx] ?? null;
-  const totalFeitas = exercicios.reduce((s,e)=>s+e.series.filter(s=>s.feita).length,0);
-  const totalSeries  = exercicios.reduce((s,e)=>s+e.series.length,0);
-  const progresso   = totalSeries>0?(totalFeitas/totalSeries)*100:0;
-
-  // Inicia com ficha
-  const iniciarFicha = (ficha: typeof FICHAS_MOCK[0]) => {
-    const exs: ExAtivo[] = ficha.exercicios.map(ex=>({
-      nome: ex.nome,
-      seriesPlanned: ex.series,
-      reps: ex.reps,
-      cargaAnterior: ex.cargaAnterior,
-      series: Array.from({length:ex.series},()=>({carga:ex.cargaAnterior,reps:ex.reps,feita:false})),
-    }));
-    setExercicios(exs); setExIdx(0); setElapsed(0);
-    tsRef.current=null; setRunning(true);
-    setView('treino');
-  };
-
-  // Inicia livre
-  const iniciarLivre = () => {
-    setExercicios([]); setExIdx(0); setElapsed(0);
-    tsRef.current=null; setRunning(true);
-    setView('treino');
-  };
-
-  // Marcar série
-  const marcarSerie = (serieIdx: number) => {
-    setExercicios(prev=>{
-      const novo = [...prev];
-      const ex   = {...novo[exIdx]};
-      const sers = [...ex.series];
-      sers[serieIdx] = {...sers[serieIdx], feita:!sers[serieIdx].feita};
-      ex.series = sers;
-      novo[exIdx] = ex;
-      return novo;
-    });
-    // Inicia descanso ao marcar
-    setDescansando(true);
-  };
-
-  // Atualiza campo da série
-  const updateSerie = (serieIdx:number, field:'carga'|'reps', val:string) => {
-    setExercicios(prev=>{
-      const novo=[...prev];
-      const ex={...novo[exIdx]};
-      const sers=[...ex.series];
-      sers[serieIdx]={...sers[serieIdx],[field]:val};
-      ex.series=sers; novo[exIdx]=ex;
-      return novo;
-    });
-  };
-
-  // Trocar exercício
-  const trocarEx = (nome:string) => {
-    setExercicios(prev=>{
-      const novo=[...prev];
-      novo[exIdx]={...novo[exIdx],nome,series:novo[exIdx].series.map(s=>({...s,feita:false}))};
-      return novo;
-    });
-    setShowTrocar(false); setBuscaTroca('');
-  };
-
-  // Adicionar exercício livre
-  const adicionarEx = (nome:string) => {
-    const novo:ExAtivo={nome,seriesPlanned:3,reps:'10-12',cargaAnterior:'',series:Array.from({length:3},()=>({carga:'',reps:'10-12',feita:false}))};
-    setExercicios(prev=>[...prev,novo]);
-    setExIdx(exercicios.length);
-    setShowTrocar(false); setBuscaTroca('');
-  };
-
-  // Finalizar
-  const finalizar = () => { setRunning(false); setView('fim'); };
-
-  // ── TELA DE CONCLUSÃO ───────────────────────────────────────────────
-  if(view==='fim') return (
-    <TelaConclusao duracao={elapsed} totalSeries={totalFeitas} onClose={()=>{ setView('escolha'); setExercicios([]); setElapsed(0); }}/>
-  );
-
-  // ── SELEÇÃO DE FICHA ────────────────────────────────────────────────
-  if(view==='selFicha') return (
-    <PageShell>
-      <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1.25rem'}}>
-        <button onClick={()=>setView('escolha')} style={{background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'8px',padding:'.4rem .8rem',color:'#9898a8',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#f0f0f2'}}>Escolha a ficha</div>
-      </div>
-      <div style={{display:'grid',gap:'.65rem'}}>
-        {FICHAS_MOCK.map(f=>(
-          <button key={f.id} onClick={()=>iniciarFicha(f)} style={{
-            background:'#0e0e11',border:'1px solid #202028',borderLeft:'2px solid #e31b23',
-            borderRadius:'14px',padding:'1.1rem 1rem',textAlign:'left',cursor:'pointer',width:'100%',
-          }}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{f.nome}</div>
-            <div style={{fontSize:'.7rem',color:'#5a5a6a',marginTop:'3px'}}>{f.dia} · {f.exercicios.length} exercícios</div>
-            <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',marginTop:'.6rem'}}>
-              {f.exercicios.slice(0,3).map((ex,i)=>(
-                <span key={i} style={{fontSize:'.62rem',color:'#9898a8',background:'rgba(255,255,255,.05)',borderRadius:'999px',padding:'.18rem .55rem',border:'1px solid #202028'}}>{ex.nome}</span>
-              ))}
-              {f.exercicios.length>3&&<span style={{fontSize:'.62rem',color:'#5a5a6a',padding:'.18rem .35rem'}}>+{f.exercicios.length-3}</span>}
-            </div>
-          </button>
-        ))}
-      </div>
-    </PageShell>
-  );
-
-  // ── TELA DE ESCOLHA ─────────────────────────────────────────────────
-  if(view==='escolha') return (
-    <PageShell>
-      <div style={{marginBottom:'1.5rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-          MODO <span style={{color:'#e31b23'}}>TREINO</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'3px',letterSpacing:'.06em'}}>Inicie sua sessão</div>
-      </div>
-
-      <div style={{display:'grid',gap:'.75rem'}}>
-        {/* Ficha */}
-        <button onClick={()=>setView('selFicha')} style={{
-          background:'linear-gradient(135deg,rgba(227,27,35,.15),rgba(227,27,35,.05))',
-          border:'1px solid rgba(227,27,35,.3)',borderRadius:'18px',
-          padding:'1.5rem',textAlign:'left',cursor:'pointer',
-          position:'relative',overflow:'hidden',
-        }}>
-          <div style={{position:'absolute',top:'-15px',right:'-15px',fontSize:'5rem',opacity:.08}}>📋</div>
-          <div style={{fontSize:'2.2rem',marginBottom:'.6rem'}}>📋</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#fff',letterSpacing:'.04em',lineHeight:1}}>Usar Ficha</div>
-          <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.5)',marginTop:'.3rem'}}>Execute uma ficha criada com exercícios e séries predefinidas</div>
-          <div style={{marginTop:'.85rem',display:'inline-flex',alignItems:'center',gap:'.4rem',background:'rgba(227,27,35,.2)',borderRadius:'8px',padding:'.3rem .75rem'}}>
-            <span style={{fontSize:'.72rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em'}}>Selecionar ficha →</span>
-          </div>
-        </button>
-
-        {/* Livre */}
-        <button onClick={iniciarLivre} style={{
-          background:'linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02))',
-          border:'1px solid #202028',borderRadius:'18px',
-          padding:'1.5rem',textAlign:'left',cursor:'pointer',
-          position:'relative',overflow:'hidden',
-        }}>
-          <div style={{position:'absolute',top:'-15px',right:'-15px',fontSize:'5rem',opacity:.06}}>💪</div>
-          <div style={{fontSize:'2.2rem',marginBottom:'.6rem'}}>💪</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#fff',letterSpacing:'.04em',lineHeight:1}}>Treino Livre</div>
-          <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.35)',marginTop:'.3rem'}}>Monte sua sessão na hora adicionando exercícios conforme treina</div>
-          <div style={{marginTop:'.85rem',display:'inline-flex',alignItems:'center',gap:'.4rem',background:'rgba(255,255,255,.08)',borderRadius:'8px',padding:'.3rem .75rem'}}>
-            <span style={{fontSize:'.72rem',color:'#9898a8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em'}}>Começar agora →</span>
-          </div>
-        </button>
-      </div>
-    </PageShell>
-  );
-
-  // ── MODO TREINO ATIVO ───────────────────────────────────────────────
+// ── FinishScreen ──────────────────────────────────────────────────
+function FinishScreen({elapsed,exerciseCount,setCount,onShare,onClose}:{elapsed:number;exerciseCount:number;setCount:number;onShare:()=>void;onClose:()=>void}) {
+  useEffect(()=>{ vibrate([80,40,80,40,120]); },[]);
   return (
-    <>
-      {/* Timer de descanso */}
-      {descansando&&<TimerDescanso segundos={tempoDescanso} onEnd={()=>setDescansando(false)}/>}
+    <motion.div initial={{opacity:0}} animate={{opacity:1}}
+      style={{position:'fixed',inset:0,zIndex:160,background:'#0a0a0e',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.25rem',padding:'2rem'}}>
+      <motion.div initial={{scale:0,rotate:-20}} animate={{scale:1,rotate:0}}
+        transition={{type:'spring',stiffness:200,damping:12,delay:.1}} style={{fontSize:'5rem'}}>💪</motion.div>
+      <motion.div initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:.25}}
+        style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',textTransform:'uppercase',color:'#fff',textAlign:'center',lineHeight:1}}>
+        Treino<br/><span style={{color:'#e31b23'}}>Concluído!</span>
+      </motion.div>
+      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:.4}}
+        style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:18,padding:'1.25rem 1.5rem',display:'flex',gap:'2rem',width:'100%',maxWidth:340,justifyContent:'space-around'}}>
+        {[['⏱',fmtTime(elapsed),'Duração'],['🏋️',String(exerciseCount),'Exercícios'],['📊',String(setCount),'Séries']].map(([icon,val,lbl],idx)=>(
+          <motion.div key={lbl} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.5+idx*.1}} style={{textAlign:'center'}}>
+            <div style={{fontSize:'1.5rem'}}>{icon}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',color:'#f0f0f2',lineHeight:1}}>{val}</div>
+            <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>{lbl}</div>
+          </motion.div>
+        ))}
+      </motion.div>
+      <motion.button initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:.65}}
+        whileTap={{scale:.97}} onClick={onShare}
+        style={{width:'100%',maxWidth:340,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'16px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 6px 24px rgba(227,27,35,.4)',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.6rem'}}>
+        📸 Compartilhar Treino
+      </motion.button>
+      <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.8}}
+        whileTap={{scale:.97}} onClick={onClose}
+        style={{width:'100%',maxWidth:340,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:14,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+        Ver Histórico →
+      </motion.button>
+    </motion.div>
+  );
+}
 
-      {/* Modal trocar exercício */}
-      {showTrocar&&(
-        <div style={{position:'fixed',inset:0,zIndex:90,background:'rgba(0,0,0,.85)',backdropFilter:'blur(4px)',display:'flex',alignItems:'flex-end'}}>
-          <div style={{background:'#0e0e11',borderTop:'1px solid #202028',borderRadius:'20px 20px 0 0',width:'100%',maxHeight:'75vh',display:'flex',flexDirection:'column',padding:'1.25rem'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2'}}>
-                {exercicios.length===0||exIdx>=exercicios.length?'Adicionar Exercício':'Trocar Exercício'}
-              </div>
-              <button onClick={()=>{setShowTrocar(false);setBuscaTroca('');}} style={{background:'rgba(255,255,255,.06)',border:'1px solid #202028',borderRadius:'8px',width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',color:'#9898a8',fontSize:'1rem',cursor:'pointer'}}>✕</button>
+// ── PÁGINA PRINCIPAL ──────────────────────────────────────────────
+export default function ModoTreino() {
+  const router = useRouter();
+  const [uid, setUid]           = useState<string|null>(null);
+  const [plans, setPlans]       = useState<Plan[]>([]);
+  const [activeId, setActiveId] = useState<string|null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [selectedPlanId, setSelectedPlanId] = useState<string|null>(null);
+  const [day, setDay]           = useState(todayDayName());
+  const [mode, setMode]         = useState<'plan'|'livre'>('plan');
+  const [started, setStarted]   = useState(false);
+  const [cursor, setCursor]     = useState(0);
+  const [prevCursor, setPrevCursor] = useState(0);
+  const [allSets, setAllSets]   = useState<Record<number,SetLog[]>>({});
+  const [elapsed, setElapsed]   = useState(0);
+  const elapsedRef              = useRef(0);
+  const timerRef                = useRef<NodeJS.Timeout|null>(null);
+  const [restSecs, setRestSecs] = useState(0);
+  const [showRest, setShowRest] = useState(false);
+  const [restPreset, setRestPreset] = useState(60);
+  const [livreExs, setLivreExs] = useState<{name:string;sets:SetLog[]}[]>([]);
+  const [livreBusca, setLivreBusca] = useState('');
+  const [showGif, setShowGif]   = useState<string|null>(null);
+  const [showFinish, setShowFinish] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [shareSession, setShareSession] = useState<ShareSession|null>(null);
+  const [finishData, setFinishData] = useState({elapsed:0,exerciseCount:0,setCount:0});
+  const [toast, setToast]       = useState('');
+  const [checkedSets, setCheckedSets] = useState<Record<string,boolean>>({});
+
+  // Solicitar permissão de notificação ao montar
+  useEffect(()=>{
+    requestNotifPermission();
+  },[]);
+
+  useEffect(()=>{
+    return onAuthStateChanged(auth, async u=>{
+      if(!u){setLoading(false);return;}
+      setUid(u.uid);
+      try {
+        const d = await getDoc(doc(db,'users',u.uid,'data','plans'));
+        if(d.exists()){
+          const p = d.data().payload ? JSON.parse(d.data().payload) : {list:[],activeId:null};
+          setPlans(p.list||[]);
+          setActiveId(p.activeId||null);
+          setSelectedPlanId(p.activeId||null);
+        }
+      } catch(e){console.error(e);}
+      setLoading(false);
+    });
+  },[]);
+
+  const showToast = (msg:string) => {setToast(msg);setTimeout(()=>setToast(''),2500);};
+
+  const startTsRef = useRef<number>(0);
+
+  useEffect(()=>{
+    if(started){
+      startTsRef.current = Date.now() - elapsedRef.current * 1000;
+      timerRef.current = setInterval(()=>{
+        const secs = Math.floor((Date.now() - startTsRef.current) / 1000);
+        elapsedRef.current = secs;
+        setElapsed(secs);
+      }, 500);
+    } else {
+      if(timerRef.current) clearInterval(timerRef.current);
+      elapsedRef.current=0; setElapsed(0); startTsRef.current=0;
+    }
+    return ()=>{if(timerRef.current) clearInterval(timerRef.current);};
+  },[started]);
+
+  const resolvedPlan = plans.find(p=>p.id===(selectedPlanId||activeId))||plans[0]||null;
+  const planItems    = resolvedPlan?.byDay?.[day]||[];
+  const currentEx    = planItems[cursor]||null;
+  const currentSets  = allSets[cursor]||[];
+
+  useEffect(()=>{
+    if(!started||mode!=='plan'||!currentEx) return;
+    if(allSets[cursor]&&allSets[cursor].length>0) return;
+    const n = currentEx.setsPlanned||3;
+    setAllSets(prev=>({...prev,[cursor]:Array.from({length:n},()=>({w:'',r:'',done:false}))}));
+  },[cursor,started,mode,currentEx]);
+
+  const updateSet = (si:number,field:'w'|'r',val:string) => {
+    setAllSets(prev=>{const cur=[...(prev[cursor]||[])];cur[si]={...cur[si],[field]:val};return{...prev,[cursor]:cur};});
+  };
+
+  const handleSetDone = (si:number) => {
+    if(!currentSets[si]?.r) return;
+    const key = `${cursor}-${si}`;
+    setCheckedSets(prev=>({...prev,[key]:true}));
+    setAllSets(prev=>{const cur=[...(prev[cursor]||[])];cur[si]={...cur[si],done:true};return{...prev,[cursor]:cur};});
+    playBeep('tick');
+    vibrate([40,20,40]);
+    setRestSecs(restPreset);
+    setShowRest(true);
+  };
+
+  const saveSession = async () => {
+    const entries:any[] = [];
+    let totalSetCount = 0;
+    planItems.forEach((ex,ci)=>{
+      const sets=(allSets[ci]||[]).filter(s=>s.r.trim());
+      if(!sets.length) return;
+      totalSetCount+=sets.length;
+      entries.push({name:ex.name,exId:ex.exId,sets:sets.map(s=>({w:s.w,r:s.r}))});
+    });
+    if(!entries.length){showToast('Nenhuma série registrada');return;}
+    const sessData:ShareSession = {planName:resolvedPlan?.name,day,entries,duration:elapsed};
+    if(uid){
+      try {
+        const histRef = doc(db,'users',uid,'data','history');
+        const histSnap = await getDoc(histRef);
+        const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
+        hist[todayKey()]={...sessData,planId:resolvedPlan?.id,savedAt:Date.now()};
+        await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
+      } catch(e){console.error(e);}
+    }
+    setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
+    setShareSession(sessData);
+    setShowFinish(true); setStarted(false); setAllSets({}); setCursor(0);
+  };
+
+  const saveLivre = async () => {
+    const valid = livreExs.filter(ex=>ex.sets.some(s=>s.r.trim()));
+    if(!valid.length){showToast('Adicione ao menos uma série');return;}
+    const entries = valid.map(ex=>({name:ex.name,sets:ex.sets.filter(s=>s.r.trim()).map(s=>({w:s.w,r:s.r}))}));
+    const sessData:ShareSession = {planName:'Treino Livre',day,entries,duration:elapsed};
+    if(uid){
+      try {
+        const histRef = doc(db,'users',uid,'data','history');
+        const histSnap = await getDoc(histRef);
+        const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
+        hist[todayKey()]={...sessData,savedAt:Date.now()};
+        await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
+      } catch(e){console.error(e);}
+    }
+    const totalSetCount=entries.reduce((a,ex)=>a+ex.sets.length,0);
+    setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
+    setShareSession(sessData);
+    setShowFinish(true); setStarted(false); setLivreExs([]);
+  };
+
+  if(loading) return (
+    <PageShell>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
+        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
+          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
+      </div>
+    </PageShell>
+  );
+
+  if(showGif) return (
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} onClick={()=>setShowGif(null)}
+      style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.97)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1.25rem',padding:'2rem'}}>
+      <motion.div initial={{scale:.85}} animate={{scale:1}} transition={{type:'spring',stiffness:200}}>
+        <ExGif name={showGif} size={270}/>
+      </motion.div>
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.15}}
+        style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',textAlign:'center'}}>
+        {showGif}
+      </motion.div>
+      <div style={{fontSize:'.72rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.1em'}}>Toque para fechar</div>
+    </motion.div>
+  );
+
+  if(showRest) return <RestTimer seconds={restSecs} onDone={()=>setShowRest(false)}/>;
+
+  if(showFinish) return (
+    <FinishScreen elapsed={finishData.elapsed} exerciseCount={finishData.exerciseCount} setCount={finishData.setCount}
+      onShare={()=>{setShowFinish(false);setShowShare(true);}}
+      onClose={()=>{setShowFinish(false);router.push('/historico');}}/>
+  );
+
+  if(showShare && shareSession) return (
+    <div style={{position:'fixed',inset:0,background:'#0a0a0e',zIndex:250}}>
+      <AnimatePresence>
+        <ShareWorkoutModal session={shareSession} onClose={()=>{setShowShare(false);router.push('/historico');}}/>
+      </AnimatePresence>
+    </div>
+  );
+
+  // ── PRÉ-INÍCIO ────────────────────────────────────────────────────
+  if(!started) return (
+    <PageShell>
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}
+            style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)'}}>
+            ✓ {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} style={{marginBottom:'1.25rem'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>Modo Treino</div>
+        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px'}}>Registre suas séries em tempo real</div>
+      </motion.div>
+
+      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.08}}
+        style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
+        {(['plan','livre'] as const).map(m=>(
+          <motion.button key={m} whileTap={{scale:.97}} onClick={()=>setMode(m)}
+            style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:mode===m?'rgba(227,27,35,.15)':'transparent',color:mode===m?'#e31b23':'#7a7a8a',boxShadow:mode===m?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s',outline:'none'}}>
+            {m==='plan'?'Com Ficha':'Treino Livre'}
+          </motion.button>
+        ))}
+      </motion.div>
+
+      <AnimatePresence mode="wait">
+        {mode==='plan' && (
+          <motion.div key="plan" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} transition={{duration:.2}}>
+            <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,padding:'1rem',display:'grid',gap:'.85rem'}}>
+              {plans.length===0 ? (
+                <div style={{textAlign:'center',padding:'1.5rem 0'}}>
+                  <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>📋</div>
+                  <div style={{fontSize:'.85rem',color:'#7a7a8a',marginBottom:'1rem'}}>Nenhuma ficha criada ainda.</div>
+                  <motion.button whileTap={{scale:.97}} onClick={()=>router.push('/treino')}
+                    style={{background:'#e31b23',border:'none',borderRadius:10,padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                    Criar Ficha
+                  </motion.button>
+                </div>
+              ) : (
+                <>
+                  {plans.length>1 && (
+                    <div>
+                      <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Ficha</div>
+                      <Select value={selectedPlanId||activeId||''} onValueChange={v=>setSelectedPlanId(v)}>
+                        <SelectTrigger style={{background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:44,outline:'none',boxShadow:'none'}}>
+                          <SelectValue>{plans.find(p=>p.id===(selectedPlanId||activeId))?.name||'Selecione uma ficha'}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent style={{background:'#1e1e24',border:'1px solid #2e2e38',outline:'none'}}>
+                          {plans.map(p=><SelectItem key={p.id} value={p.id} style={{color:'#f0f0f2',outline:'none'}}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div>
+                    <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Dia da semana</div>
+                    <Select value={day} onValueChange={v=>setDay(v)}>
+                      <SelectTrigger style={{background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:44,outline:'none',boxShadow:'none'}}>
+                        <SelectValue>{day}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent style={{background:'#1e1e24',border:'1px solid #2e2e38',outline:'none'}}>
+                        {DAYS.map(d=><SelectItem key={d} value={d} style={{color:'#f0f0f2',outline:'none'}}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {planItems.length>0 && (
+                    <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}}
+                      style={{background:'rgba(0,0,0,.2)',borderRadius:12,padding:'.75rem',display:'grid',gap:'.45rem'}}>
+                      <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.1rem'}}>{planItems.length} exercício(s) hoje</div>
+                      {planItems.slice(0,4).map((ex,i)=>(
+                        <motion.div key={i} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.05*i}}
+                          style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
+                          <ExGif name={ex.name} size={34}/>
+                          <span style={{fontSize:'.85rem',color:'#b0b0be',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</span>
+                          <span style={{fontSize:'.65rem',color:'#484858',fontWeight:700,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:6,padding:'2px 7px',flexShrink:0}}>{ex.setsPlanned}x</span>
+                        </motion.div>
+                      ))}
+                      {planItems.length>4 && <div style={{fontSize:'.7rem',color:'#484858',textAlign:'center',paddingTop:'.2rem'}}>+{planItems.length-4} exercícios</div>}
+                    </motion.div>
+                  )}
+                  {planItems.length===0 && <div style={{textAlign:'center',padding:'.75rem',color:'#484858',fontSize:'.82rem'}}>Nenhum exercício para {day}. Selecione outro dia.</div>}
+
+                  {/* Timer descanso */}
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.6rem .75rem',background:'rgba(0,0,0,.2)',borderRadius:10}}>
+                    <div style={{fontSize:'.75rem',color:'#7a7a8a'}}>⏱ Descanso padrão</div>
+                    <div style={{display:'flex',gap:'.35rem'}}>
+                      {[30,60,90,120].map(s=>(
+                        <motion.button key={s} whileTap={{scale:.9}} onClick={()=>setRestPreset(s)}
+                          style={{padding:'.28rem .55rem',borderRadius:7,border:'1px solid '+(restPreset===s?'#e31b23':'#2e2e38'),background:restPreset===s?'rgba(227,27,35,.15)':'transparent',color:restPreset===s?'#e31b23':'#7a7a8a',fontSize:'.72rem',fontWeight:700,cursor:'pointer',transition:'all .15s',outline:'none'}}>
+                          {s}s
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <motion.button whileTap={{scale:.98}}
+                    onClick={()=>{unlockAudio();vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}
+                    disabled={planItems.length===0}
+                    style={{width:'100%',background:planItems.length===0?'rgba(227,27,35,.3)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:planItems.length===0?'not-allowed':'pointer',boxShadow:planItems.length===0?'none':'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
+                    Iniciar Treino →
+                  </motion.button>
+                </>
+              )}
             </div>
-            <input value={buscaTroca} onChange={e=>setBuscaTroca(e.target.value)}
-              placeholder="Buscar exercício..."
-              style={{background:'#111115',border:'1px solid #222227',borderRadius:'10px',color:'#eaeaea',padding:'10px 13px',fontSize:'.9rem',outline:'none',marginBottom:'.75rem'}}/>
-            <div style={{overflowY:'auto',display:'grid',gap:'.4rem'}}>
-              {EXERCICIOS_LIVRE.filter(e=>e.toLowerCase().includes(buscaTroca.toLowerCase())).map((ex,i)=>(
-                <button key={i} onClick={()=>exercicios.length===0?adicionarEx(ex):trocarEx(ex)} style={{
-                  background:'rgba(255,255,255,.03)',border:'1px solid #202028',
-                  borderRadius:'10px',padding:'.7rem 1rem',textAlign:'left',cursor:'pointer',
-                  color:'#f0f0f2',fontSize:'.9rem',fontWeight:600,
-                }}>{ex}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <PageShell>
-        {/* Header do treino */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-              {exercicios.length>0?`${exIdx+1}/${exercicios.length} exercícios`:'Treino Livre'}
-            </div>
-            <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'2px'}}>⏱ {fmt(elapsed)}</div>
-          </div>
-          <button onClick={finalizar} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:'10px',padding:'.45rem .85rem',color:'#e31b23',fontSize:'.78rem',fontWeight:800,textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif"}}>
-            Finalizar
-          </button>
-        </div>
-
-        {/* Barra de progresso geral */}
-        <div style={{marginBottom:'1rem'}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
-            <span style={{fontSize:'.6rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.07em'}}>Progresso geral</span>
-            <span style={{fontSize:'.6rem',color:'#e31b23',fontWeight:700}}>{totalFeitas}/{totalSeries} séries</span>
-          </div>
-          <div style={{background:'#16161c',borderRadius:'4px',height:'4px'}}>
-            <div style={{height:'100%',borderRadius:'4px',background:'linear-gradient(90deg,#e31b23,#ff4444)',width:`${progresso}%`,transition:'width .4s',boxShadow:'0 0 10px rgba(227,27,35,.4)'}}/>
-          </div>
-        </div>
-
-        {/* Navegação entre exercícios */}
-        {exercicios.length>0&&(
-          <div style={{display:'flex',gap:'.4rem',overflowX:'auto',marginBottom:'1rem',paddingBottom:'.25rem'}}>
-            {exercicios.map((ex,i)=>{
-              const todasFeitas = ex.series.every(s=>s.feita);
-              const alguma      = ex.series.some(s=>s.feita);
-              return (
-                <button key={i} onClick={()=>setExIdx(i)} style={{
-                  flexShrink:0,padding:'.35rem .75rem',borderRadius:'10px',cursor:'pointer',
-                  border:`1px solid ${i===exIdx?'#e31b23':todasFeitas?'rgba(34,197,94,.3)':alguma?'rgba(227,27,35,.2)':'#202028'}`,
-                  background: i===exIdx?'rgba(227,27,35,.15)':todasFeitas?'rgba(34,197,94,.08)':'rgba(255,255,255,.04)',
-                  color: i===exIdx?'#e31b23':todasFeitas?'#4ade80':'#9898a8',
-                  fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.75rem',
-                  textTransform:'uppercase',letterSpacing:'.03em',
-                  display:'flex',alignItems:'center',gap:'.35rem',
-                }}>
-                  {todasFeitas&&<span style={{fontSize:'.7rem'}}>✅</span>}
-                  {ex.nome.split(' ').slice(0,2).join(' ')}
-                </button>
-              );
-            })}
-            <button onClick={()=>{setExIdx(exercicios.length);setShowTrocar(true);}} style={{
-              flexShrink:0,padding:'.35rem .75rem',borderRadius:'10px',cursor:'pointer',
-              border:'1px dashed #202028',background:'transparent',
-              color:'#5a5a6a',fontFamily:"'Barlow Condensed',sans-serif",
-              fontWeight:700,fontSize:'.75rem',textTransform:'uppercase',
-            }}>+ Add</button>
-          </div>
+          </motion.div>
         )}
 
-        {/* Card do exercício atual */}
-        {exAtual ? (
-          <div style={{background:'#0e0e11',border:'1px solid #202028',borderRadius:'16px',padding:'1.1rem',marginBottom:'.75rem'}}>
-            {/* Nome + trocar */}
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.75rem'}}>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{exAtual.nome}</div>
-                {exAtual.cargaAnterior&&exAtual.cargaAnterior!=='0'&&(
-                  <div style={{fontSize:'.65rem',color:'#5a5a6a',marginTop:'3px'}}>
-                    📊 Última vez: <span style={{color:'#e31b23',fontWeight:700}}>{exAtual.cargaAnterior}kg</span>
-                  </div>
+        {mode==='livre' && (
+          <motion.div key="livre" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} transition={{duration:.2}}>
+            <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,padding:'1.75rem',textAlign:'center',display:'grid',gap:'1rem'}}>
+              <motion.div initial={{scale:.8}} animate={{scale:1}} transition={{type:'spring',stiffness:200}} style={{fontSize:'3.5rem'}}>🏋️</motion.div>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
+                  Treino <span style={{color:'#e31b23'}}>Livre</span>
+                </div>
+                <div style={{fontSize:'.82rem',color:'#7a7a8a',marginTop:'.5rem',lineHeight:1.6}}>Sem ficha? Sem problema.</div>
+              </div>
+              <motion.button whileTap={{scale:.97}} onClick={()=>{unlockAudio();vibrate(30);setStarted(true);}}
+                style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
+                Começar →
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </PageShell>
+  );
+
+  // ── SESSÃO ATIVA — COM FICHA ──────────────────────────────────────
+  if(mode==='plan') return (
+    <PageShell>
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+        <div>
+          <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em'}}>Em andamento</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{resolvedPlan?.name}</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:'.65rem'}}>
+          <div style={{textAlign:'right'}}>
+            <motion.div key={Math.floor(elapsed/60)} initial={{scale:1.05}} animate={{scale:1}}
+              style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#e31b23',lineHeight:1}}>
+              {fmtTime(elapsed)}
+            </motion.div>
+            <div style={{fontSize:'.55rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>duração</div>
+          </div>
+          <motion.button whileTap={{scale:.95}}
+            onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}
+            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'0 .65rem',height:34,fontSize:'.75rem',fontWeight:700,color:'#7a7a8a',cursor:'pointer',outline:'none'}}>✕</motion.button>
+        </div>
+      </motion.div>
+
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}} style={{marginBottom:'.75rem'}}>
+        <div style={{height:4,background:'#2e2e38',borderRadius:2,overflow:'hidden'}}>
+          <motion.div animate={{width:`${((cursor+1)/planItems.length)*100}%`}} transition={{duration:.4,ease:'easeOut'}}
+            style={{height:'100%',background:'#e31b23',borderRadius:2}}/>
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px'}}>
+          <div style={{fontSize:'.6rem',color:'#484858'}}>{cursor+1} de {planItems.length} exercícios</div>
+          <div style={{fontSize:'.6rem',color:'#484858'}}>{Object.values(allSets).flat().filter(s=>s.r).length} séries registradas</div>
+        </div>
+      </motion.div>
+
+      <div style={{display:'flex',gap:'.3rem',overflowX:'auto',marginBottom:'.75rem',paddingBottom:'.25rem',scrollbarWidth:'none'}}>
+        {planItems.map((ex,i)=>{
+          const done=(allSets[i]||[]).some(s=>s.r.trim());
+          const active=cursor===i;
+          return (
+            <motion.button key={i} whileTap={{scale:.9}} onClick={()=>{setPrevCursor(cursor);setCursor(i);}}
+              style={{flexShrink:0,width:36,height:36,borderRadius:8,border:'1px solid '+(active?'#e31b23':done?'rgba(34,197,94,.3)':'#2e2e38'),background:active?'rgba(227,27,35,.15)':done?'rgba(34,197,94,.08)':'rgba(255,255,255,.03)',color:active?'#e31b23':done?'#4ade80':'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>
+              {done?'✓':i+1}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {currentEx && (
+          <motion.div key={cursor}
+            initial={{opacity:0,x:cursor>=prevCursor?30:-30}}
+            animate={{opacity:1,x:0}}
+            exit={{opacity:0,x:cursor>=prevCursor?-30:30}}
+            transition={{duration:.22,ease:'easeOut'}}
+            style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,marginBottom:'.75rem',overflow:'hidden'}}>
+            <div style={{padding:'1rem'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
+                <motion.button whileTap={{scale:.93}} onClick={()=>setShowGif(currentEx.name)}
+                  style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:10,overflow:'hidden',flexShrink:0,outline:'none'}}>
+                  <ExGif name={currentEx.name} size={72}/>
+                </motion.button>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{display:'inline-block',fontSize:'.58rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:4,padding:'1px 6px',marginBottom:4}}>{cursor+1}/{planItems.length}</span>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1.1,wordBreak:'break-word',whiteSpace:'normal'}}>{currentEx.name}</div>
+                  <div style={{fontSize:'.62rem',color:'#484858',marginTop:'3px'}}>{currentEx.setsPlanned} séries · {currentEx.repsTarget} reps</div>
+                </div>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',padding:'0 .25rem .3rem'}}>
+                {['#','Kg','Reps',''].map((h,i)=>(
+                  <div key={i} style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',textAlign:i>0?'center':'left'}}>{h}</div>
+                ))}
+              </div>
+
+              <div style={{display:'grid',gap:'.4rem',marginBottom:'.75rem'}}>
+                <AnimatePresence>
+                  {currentSets.map((s,si)=>{
+                    const key=`${cursor}-${si}`;
+                    const isDone=checkedSets[key]||s.done;
+                    return (
+                      <motion.div key={si} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-20}} transition={{delay:si*.04}}
+                        style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.25)':s.r?'rgba(255,255,255,.08)':'#2e2e38'),borderRadius:10,padding:'.5rem .35rem',transition:'all .2s'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
+                        <input type="number" min="0" step="0.5" placeholder="0" value={s.w} onChange={e=>updateSet(si,'w',e.target.value)}
+                          style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.9rem',color:'#fff',height:36,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                        <input type="number" min="0" placeholder="0" value={s.r} onChange={e=>updateSet(si,'r',e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSetDone(si)}
+                          style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.9rem',color:'#fff',height:36,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                        <motion.button whileTap={{scale:.85}} onClick={()=>handleSetDone(si)}
+                          style={{width:32,height:32,borderRadius:'50%',border:'1px solid '+(isDone?'rgba(34,197,94,.6)':s.r?'rgba(34,197,94,.3)':'#2e2e38'),background:isDone?'rgba(34,197,94,.2)':s.r?'rgba(34,197,94,.08)':'transparent',color:isDone?'#4ade80':s.r?'#4ade80':'#484858',fontSize:'.9rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>✓</motion.button>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+
+              <div style={{display:'flex',gap:'.5rem'}}>
+                <motion.button whileTap={{scale:.97}}
+                  onClick={()=>setAllSets(prev=>{const cur=[...(prev[cursor]||[])];cur.push({w:'',r:'',done:false});return{...prev,[cursor]:cur};})}
+                  style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:8,color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,height:36,cursor:'pointer',outline:'none'}}>+ Série</motion.button>
+                {currentSets.length>1 && (
+                  <motion.button whileTap={{scale:.97}}
+                    onClick={()=>setAllSets(prev=>{const cur=(prev[cursor]||[]).slice(0,-1);return{...prev,[cursor]:cur};})}
+                    style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:8,color:'#e31b23',fontSize:'.8rem',fontWeight:700,height:36,padding:'0 .75rem',cursor:'pointer',outline:'none'}}>− Série</motion.button>
                 )}
               </div>
-              <button onClick={()=>setShowTrocar(true)} style={{
-                background:'rgba(255,255,255,.06)',border:'1px solid #202028',
-                borderRadius:'8px',padding:'.35rem .65rem',color:'#9898a8',
-                fontSize:'.72rem',fontWeight:700,cursor:'pointer',flexShrink:0,marginLeft:'.5rem',
-              }}>🔄 Trocar</button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Config descanso */}
-            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.85rem',padding:'.5rem .75rem',background:'rgba(0,0,0,.3)',borderRadius:'10px'}}>
-              <span style={{fontSize:'.65rem',color:'#5a5a6a',textTransform:'uppercase',letterSpacing:'.06em',flex:1}}>⏱ Descanso</span>
-              {[30,45,60,90,120].map(s=>(
-                <button key={s} onClick={()=>setTempoDescanso(s)} style={{
-                  padding:'.2rem .5rem',borderRadius:'6px',cursor:'pointer',
-                  border:`1px solid ${tempoDescanso===s?'rgba(227,27,35,.4)':'#202028'}`,
-                  background:tempoDescanso===s?'rgba(227,27,35,.15)':'transparent',
-                  color:tempoDescanso===s?'#e31b23':'#5a5a6a',
-                  fontSize:'.65rem',fontWeight:700,
-                }}>{s}s</button>
-              ))}
-            </div>
-
-            {/* Header das séries */}
-            <div style={{display:'grid',gridTemplateColumns:'32px 1fr 1fr 42px',gap:'.5rem',marginBottom:'.4rem',padding:'0 .25rem'}}>
-              {['SÉRIE','CARGA (kg)','REPS',''].map((h,i)=>(
-                <div key={i} style={{fontSize:'.55rem',color:'#323240',textTransform:'uppercase',letterSpacing:'.07em',textAlign:i===3?'center':'left'}}>{h}</div>
-              ))}
-            </div>
-
-            {/* Séries */}
-            <div style={{display:'grid',gap:'.4rem'}}>
-              {exAtual.series.map((serie,si)=>(
-                <div key={si} style={{
-                  display:'grid',gridTemplateColumns:'32px 1fr 1fr 42px',gap:'.5rem',
-                  alignItems:'center',
-                  background:serie.feita?'rgba(34,197,94,.06)':'rgba(0,0,0,.2)',
-                  border:`1px solid ${serie.feita?'rgba(34,197,94,.2)':'#1a1a20'}`,
-                  borderRadius:'10px',padding:'.5rem .6rem',
-                  transition:'all .2s',
-                }}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:serie.feita?'#4ade80':'#5a5a6a',textAlign:'center'}}>{si+1}</div>
-                  <input type="number" step="0.5" value={serie.carga} onChange={e=>updateSerie(si,'carga',e.target.value)}
-                    placeholder={exAtual.cargaAnterior||'0'}
-                    style={{background:'rgba(0,0,0,.3)',border:'1px solid #202028',borderRadius:'7px',color:serie.feita?'#4ade80':'#f0f0f2',padding:'.45rem .6rem',fontSize:'.9rem',outline:'none',width:'100%',fontWeight:600}}/>
-                  <input type="text" value={serie.reps} onChange={e=>updateSerie(si,'reps',e.target.value)}
-                    style={{background:'rgba(0,0,0,.3)',border:'1px solid #202028',borderRadius:'7px',color:serie.feita?'#4ade80':'#f0f0f2',padding:'.45rem .6rem',fontSize:'.9rem',outline:'none',width:'100%',fontWeight:600}}/>
-                  <button onClick={()=>marcarSerie(si)} style={{
-                    width:38,height:38,borderRadius:'10px',border:'none',cursor:'pointer',
-                    background:serie.feita?'rgba(34,197,94,.2)':'rgba(255,255,255,.06)',
-                    fontSize:'1.1rem',display:'flex',alignItems:'center',justifyContent:'center',
-                    transition:'all .15s',
-                  }}>
-                    {serie.feita?'✅':'⭕'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+      <div style={{display:'flex',gap:'.5rem'}}>
+        <motion.button whileTap={{scale:.97}} onClick={()=>{setPrevCursor(cursor);setCursor(c=>Math.max(0,c-1));}} disabled={cursor===0}
+          style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:10,color:cursor===0?'#2e2e38':'#7a7a8a',height:46,fontSize:'.85rem',fontWeight:700,cursor:cursor===0?'not-allowed':'pointer',outline:'none'}}>← Anterior</motion.button>
+        {cursor<planItems.length-1 ? (
+          <motion.button whileTap={{scale:.97}} onClick={()=>{vibrate(20);setPrevCursor(cursor);setCursor(c=>c+1);}}
+            style={{flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(227,27,35,.3)',cursor:'pointer',outline:'none'}}>Próximo →</motion.button>
         ) : (
-          /* Treino livre sem exercícios */
-          <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #202028',borderRadius:'16px',marginBottom:'.75rem'}}>
-            <div style={{fontSize:'2.5rem',marginBottom:'.75rem'}}>💪</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Adicione o primeiro exercício</div>
-            <div style={{fontSize:'.8rem',color:'#5a5a6a'}}>Toque em &quot;+ Add&quot; acima para buscar e adicionar exercícios</div>
-          </div>
+          <motion.button whileTap={{scale:.97}} onClick={saveSession}
+            style={{flex:2,background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}>Finalizar 💪</motion.button>
         )}
+      </div>
+    </PageShell>
+  );
 
-        {/* Botões de navegação */}
-        {exercicios.length>0&&(
-          <div style={{display:'flex',gap:'.6rem',marginBottom:'1rem'}}>
-            <button onClick={()=>setExIdx(i=>Math.max(0,i-1))} disabled={exIdx===0} style={{
-              flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #202028',
-              borderRadius:'12px',padding:'.85rem',color:exIdx===0?'#323240':'#9898a8',
-              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',
-              textTransform:'uppercase',cursor:exIdx===0?'not-allowed':'pointer',
-            }}>← Anterior</button>
-            {exIdx<exercicios.length-1 ? (
-              <button onClick={()=>setExIdx(i=>i+1)} style={{
-                flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',
-                borderRadius:'12px',padding:'.85rem',color:'#fff',
-                fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',
-                textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',
-                boxShadow:'0 4px 20px rgba(227,27,35,.28)',
-              }}>Próximo →</button>
-            ) : (
-              <button onClick={finalizar} style={{
-                flex:2,background:'linear-gradient(135deg,#22c55e,#16a34a)',border:'none',
-                borderRadius:'12px',padding:'.85rem',color:'#fff',
-                fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',
-                textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',
-                boxShadow:'0 4px 20px rgba(34,197,94,.28)',
-              }}>🏆 Concluir Treino</button>
-            )}
-          </div>
-        )}
+  // ── SESSÃO ATIVA — TREINO LIVRE ───────────────────────────────────
+  return (
+    <PageShell>
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+        <div>
+          <span style={{display:'inline-block',fontSize:'.6rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:4,padding:'1px 6px',letterSpacing:'.06em',marginBottom:3}}>TREINO LIVRE</span>
+          <motion.div key={Math.floor(elapsed/60)} initial={{scale:1.05}} animate={{scale:1}}
+            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:'#e31b23',lineHeight:1}}>
+            {fmtTime(elapsed)}
+          </motion.div>
+        </div>
+        <div style={{display:'flex',gap:'.5rem'}}>
+          <motion.button whileTap={{scale:.95}} onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}
+            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'0 .65rem',height:36,fontSize:'.75rem',fontWeight:700,color:'#7a7a8a',cursor:'pointer',outline:'none'}}>✕</motion.button>
+          <motion.button whileTap={{scale:.97}} onClick={saveLivre}
+            style={{background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:8,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',height:36,padding:'0 .9rem',boxShadow:'0 2px 10px rgba(34,197,94,.25)',cursor:'pointer',outline:'none'}}>Salvar 💪</motion.button>
+        </div>
+      </motion.div>
 
-        {/* Adicionar exercício (treino livre) */}
-        {exercicios.length===0&&(
-          <button onClick={()=>setShowTrocar(true)} style={{
-            width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',
-            borderRadius:'12px',padding:'14px',color:'#fff',
-            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',
-            textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',
-            boxShadow:'0 4px 20px rgba(227,27,35,.3)',
-          }}>+ Adicionar Exercício</button>
-        )}
-      </PageShell>
-    </>
+      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}
+        style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14,marginBottom:'.75rem',padding:'.75rem'}}>
+        <input value={livreBusca} onChange={e=>setLivreBusca(e.target.value)} placeholder="🔍 Adicionar exercício…"
+          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:42,fontSize:'.9rem',padding:'0 13px',outline:'none'}}/>
+        <AnimatePresence>
+          {livreBusca.length>=1 && (
+            <motion.div initial={{opacity:0,y:-6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+              style={{marginTop:'.5rem',maxHeight:220,overflowY:'auto',display:'grid',gap:'.3rem'}}>
+              {ALL_EXS.filter(n=>n.toLowerCase().includes(livreBusca.toLowerCase())).slice(0,8).map(n=>(
+                <motion.button key={n} whileTap={{scale:.98}}
+                  onClick={()=>{vibrate(20);setLivreExs(prev=>[{name:n,sets:[{w:'',r:'',done:false}]},...prev]);setLivreBusca('');}}
+                  style={{display:'flex',alignItems:'center',gap:'.6rem',background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:8,padding:'.45rem .65rem',textAlign:'left',cursor:'pointer',outline:'none'}}>
+                  <ExGif name={n} size={40}/>
+                  <span style={{fontSize:'.85rem',color:'#f0f0f2',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n}</span>
+                  <span style={{color:'#e31b23',fontWeight:700,fontSize:'1.1rem',flexShrink:0}}>+</span>
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {livreExs.length===0 && (
+        <motion.div initial={{opacity:0}} animate={{opacity:1}}
+          style={{textAlign:'center',padding:'2rem 1rem',border:'1px dashed #2e2e38',borderRadius:12,color:'#484858',fontSize:'.85rem'}}>
+          Use a busca acima para adicionar exercícios
+        </motion.div>
+      )}
+
+      <div style={{display:'grid',gap:'.65rem'}}>
+        <AnimatePresence>
+          {livreExs.map((ex,ei)=>(
+            <motion.div key={ei} initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-30,height:0}} transition={{duration:.2}}
+              style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14,overflow:'hidden'}}>
+              <div style={{padding:'.85rem'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'.65rem',marginBottom:'.75rem'}}>
+                  <motion.button whileTap={{scale:.93}} onClick={()=>setShowGif(ex.name)}
+                    style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:8,overflow:'hidden',flexShrink:0,outline:'none'}}>
+                    <ExGif name={ex.name} size={52}/>
+                  </motion.button>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'#f0f0f2',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.2}}>{ex.name}</div>
+                    <div style={{fontSize:'.62rem',color:'#484858',marginTop:'1px'}}>{ex.sets.length} série(s)</div>
+                  </div>
+                  <motion.button whileTap={{scale:.9}} onClick={()=>{vibrate(20);setLivreExs(prev=>prev.filter((_,i)=>i!==ei));}}
+                    style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:6,padding:'0 .4rem',height:30,fontSize:'.75rem',fontWeight:700,color:'#e31b23',cursor:'pointer',flexShrink:0,outline:'none'}}>✕</motion.button>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',padding:'0 .25rem .2rem'}}>
+                  {['#','Kg','Reps',''].map((h,i)=>(
+                    <div key={i} style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',textAlign:i>0?'center':'left'}}>{h}</div>
+                  ))}
+                </div>
+
+                <div style={{display:'grid',gap:'.3rem',marginBottom:'.5rem'}}>
+                  <AnimatePresence>
+                    {ex.sets.map((s,si)=>{
+                      const isDone=s.done;
+                      return (
+                        <motion.div key={si} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{delay:si*.03}}
+                          style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:8,padding:'.4rem .3rem',transition:'all .2s'}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
+                          <input type="number" min="0" step="0.5" placeholder="0" value={s.w}
+                            onChange={e=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.map((s2,j)=>j!==si?s2:{...s2,w:e.target.value})}))}
+                            style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.88rem',color:'#fff',height:34,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                          <input type="number" min="0" placeholder="0" value={s.r}
+                            onChange={e=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.map((s2,j)=>j!==si?s2:{...s2,r:e.target.value})}))}
+                            style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.88rem',color:'#fff',height:34,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                          <motion.button whileTap={{scale:.85}}
+                            onClick={()=>{
+                              if(s.r){
+                                playBeep('tick');
+                                vibrate([40,20,40]);
+                                setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.map((s2,j)=>j!==si?s2:{...s2,done:true})}));
+                                setRestSecs(restPreset);setShowRest(true);
+                              }
+                            }}
+                            style={{width:32,height:32,borderRadius:'50%',border:'1px solid '+(isDone?'rgba(34,197,94,.6)':s.r?'rgba(34,197,94,.3)':'#2e2e38'),background:isDone?'rgba(34,197,94,.2)':s.r?'rgba(34,197,94,.08)':'transparent',color:isDone?'#4ade80':s.r?'#4ade80':'#484858',fontSize:'.85rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>✓</motion.button>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+
+                <div style={{display:'flex',gap:'.4rem'}}>
+                  <motion.button whileTap={{scale:.97}}
+                    onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:[...ex2.sets,{w:'',r:'',done:false}]}))}
+                    style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:7,color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,height:32,cursor:'pointer',outline:'none'}}>+ Série</motion.button>
+                  {ex.sets.length>1 && (
+                    <motion.button whileTap={{scale:.97}}
+                      onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.slice(0,-1)}))}
+                      style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:7,color:'#e31b23',fontSize:'.78rem',fontWeight:700,height:32,padding:'0 .65rem',cursor:'pointer',outline:'none'}}>− Série</motion.button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {livreExs.length>0 && (
+        <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} whileTap={{scale:.98}} onClick={saveLivre}
+          style={{width:'100%',marginTop:'.85rem',background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:14,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',boxShadow:'0 4px 20px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}>
+          Finalizar Treino 💪
+        </motion.button>
+      )}
+    </PageShell>
   );
 }
