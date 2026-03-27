@@ -114,7 +114,6 @@ export default function HomePage() {
   const [history,    setHistory]    = useState<Record<string,HistEntry>>({});
   const [fichas,     setFichas]     = useState<Ficha[]>([]);
   const [activeId,   setActiveId]   = useState<string|null>(null);
-  const [selosCount, setSelosCount] = useState(0);
   const [loading,    setLoading]    = useState(true);
   const [meuRank,    setMeuRank]    = useState<RankScore|null>(null);
   const [top3,       setTop3]       = useState<RankScore[]>([]);
@@ -166,10 +165,6 @@ export default function HomePage() {
         }
 
         // Selos
-        const selosDoc = await getDoc(doc(db,'users',u.uid,'data','selos'));
-        if(selosDoc.exists()){
-          setSelosCount(Object.values(selosDoc.data()).filter(Boolean).length);
-        }
 
         // Rank global
         try {
@@ -393,25 +388,6 @@ export default function HomePage() {
           <CardContent style={{padding:'.85rem 1rem'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem'}}>
               <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                <ShieldStar size={16} color={rank.cor} weight="fill"/>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:rank.cor,textTransform:'uppercase'}}>{rank.label}</div>
-              </div>
-              <div style={{fontSize:'.62rem',color:'#7a7a8a',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                <Trophy size={12}/> {selosCount} selos
-              </div>
-            </div>
-            <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:5,overflow:'hidden',marginBottom:'.3rem'}}>
-              <motion.div animate={{width:`${rankPct}%`}} transition={{duration:.6,ease:'easeOut'}}
-                style={{height:'100%',borderRadius:4,background:rank.cor,boxShadow:`0 0 8px ${rank.cor}88`}}/>
-            </div>
-            <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858'}}>
-              <span>{rank.label}</span>
-              {nextRank&&<span>{nextRank.minSelos-selosCount} selos para {nextRank.label}</span>}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
       {/* Atalhos */}
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.2}}
         style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.75rem'}}>
