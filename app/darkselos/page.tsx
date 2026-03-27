@@ -343,9 +343,6 @@ export default function DarkSelosPage() {
   const totalSelos  = SELOS.length;
   const totalUnlock = unlocked.size;
   const pct         = Math.round(totalUnlock/totalSelos*100);
-  const nivelPct  = proxNivel
-    ? Math.round((totalUnlock-nivel.minSelos)/(proxNivel.minSelos-nivel.minSelos)*100)
-    : 100;
 
   const selosFiltrados = SELOS.filter(s=>catAtiva==='todos'||s.cat===catAtiva);
 
