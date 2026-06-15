@@ -86,7 +86,7 @@ const DarkTooltip = ({active,payload,label,unit='kg'}:any) => {
 
 // ── Heatmap ───────────────────────────────────────────────────
 function FreqHeatmap({history}:{history:History}) {
-  const now = new Date();
+  const now = useMemo(()=>new Date(),[]);
   const cells = useMemo(()=>{
     const result=[];
     for(let i=51;i>=0;i--){
@@ -100,8 +100,7 @@ function FreqHeatmap({history}:{history:History}) {
       result.push(week);
     }
     return result;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[history]);
+  },[history,now]);
 
   const total  = cells.flat().filter(c=>c.trained).length;
   const month  = cells.flat().filter(c=>{
@@ -151,9 +150,9 @@ function MuscleRadar({history}:{history:History}) {
     const counts:Record<string,number>={};
     Object.entries(history).forEach(([date,s])=>{
       if(new Date(date+'T12:00:00')<cutoff) return;
-      s.entries.forEach(en=>{
+      (s.entries||[]).forEach(en=>{
         const m=MUSCLE_MAP[en.name]||'Outros';
-        counts[m]=(counts[m]||0)+en.sets.filter(s=>s.r).length;
+        counts[m]=(counts[m]||0)+(en.sets||[]).filter(s=>s.r).length;
       });
     });
     const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);

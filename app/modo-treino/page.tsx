@@ -145,6 +145,9 @@ function ExGif({name, size=64}:{name:string;size?:number}) {
 
 // ── RestTimer ─────────────────────────────────────────────────────
 function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>void}) {
+  // onDone é estabilizado pelo chamador — não precisa re-registrar o interval
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   const [total, setTotal] = useState(initialSeconds);
   const [left,  setLeft]  = useState(initialSeconds);
   const leftRef = useRef(initialSeconds);
@@ -171,7 +174,7 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
           try { navigator.vibrate?.([300,100,300,100,500]); } catch(_){}
           sendNotif('DarkSet 💪', 'Descanso encerrado! Hora da próxima série!');
         }, 50);
-        onDone();
+        onDoneRef.current();
         return;
       }
       if(remaining === 10 && !warnedRef.current) {
@@ -336,7 +339,8 @@ export default function ModoTreino() {
       try {
         const d = await getDoc(doc(db,'users',u.uid,'data','plans'));
         if(d.exists()){
-          const p = d.data().payload ? JSON.parse(d.data().payload) : {list:[],activeId:null};
+          let p = {list:[] as Plan[], activeId:null as string|null};
+          try { p = d.data().payload ? JSON.parse(d.data().payload) : p; } catch { /* payload inválido */ }
           setPlans(p.list||[]);
           setActiveId(p.activeId||null);
           setSelectedPlanId(p.activeId||null);
@@ -372,9 +376,12 @@ export default function ModoTreino() {
 
   useEffect(()=>{
     if(!started||mode!=='plan'||!currentEx) return;
-    if(allSets[cursor]&&allSets[cursor].length>0) return;
-    const n = currentEx.setsPlanned||3;
-    setAllSets(prev=>({...prev,[cursor]:Array.from({length:n},()=>({w:'',r:'',done:false}))}));
+    // allSets lido via setState funcional abaixo para evitar dep cíclica
+    setAllSets(prev=>{
+      if(prev[cursor]&&prev[cursor].length>0) return prev;
+      const n = currentEx.setsPlanned||3;
+      return {...prev,[cursor]:Array.from({length:n},()=>({w:'',r:'',done:false}))};
+    });
   },[cursor,started,mode,currentEx]);
 
   const updateSet = (si:number,field:'w'|'r',val:string) => {
@@ -407,10 +414,11 @@ export default function ModoTreino() {
       try {
         const histRef = doc(db,'users',uid,'data','history');
         const histSnap = await getDoc(histRef);
-        const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
+        let hist: Record<string,unknown> = {};
+        try { hist = histSnap.exists() ? JSON.parse(histSnap.data().payload||'{}') : {}; } catch { /* payload corrompido, reseta */ }
         hist[todayKey()]={...sessData,planId:resolvedPlan?.id,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
-      } catch(e){console.error(e);}
+      } catch(e){ console.error(e); showToast('Erro ao salvar treino'); return; }
     }
     setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
     setShareSession(sessData);
@@ -426,10 +434,11 @@ export default function ModoTreino() {
       try {
         const histRef = doc(db,'users',uid,'data','history');
         const histSnap = await getDoc(histRef);
-        const hist = histSnap.exists()?JSON.parse(histSnap.data().payload||'{}'):{};
+        let hist: Record<string,unknown> = {};
+        try { hist = histSnap.exists() ? JSON.parse(histSnap.data().payload||'{}') : {}; } catch { /* payload corrompido, reseta */ }
         hist[todayKey()]={...sessData,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
-      } catch(e){console.error(e);}
+      } catch(e){ console.error(e); showToast('Erro ao salvar treino'); return; }
     }
     const totalSetCount=entries.reduce((a,ex)=>a+ex.sets.length,0);
     setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});

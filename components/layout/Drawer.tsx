@@ -53,6 +53,14 @@ export default function Drawer() {
   // Fecha ao trocar de rota
   useEffect(() => { setOpen(false); }, [pathname]);
 
+  // Fecha com ESC
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open]);
+
   const navigate = (href: string) => { router.push(href); setOpen(false); };
 
   const initials = user
@@ -72,11 +80,17 @@ export default function Drawer() {
         paddingTop:'max(env(safe-area-inset-top),0.6rem)',
       }}>
         {/* Hamburger */}
-        <button onClick={()=>setOpen(true)} style={{
-          background:'none',border:'none',cursor:'pointer',
-          padding:'.3rem',display:'flex',flexDirection:'column',
-          gap:'5px',flexShrink:0,
-        }}>
+        <button
+          onClick={()=>setOpen(true)}
+          aria-label="Abrir menu"
+          aria-expanded={open}
+          aria-controls="main-drawer"
+          style={{
+            background:'none',border:'none',cursor:'pointer',
+            padding:'.3rem',display:'flex',flexDirection:'column',
+            gap:'5px',flexShrink:0,
+          }}
+        >
           <span style={{display:'block',width:22,height:2,background:'#c0c0c8',borderRadius:1,transition:'all .2s'}}/>
           <span style={{display:'block',width:16,height:2,background:'#c0c0c8',borderRadius:1,transition:'all .2s'}}/>
           <span style={{display:'block',width:22,height:2,background:'#c0c0c8',borderRadius:1,transition:'all .2s'}}/>
@@ -115,16 +129,23 @@ export default function Drawer() {
       )}
 
       {/* ── DRAWER ───────────────────────────────────────────── */}
-      <div style={{
-        position:'fixed',top:0,left:0,bottom:0,zIndex:61,
-        width:272,maxWidth:'80vw',
-        background:'#080809',
-        borderRight:'1px solid rgba(227,27,35,.12)',
-        display:'flex',flexDirection:'column',
-        transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition:'transform .26s cubic-bezier(.4,0,.2,1)',
-        overflowY:'auto',
-      }}>
+      <div
+        id="main-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu de navegação"
+        style={{
+          position:'fixed',top:0,left:0,bottom:0,zIndex:61,
+          width:272,maxWidth:'80vw',
+          background:'#080809',
+          borderRight:'1px solid rgba(227,27,35,.12)',
+          display:'flex',flexDirection:'column',
+          transform: open ? 'translateX(0)' : 'translateX(-100%)',
+          transition:'transform .26s cubic-bezier(.4,0,.2,1)',
+          overflowY:'auto',
+          visibility: open ? 'visible' : 'hidden',
+        }}
+      >
 
         {/* Header do drawer */}
         <div style={{

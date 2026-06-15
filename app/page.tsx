@@ -29,7 +29,7 @@ function calcStreak(history: Record<string,HistoryEntry>, trainDays: number[]): 
   const todayKey = today.toISOString().slice(0,10);
   const d = new Date(today);
   if (trainDays.includes(today.getDay()) && !history[todayKey]) d.setDate(d.getDate()-1);
-  for (let i=0; i<800; i++) {
+  for (let i=0; i<365; i++) {
     const k = d.toISOString().slice(0,10);
     const isTrain = trainDays.includes(d.getDay());
     if (!isTrain) { d.setDate(d.getDate()-1); continue; }
@@ -102,12 +102,17 @@ export default function HomePage() {
           setUserData(p=>({...p,name:u.displayName||'',photoURL:u.photoURL||null}));
         }
         const histDoc = await getDoc(doc(db,'users',u.uid,'data','history'));
-        if(histDoc.exists()) setHistory(JSON.parse(histDoc.data().payload||'{}'));
+        if(histDoc.exists()){
+          try { setHistory(JSON.parse(histDoc.data().payload||'{}')); }
+          catch { console.warn('home: history payload corrompido'); }
+        }
         const plansDoc = await getDoc(doc(db,'users',u.uid,'data','plans'));
         if(plansDoc.exists()){
-          const p = JSON.parse(plansDoc.data().payload||'{"list":[],"activeId":null}');
-          setFichas(p.list||[]);
-          setActiveId(p.activeId||null);
+          try {
+            const p = JSON.parse(plansDoc.data().payload||'{"list":[],"activeId":null}');
+            setFichas(p.list||[]);
+            setActiveId(p.activeId||null);
+          } catch { console.warn('home: plans payload corrompido'); }
         }
         const rankSnap = await getDoc(doc(db,'globalRank',u.uid));
         if(rankSnap.exists()) setMeuRank(rankSnap.data());

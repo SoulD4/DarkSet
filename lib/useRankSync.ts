@@ -16,12 +16,13 @@ export function useRankSync(uid: string|null, nome: string, initials: string) {
 
         // Calcula volume total (soma de todos os sets)
         let volumeKg = 0;
-        Object.values(hist).forEach((sessao: any)=>{
-          if(sessao?.exercicios) {
-            sessao.exercicios.forEach((ex: any)=>{
-              if(ex?.sets) {
-                ex.sets.forEach((s: any)=>{
-                  volumeKg += (parseFloat(s.kg)||0) * (parseInt(s.reps)||0);
+        const parseN = (v: unknown) => { const n = parseFloat(String(v).replace(',','.')); return isFinite(n) ? n : 0; };
+        Object.values(hist).forEach((sessao: any) => {
+          if (Array.isArray(sessao?.entries)) {
+            sessao.entries.forEach((ex: any) => {
+              if (Array.isArray(ex?.sets)) {
+                ex.sets.forEach((s: any) => {
+                  volumeKg += parseN(s.w) * parseN(s.r);
                 });
               }
             });
