@@ -80,22 +80,20 @@ html, body {
   box-shadow: none !important;
 }
 
-*:focus,
-*:focus-visible,
-*:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-  border-color: inherit !important;
-  ring: none !important;
+/* Remove outline de UI elements apenas — preserva acessibilidade via teclado */
+button:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+[role="combobox"]:focus:not(:focus-visible),
+[role="option"]:focus:not(:focus-visible),
+[data-radix-popper-content-wrapper] *:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
-/* Radix / shadcn select e outros */
-[data-radix-popper-content-wrapper] *:focus,
-button:focus,
-select:focus,
-input:focus,
-[role="combobox"]:focus,
-[role="option"]:focus {
-  outline: none !important;
-  box-shadow: none !important;
+/* Shadcn — evita outline azul padrão do browser em cards/componentes */
+[data-slot="card"]:focus,
+[data-slot="card"]:focus-visible {
+  outline: none;
+  box-shadow: none;
 }

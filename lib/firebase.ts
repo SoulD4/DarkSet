@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
@@ -11,7 +11,18 @@ const firebaseConfig = {
   appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app      = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+// Só inicializa quando as variáveis de ambiente estão presentes
+// (evita crash durante pre-render do Next.js sem .env configurado)
+const getApp = (): FirebaseApp => {
+  if (getApps().length > 0) return getApps()[0];
+  if (!firebaseConfig.apiKey) {
+    // Durante build sem .env: retorna app vazio para não quebrar imports
+    return initializeApp({ apiKey: 'placeholder', projectId: 'placeholder', appId: 'placeholder' });
+  }
+  return initializeApp(firebaseConfig);
+};
+
+const app      = getApp();
 const auth     = getAuth(app);
 const db       = getFirestore(app);
 const provider = new GoogleAuthProvider();

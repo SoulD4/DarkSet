@@ -65,7 +65,10 @@ export default function HistoricoPage() {
       setUid(u.uid);
       try {
         const snap = await getDoc(doc(db,'users',u.uid,'data','history'));
-        if(snap.exists()) setHistory(JSON.parse(snap.data().payload||'{}'));
+        if(snap.exists()) {
+          try { setHistory(JSON.parse(snap.data().payload || '{}')); }
+          catch { console.warn('historico: payload corrompido'); }
+        }
       } catch(e){ console.error(e); }
       setLoading(false);
     });

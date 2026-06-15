@@ -37,7 +37,7 @@ function calcStats(hist:Record<string,HistEntry>, trainDays:number[]) {
   const todayKey=today.toISOString().slice(0,10);
   const d=new Date(today);
   if(trainDays.includes(today.getDay())&&!hist[todayKey]) d.setDate(d.getDate()-1);
-  for(let i=0;i<800;i++){
+  for(let i=0;i<365;i++){
     const k=d.toISOString().slice(0,10);
     const isTrain=trainDays.includes(d.getDay());
     if(!isTrain){d.setDate(d.getDate()-1);continue;}
