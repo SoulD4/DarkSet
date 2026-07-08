@@ -3,15 +3,21 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import StatTile from '@/components/core/StatTile';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getLiga, LIGAS } from '@/lib/rankSystem';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Settings, BarChart2, Crown, LogOut, Bell, Target, Weight, Smartphone, CheckCircle2, Flame, Dumbbell, TrendingUp, Edit2, Save, X, Loader2, Trophy, Zap, Star, Globe } from 'lucide-react';
-import { UserCircle, Barbell, Lightning, ShieldStar } from '@phosphor-icons/react';
+import {
+  Settings, BarChart2, Crown, LogOut, Bell, Target, Weight,
+  Smartphone, CheckCircle2, Flame, Dumbbell, TrendingUp,
+  Edit2, Save, X, Loader2, Trophy, Zap, Globe, LogIn,
+} from 'lucide-react';
 
 type HistEntry = { entries:{name?:string;sets:{w:string;r:string}[]}[]; startTime?:string };
 
@@ -59,9 +65,7 @@ export default function PerfilPage() {
   const [tab,setTab]=useState<'config'|'stats'|'plano'>('config');
   const [editName,setEditName]=useState(false);
   const [nameInput,setNameInput]=useState('');
-  const [toast,setToast]=useState('');
-
-  const showToast=(m:string)=>{setToast(m);setTimeout(()=>setToast(''),2500);};
+  const { toast, show } = useToast();
 
   useEffect(()=>{
     return onAuthStateChanged(auth,async u=>{
@@ -75,7 +79,7 @@ export default function PerfilPage() {
           setNameInput(d.name||u.displayName||'Atleta');
         }
         const histSnap=await getDoc(doc(db,'users',u.uid,'data','history'));
-        if(histSnap.exists()) setHistory(JSON.parse(histSnap.data().payload||'{}')); 
+        if(histSnap.exists()) setHistory(JSON.parse(histSnap.data().payload||'{}'));
         const selosSnap=await getDoc(doc(db,'users',u.uid,'data','selos'));
         if(selosSnap.exists()) setSelos(selosSnap.data() as Record<string,boolean>);
         const rankSnap=await getDoc(doc(db,'globalRank',u.uid));
@@ -93,7 +97,7 @@ export default function PerfilPage() {
       await setDoc(doc(db,'users',user.uid),{name:nameInput.trim()},{merge:true});
       setUserData(d=>({...d,name:nameInput.trim()}));
       setEditName(false);
-      showToast('Nome atualizado!');
+      show('Nome atualizado!');
     } catch(e){console.error(e);}
     setSaving(false);
   };
@@ -114,98 +118,118 @@ export default function PerfilPage() {
   const ligaPct=proxLiga?Math.min(100,Math.round(((meuRank?.pontos||0)-liga.min)/(proxLiga.min-liga.min)*100)):100;
   const initials=(userData.name||user?.displayName||'DS').slice(0,2).toUpperCase();
 
+  const tierLabel = tier==='darkgod'?'DarkGod':tier==='elite'?'Elite':'Gratuito';
+  const tierChip =
+    tier==='darkgod' ? 'border-accent/30 bg-accent-soft text-accent' :
+    tier==='elite'   ? 'border-warn/30 bg-warn-soft text-warn' :
+                       'border-line bg-surface-2 text-ink-3';
+
+  // ── LOADING ──────────────────────────────────────────────
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}} style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
     </PageShell>
   );
 
+  // ── NÃO LOGADO ───────────────────────────────────────────
   if(!user) return (
     <PageShell>
-      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:'1rem',textAlign:'center'}}>
-        <UserCircle size={64} color="#484858" weight="fill"/>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#f0f0f2'}}>Faça login para ver seu perfil</div>
-        <motion.button whileTap={{scale:.97}} onClick={()=>router.push('/login')} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'13px 32px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-          Entrar
-        </motion.button>
-      </motion.div>
+      <PageHeader title="Perfil" subtitle="Sua conta e preferências"/>
+      <EmptyState
+        icon={<LogIn size={40}/>}
+        title="Entre para ver seu perfil"
+        subtitle="Faça login para acessar suas configurações, stats e plano."
+        action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
     </PageShell>
   );
 
   return (
     <PageShell>
-      <AnimatePresence>
-        {toast&&(
-          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0}} style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',gap:'.4rem',pointerEvents:'none'}}>
-            <CheckCircle2 size={14}/>{toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastViewport toast={toast}/>
 
-      {/* Header */}
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}>
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,marginBottom:'.75rem',overflow:'hidden',position:'relative'}}>
-          <div style={{position:'absolute',top:0,left:0,right:0,height:60,background:'linear-gradient(135deg,rgba(227,27,35,.15),rgba(0,0,0,0))',pointerEvents:'none'}}/>
-          <CardContent style={{padding:'1.25rem',position:'relative'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
-              {user.photoURL
-                ?<img src={user.photoURL} style={{width:64,height:64,borderRadius:'50%',border:'2px solid #2e2e38',objectFit:'cover'}} alt="avatar"/>
-                :<div style={{width:64,height:64,borderRadius:'50%',background:'linear-gradient(135deg,#e31b23,#6b0a0e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',color:'#fff',flexShrink:0}}>{initials}</div>
-              }
-              <div style={{flex:1,minWidth:0}}>
-                {editName?(
-                  <div style={{display:'flex',gap:'.4rem',alignItems:'center',marginBottom:'.3rem'}}>
-                    <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&salvarNome()} autoFocus style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:8,color:'#f0f0f2',padding:'6px 10px',fontSize:'1rem',outline:'none',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800}}/>
-                    <motion.button whileTap={{scale:.9}} onClick={salvarNome} disabled={saving} style={{background:'rgba(34,197,94,.15)',border:'1px solid rgba(34,197,94,.3)',borderRadius:7,padding:'5px 8px',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
-                      {saving?<Loader2 size={14}/>:<Save size={14}/>}
-                    </motion.button>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>setEditName(false)} style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:7,padding:'5px 8px',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
-                      <X size={14}/>
-                    </motion.button>
-                  </div>
-                ):(
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.2rem'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{userData.name||'Atleta'}</div>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>setEditName(true)} style={{background:'none',border:'none',color:'#484858',cursor:'pointer',outline:'none',padding:0}}>
-                      <Edit2 size={13}/>
-                    </motion.button>
-                  </div>
-                )}
-                <div style={{fontSize:'.68rem',color:'#7a7a8a',marginBottom:'.4rem'}}>{user.email}</div>
-                <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
-                  <Badge style={{background:tier==='darkgod'?'rgba(227,27,35,.15)':tier==='elite'?'rgba(250,204,21,.1)':'rgba(255,255,255,.06)',color:tier==='darkgod'?'#e31b23':tier==='elite'?'#facc15':'#7a7a8a',border:`1px solid ${tier==='darkgod'?'rgba(227,27,35,.3)':tier==='elite'?'rgba(250,204,21,.2)':'#2e2e38'}`,fontSize:'.58rem'}}>
-                    {tier==='darkgod'?'DarkGod':tier==='elite'?'Elite':'Gratuito'}
-                  </Badge>
-                  <Badge style={{background:liga.corBg,color:liga.cor,border:`1px solid ${liga.corBorder}`,fontSize:'.58rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <Globe size={10}/>{liga.nome}
-                  </Badge>
+      <PageHeader title="Perfil" subtitle="Sua conta e preferências"/>
+
+      {/* Card de identidade + rank */}
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+        className="card p-5 mb-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-14 bg-gradient-to-br from-accent-soft to-transparent pointer-events-none"/>
+        <div className="relative flex items-center gap-4">
+          {user.photoURL
+            ? <img src={user.photoURL} alt="avatar"
+                className="w-16 h-16 rounded-full border-2 border-line object-cover shrink-0"/>
+            : <div className="w-16 h-16 rounded-full bg-accent text-accent-ink font-display font-bold text-2xl flex items-center justify-center shrink-0">
+                {initials}
+              </div>
+          }
+          <div className="flex-1 min-w-0">
+            {editName?(
+              <div className="flex items-center gap-1.5 mb-1">
+                <input value={nameInput} onChange={e=>setNameInput(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&salvarNome()} autoFocus
+                  className="field flex-1 min-w-0 font-display font-bold"/>
+                <motion.button whileTap={{scale:.9}} onClick={salvarNome} disabled={saving}
+                  aria-label="Salvar nome"
+                  className="shrink-0 inline-flex items-center rounded-lg border border-ok/30 bg-ok-soft text-ok p-2 disabled:opacity-40">
+                  {saving?<Loader2 size={14} className="animate-spin"/>:<Save size={14}/>}
+                </motion.button>
+                <motion.button whileTap={{scale:.9}} onClick={()=>setEditName(false)}
+                  aria-label="Cancelar edição"
+                  className="shrink-0 inline-flex items-center rounded-lg border border-line bg-surface-2 text-ink-3 p-2">
+                  <X size={14}/>
+                </motion.button>
+              </div>
+            ):(
+              <div className="flex items-center gap-2 mb-0.5">
+                <div className="font-display font-bold text-[1.35rem] leading-none tracking-tight text-ink-1 truncate">
+                  {userData.name||'Atleta'}
                 </div>
+                <motion.button whileTap={{scale:.9}} onClick={()=>setEditName(true)}
+                  aria-label="Editar nome" className="text-ink-3 shrink-0">
+                  <Edit2 size={13}/>
+                </motion.button>
               </div>
+            )}
+            <div className="text-[0.68rem] text-ink-3 mb-1.5 truncate">{user.email}</div>
+            <div className="flex gap-1.5 flex-wrap">
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.58rem] font-semibold ${tierChip}`}>
+                {tierLabel}
+              </span>
+              {/* Cores dinâmicas da liga (lib/rankSystem) */}
+              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.58rem] font-semibold"
+                style={{background:liga.corBg,color:liga.cor,borderColor:liga.corBorder}}>
+                <Globe size={10}/>{liga.nome}
+              </span>
             </div>
-            {/* Barra rank global */}
-            <div style={{marginTop:'.85rem'}}>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858',marginBottom:'.3rem'}}>
-                <span style={{color:liga.cor,fontWeight:700}}>{liga.nome}</span>
-                <span>{proxLiga?`${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}`:'Rank máximo'}</span>
-              </div>
-              <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:4,overflow:'hidden'}}>
-                <motion.div animate={{width:`${ligaPct}%`}} transition={{duration:.6,ease:'easeOut'}} style={{height:'100%',borderRadius:4,background:liga.cor,boxShadow:`0 0 8px ${liga.cor}88`}}/>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Progresso de rank global */}
+        <div className="relative mt-4">
+          <div className="flex justify-between text-[0.58rem] text-ink-3 mb-1.5">
+            <span className="font-bold" style={{color:liga.cor}}>{liga.nome}</span>
+            <span className="tnum">{proxLiga?`${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}`:'Rank máximo'}</span>
+          </div>
+          <div className="bg-surface-3 rounded-full h-1 overflow-hidden">
+            <motion.div animate={{width:`${ligaPct}%`}} transition={{duration:.6,ease:'easeOut'}}
+              className="h-full rounded-full"
+              style={{background:liga.cor,boxShadow:`0 0 8px ${liga.cor}88`}}/>
+          </div>
+        </div>
       </motion.div>
 
       {/* Tabs */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.06}} style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:12,padding:'3px',gap:'3px',marginBottom:'1rem'}}>
+      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.06}}
+        className="flex bg-surface-2 border border-line rounded-xl p-1 gap-1 mb-6">
         {(['config','stats','plano'] as const).map((id)=>{
           const labels={config:'Config',stats:'Stats',plano:'Plano'};
           const Icons={config:Settings,stats:BarChart2,plano:Crown};
           const Icon=Icons[id];
+          const active=tab===id;
           return (
-            <motion.button key={id} whileTap={{scale:.95}} onClick={()=>setTab(id)} style={{flex:1,padding:'.46rem',borderRadius:9,border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.75rem',textTransform:'uppercase',background:tab===id?'rgba(227,27,35,.15)':'transparent',color:tab===id?'#e31b23':'#484858',boxShadow:tab===id?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}>
+            <motion.button key={id} whileTap={{scale:.95}} onClick={()=>setTab(id)}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-[0.75rem] font-semibold transition-colors
+                ${active?'bg-accent-soft text-accent border border-accent/30':'text-ink-3 border border-transparent'}`}>
               <Icon size={13}/>{labels[id]}
             </motion.button>
           );
@@ -215,138 +239,159 @@ export default function PerfilPage() {
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.15}}>
 
+          {/* ── CONFIG ─────────────────────────────────────── */}
           {tab==='config'&&(
-            <div style={{display:'grid',gap:'.55rem'}}>
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'.85rem 1rem'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.75rem'}}>
-                    <Target size={14} color="#7a7a8a"/>
-                    <span style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700}}>Meta semanal</span>
-                  </div>
-                  <div style={{display:'flex',gap:'.4rem'}}>
-                    {[3,4,5,6,7].map(n=>(
-                      <motion.button key={n} whileTap={{scale:.9}} onClick={()=>salvarConfig('weeklyGoal',n)} style={{flex:1,padding:'.4rem',borderRadius:8,border:`1px solid ${(userData as any).weeklyGoal===n?'#e31b23':'#2e2e38'}`,background:(userData as any).weeklyGoal===n?'rgba(227,27,35,.15)':'transparent',color:(userData as any).weeklyGoal===n?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',cursor:'pointer',outline:'none'}}>
+            <div className="grid gap-2.5">
+              {/* Meta semanal */}
+              <div className="card px-4 py-3.5">
+                <div className="eyebrow mb-3 flex items-center gap-1.5">
+                  <Target size={12}/> Meta semanal
+                </div>
+                <div className="flex gap-1.5">
+                  {[3,4,5,6,7].map(n=>{
+                    const active=(userData as any).weeklyGoal===n;
+                    return (
+                      <motion.button key={n} whileTap={{scale:.9}} onClick={()=>salvarConfig('weeklyGoal',n)}
+                        className={`flex-1 rounded-lg border py-1.5 font-display font-bold text-[0.88rem] tnum transition-colors
+                          ${active?'border-accent/30 bg-accent-soft text-accent':'border-line text-ink-3'}`}>
                         {n}x
                       </motion.button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    );
+                  })}
+                </div>
+              </div>
 
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'.85rem 1rem'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.75rem'}}>
-                    <Dumbbell size={14} color="#7a7a8a"/>
-                    <span style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700}}>Dias de treino</span>
-                  </div>
-                  <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
-                    {DIAS_SEMANA.map((dia,i)=>{
-                      const ativo=(userData as any).trainDays?.includes(i);
-                      return (
-                        <motion.button key={i} whileTap={{scale:.9}} onClick={()=>{const novo=ativo?(userData as any).trainDays.filter((d:number)=>d!==i):[...(userData as any).trainDays,i].sort();salvarConfig('trainDays',novo);}} style={{padding:'.3rem .55rem',borderRadius:7,border:`1px solid ${ativo?'#e31b23':'#2e2e38'}`,background:ativo?'rgba(227,27,35,.15)':'transparent',color:ativo?'#e31b23':'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none'}}>
-                          {dia}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Dias de treino */}
+              <div className="card px-4 py-3.5">
+                <div className="eyebrow mb-3 flex items-center gap-1.5">
+                  <Dumbbell size={12}/> Dias de treino
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {DIAS_SEMANA.map((dia,i)=>{
+                    const ativo=(userData as any).trainDays?.includes(i);
+                    return (
+                      <motion.button key={i} whileTap={{scale:.9}}
+                        onClick={()=>{const novo=ativo?(userData as any).trainDays.filter((d:number)=>d!==i):[...(userData as any).trainDays,i].sort();salvarConfig('trainDays',novo);}}
+                        className={`rounded-lg border px-2.5 py-1 text-[0.72rem] font-semibold transition-colors
+                          ${ativo?'border-accent/30 bg-accent-soft text-accent':'border-line text-ink-3'}`}>
+                        {dia}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {([{campo:'notifications',label:'Notificações',desc:'Lembretes de treino',Icon:Bell},{campo:'vibration',label:'Vibração',desc:'Feedback tátil',Icon:Smartphone}] as const).map(({campo,label,desc,Icon})=>(
-                <Card key={campo} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                  <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                    <Icon size={16} color="#7a7a8a"/>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:'.88rem',fontWeight:600,color:'#f0f0f2'}}>{label}</div>
-                      <div style={{fontSize:'.65rem',color:'#7a7a8a'}}>{desc}</div>
+              {/* Toggles */}
+              {([{campo:'notifications',label:'Notificações',desc:'Lembretes de treino',Icon:Bell},{campo:'vibration',label:'Vibração',desc:'Feedback tátil',Icon:Smartphone}] as const).map(({campo,label,desc,Icon})=>{
+                const on=(userData as any)[campo];
+                return (
+                  <div key={campo} className="card px-4 py-3.5 flex items-center gap-3">
+                    <Icon size={16} className="text-ink-3 shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[0.88rem] font-semibold text-ink-1">{label}</div>
+                      <div className="text-[0.65rem] text-ink-3">{desc}</div>
                     </div>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>salvarConfig(campo,!(userData as any)[campo])} style={{width:44,height:24,borderRadius:12,border:'none',cursor:'pointer',outline:'none',background:(userData as any)[campo]?'#e31b23':'rgba(255,255,255,.1)',position:'relative',flexShrink:0}}>
-                      <motion.div animate={{x:(userData as any)[campo]?20:2}} style={{width:20,height:20,borderRadius:'50%',background:'#fff',position:'absolute',top:2,boxShadow:'0 1px 4px rgba(0,0,0,.4)'}}/>
+                    <motion.button whileTap={{scale:.9}} onClick={()=>salvarConfig(campo,!on)}
+                      role="switch" aria-checked={on} aria-label={label}
+                      className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${on?'bg-accent':'bg-surface-3'}`}>
+                      <motion.div animate={{x:on?22:2}} transition={{type:'spring',stiffness:500,damping:32}}
+                        className="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow-card"/>
                     </motion.button>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                );
+              })}
 
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                  <Weight size={16} color="#7a7a8a"/>
-                  <div style={{flex:1}}><div style={{fontSize:'.88rem',fontWeight:600,color:'#f0f0f2'}}>Unidade de peso</div></div>
-                  <div style={{display:'flex',gap:'.3rem'}}>
-                    {(['kg','lb'] as const).map(u=>(
-                      <motion.button key={u} whileTap={{scale:.9}} onClick={()=>salvarConfig('weightUnit',u)} style={{padding:'.3rem .7rem',borderRadius:7,border:`1px solid ${(userData as any).weightUnit===u?'#e31b23':'#2e2e38'}`,background:(userData as any).weightUnit===u?'rgba(227,27,35,.15)':'transparent',color:(userData as any).weightUnit===u?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',cursor:'pointer',outline:'none'}}>
+              {/* Unidade de peso */}
+              <div className="card px-4 py-3.5 flex items-center gap-3">
+                <Weight size={16} className="text-ink-3 shrink-0"/>
+                <div className="flex-1 text-[0.88rem] font-semibold text-ink-1">Unidade de peso</div>
+                <div className="flex gap-1.5">
+                  {(['kg','lb'] as const).map(u=>{
+                    const active=(userData as any).weightUnit===u;
+                    return (
+                      <motion.button key={u} whileTap={{scale:.9}} onClick={()=>salvarConfig('weightUnit',u)}
+                        className={`rounded-lg border px-3 py-1 text-[0.78rem] font-semibold transition-colors
+                          ${active?'border-accent/30 bg-accent-soft text-accent':'border-line text-ink-3'}`}>
                         {u}
                       </motion.button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* ── STATS ──────────────────────────────────────── */}
           {tab==='stats'&&(
-            <div style={{display:'grid',gap:'.55rem'}}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'.5rem'}}>
-                {([{val:stats.totalTreinos,lbl:'Total Treinos',cor:'#e31b23',Icon:Dumbbell},{val:stats.streak,lbl:'Streak Atual',cor:'#f97316',Icon:Flame},{val:stats.prs,lbl:'PRs Totais',cor:'#a78bfa',Icon:TrendingUp},{val:selosCount,lbl:'Selos',cor:'#facc15',Icon:Trophy}] as const).map((s,i)=>(
-                  <motion.div key={i} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
-                    <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
-                      <CardContent style={{padding:'.85rem',textAlign:'center'}}>
-                        <s.Icon size={18} color={s.cor} style={{margin:'0 auto .3rem'}}/>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:s.cor,lineHeight:1}}>{s.val}</div>
-                        <div style={{fontSize:'.55rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.lbl}</div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
+            <div className="grid gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                <StatTile value={stats.totalTreinos} label="Total Treinos" tone="accent" icon={<Dumbbell size={16}/>}/>
+                <StatTile value={stats.streak} label="Streak Atual" tone="warn" icon={<Flame size={16}/>}/>
+                <StatTile value={stats.prs} label="PRs Totais" tone="info" icon={<TrendingUp size={16}/>}/>
+                <StatTile value={selosCount} label="Selos" tone="ok" icon={<Trophy size={16}/>}/>
               </div>
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}><Barbell size={16} color="#7a7a8a" weight="fill"/><span style={{fontSize:'.82rem',color:'#7a7a8a'}}>Volume total</span></div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#f0f0f2'}}>{stats.volTotal>=1000000?(stats.volTotal/1000000).toFixed(1)+'t':stats.volTotal>=1000?(stats.volTotal/1000).toFixed(1)+'t':Math.round(stats.volTotal)+'kg'}</div>
-                </CardContent>
-              </Card>
+
+              <div className="card px-4 py-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-ink-2 text-[0.82rem]">
+                  <Dumbbell size={16} className="text-ink-3"/> Volume total
+                </div>
+                <div className="font-display font-bold text-[1.2rem] text-ink-1 tnum">
+                  {stats.volTotal>=1000000?(stats.volTotal/1000000).toFixed(1)+'t':stats.volTotal>=1000?(stats.volTotal/1000).toFixed(1)+'t':Math.round(stats.volTotal)+'kg'}
+                </div>
+              </div>
+
               {stats.topPRs.length>0&&(
-                <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                  <CardContent style={{padding:'.85rem 1rem'}}>
-                    <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.65rem',display:'flex',alignItems:'center',gap:'.3rem'}}><Trophy size={12}/> Top PRs</div>
-                    {stats.topPRs.map((pr,i)=>(
-                      <div key={i}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.5rem 0'}}>
-                          <span style={{fontSize:'.82rem',color:'#9898a8'}}>{pr.nome}</span>
-                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#e31b23'}}>{pr.est}kg</span>
-                        </div>
-                        {i<stats.topPRs.length-1&&<Separator style={{background:'rgba(255,255,255,.05)'}}/>}
+                <div className="card px-4 py-3.5">
+                  <div className="eyebrow mb-2 flex items-center gap-1.5">
+                    <Trophy size={12}/> Top PRs
+                  </div>
+                  {stats.topPRs.map((pr,i)=>(
+                    <div key={i}>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-[0.82rem] text-ink-2 truncate mr-3">{pr.nome}</span>
+                        <span className="font-display font-bold text-[1.05rem] text-accent tnum shrink-0">{pr.est}kg</span>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                      {i<stats.topPRs.length-1&&<div className="border-t border-line"/>}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
 
+          {/* ── PLANO ──────────────────────────────────────── */}
           {tab==='plano'&&(
-            <div style={{display:'grid',gap:'.75rem'}}>
-              <Card style={{background:tier==='free'?'#1e1e24':`linear-gradient(135deg,rgba(227,27,35,.12),rgba(0,0,0,.3))`,border:`1px solid ${tier==='free'?'#2e2e38':'rgba(227,27,35,.3)'}`,borderRadius:16}}>
-                <CardContent style={{padding:'1rem',textAlign:'center'}}>
-                  <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:'.4rem'}}>Plano atual</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',color:tier==='free'?'#f0f0f2':'#e31b23'}}>{tier==='darkgod'?'DarkGod Founder':tier==='elite'?'Elite':'Gratuito'}</div>
-                  {tier!=='free'&&<Badge style={{background:'rgba(34,197,94,.1)',color:'#4ade80',border:'1px solid rgba(34,197,94,.2)',fontSize:'.6rem'}}>Ativo</Badge>}
-                </CardContent>
-              </Card>
+            <div className="grid gap-3">
+              <div className={`card p-4 text-center ${tier!=='free'?'border-accent/30 bg-accent-soft':''}`}>
+                <div className="eyebrow mb-1.5">Plano atual</div>
+                <div className={`font-display font-bold text-[1.5rem] tracking-tight ${tier==='free'?'text-ink-1':'text-accent'}`}>
+                  {tier==='darkgod'?'DarkGod Founder':tier==='elite'?'Elite':'Gratuito'}
+                </div>
+                {tier!=='free'&&(
+                  <span className="inline-flex items-center gap-1 rounded-full border border-ok/30 bg-ok-soft text-ok text-[0.6rem] font-semibold px-2 py-0.5 mt-2">
+                    <CheckCircle2 size={10}/> Ativo
+                  </span>
+                )}
+              </div>
+
               {tier==='free'&&(
-                <Card style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:16}}>
-                  <CardContent style={{padding:'1.25rem'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'1rem'}}>
-                      <Lightning size={20} color="#e31b23" weight="fill"/>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#fff'}}>DARK<span style={{color:'#e31b23'}}>SET</span> ELITE</div>
+                <div className="card p-5 border-accent/30">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Zap size={20} className="text-accent"/>
+                    <div className="font-display font-bold text-[1.25rem] tracking-tight text-ink-1">
+                      DarkSet <span className="text-accent">Elite</span>
                     </div>
-                    {['Gráficos avançados','Backup automático','Cardio GPS ilimitado','DarkSquad + ranking global','DarkDiet completo'].map((feat,i)=>(
-                      <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.4rem 0'}}><CheckCircle2 size={14} color="#4ade80"/><span style={{fontSize:'.85rem',color:'#f0f0f2'}}>{feat}</span></div>
-                    ))}
-                    <motion.button whileTap={{scale:.97}} style={{width:'100%',marginTop:'1rem',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-                      Assinar Elite — R$ 14,90/mês
-                    </motion.button>
-                  </CardContent>
-                </Card>
+                  </div>
+                  {['Gráficos avançados','Backup automático','Cardio GPS ilimitado','DarkSquad + ranking global','DarkDiet completo'].map((feat,i)=>(
+                    <div key={i} className="flex items-center gap-2.5 py-1.5">
+                      <CheckCircle2 size={14} className="text-ok shrink-0"/>
+                      <span className="text-[0.85rem] text-ink-1">{feat}</span>
+                    </div>
+                  ))}
+                  <Button full className="mt-4">
+                    Assinar Elite — R$ 14,90/mês
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -354,9 +399,11 @@ export default function PerfilPage() {
         </motion.div>
       </AnimatePresence>
 
-      <motion.button whileTap={{scale:.97}} onClick={handleLogout} style={{width:'100%',marginTop:'1.25rem',background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:12,padding:'13px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
-        <LogOut size={16}/> Sair da conta
-      </motion.button>
+      <div className="mt-6">
+        <Button variant="danger" full onClick={handleLogout}>
+          <LogOut size={16}/> Sair da conta
+        </Button>
+      </div>
     </PageShell>
   );
 }
