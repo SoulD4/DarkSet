@@ -2,27 +2,26 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  doc, getDoc, setDoc, addDoc, getDocs,
-  collection, query, where, orderBy,
-  deleteDoc, serverTimestamp, updateDoc
+  doc, getDoc, setDoc, getDocs,
+  collection, query, where,
+  deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   Lock, Eye, EyeOff, Plus, X, Trash2,
   ChevronRight, Copy, Check, Send,
-  UserPlus, Users, Dumbbell, ClipboardList,
+  UserPlus, Dumbbell, ClipboardList,
   AlertCircle, CheckCircle2, Loader2,
-  ArrowLeft, Search, Settings, LogOut
+  ArrowLeft, Search, Settings,
+  Award, GraduationCap,
 } from 'lucide-react';
-import {
-  Barbell, Student, UserCircle, Sword,
-  Certificate, Link as LinkIcon
-} from '@phosphor-icons/react';
 
 // ── Tipos ─────────────────────────────────────────────────────
 type ExFicha  = { nome:string; series:number; reps:string };
@@ -101,9 +100,7 @@ export default function PersonalPage() {
   const [grupoFiltro,setGrupoFiltro]=useState('');
   const [fichaView, setFichaView] = useState<'lista'|'builder'>('lista');
   const [fichasAluno,setFichasAluno]=useState<Ficha[]>([]);
-  const [toast,     setToast]     = useState('');
-
-  const showToast = (m:string)=>{setToast(m);setTimeout(()=>setToast(''),2500);};
+  const { toast, show } = useToast();
 
   // ── Auth ────────────────────────────────────────────────────
   useEffect(()=>{
@@ -237,13 +234,13 @@ export default function PersonalPage() {
       });
       setCodigoConvite(code);
       setShowConvite(true);
-    } catch(e){showToast('Erro ao gerar convite');}
+    } catch(e){show('Erro ao gerar convite','danger');}
   };
 
   const copiarConvite = () => {
     navigator.clipboard?.writeText(codigoConvite).catch(()=>{});
     setCopiado(true); setTimeout(()=>setCopiado(false),2000);
-    showToast('Código copiado!');
+    show('Código copiado!');
   };
 
   // ── Ficha builder ─────────────────────────────────────────────
@@ -282,7 +279,7 @@ export default function PersonalPage() {
         doc(db,'personal_plans',alunoSel.uid,'plans',ficha.id),
         ficha
       );
-      showToast('Ficha salva!');
+      show('Ficha salva!');
       setNomeFicha(''); setByDay(byDayVazio()); setFichaView('lista');
       carregarFichasAluno(alunoSel.uid);
     } catch(e){setErro('Erro ao salvar ficha.');}
@@ -294,7 +291,7 @@ export default function PersonalPage() {
     try {
       await deleteDoc(doc(db,'personal_plans',alunoSel.uid,'plans',fichaId));
       setFichasAluno(f=>f.filter(x=>x.id!==fichaId));
-      showToast('Ficha removida');
+      show('Ficha removida');
     } catch(_){}
   };
 
@@ -306,10 +303,7 @@ export default function PersonalPage() {
   // ── LOADING ──────────────────────────────────────────────────
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
     </PageShell>
   );
 
@@ -317,150 +311,145 @@ export default function PersonalPage() {
   if(step==='pending') return (
     <PageShell>
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
-        style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'65vh',textAlign:'center',gap:'1rem',padding:'1rem'}}>
-        <motion.div animate={{scale:[1,1.05,1]}} transition={{duration:2,repeat:Infinity}}>
-          <Certificate size={64} color="#facc15" weight="fill"/>
+        className="flex flex-col items-center justify-center min-h-[65vh] text-center gap-4 px-4">
+        <motion.div animate={{scale:[1,1.05,1]}} transition={{duration:2,repeat:Infinity}}
+          className="text-warn">
+          <Award size={64}/>
         </motion.div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-          Aguardando<br/><span style={{color:'#facc15'}}>Aprovação</span>
-        </div>
-        <div style={{fontSize:'.88rem',color:'#7a7a8a',maxWidth:280,lineHeight:1.6}}>
+        <h1 className="font-display font-bold text-[1.7rem] leading-tight tracking-tight text-ink-1">
+          Aguardando<br/><span className="text-warn">aprovação</span>
+        </h1>
+        <p className="text-[0.88rem] text-ink-2 max-w-[280px] leading-relaxed">
           Sua solicitação foi enviada. Você será notificado quando for aprovado pela administração.
+        </p>
+        <div className="card w-full max-w-[300px] border-warn/30 bg-warn-soft px-4 py-3.5 text-center">
+          <div className="eyebrow text-warn">Status</div>
+          <div className="font-display font-bold text-[1.1rem] text-warn mt-1">Em análise</div>
         </div>
-        <Card style={{background:'rgba(250,204,21,.06)',border:'1px solid rgba(250,204,21,.2)',borderRadius:12,width:'100%',maxWidth:300}}>
-          <CardContent style={{padding:'.85rem',textAlign:'center'}}>
-            <div style={{fontSize:'.65rem',color:'#facc15',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.3rem'}}>Status</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#facc15'}}>Em análise</div>
-          </CardContent>
-        </Card>
       </motion.div>
     </PageShell>
   );
 
-  // ── LOGIN ─────────────────────────────────────────────────────
+  // ── LOGIN (PIN / CREF) ────────────────────────────────────────
   if(!unlocked) return (
     <PageShell>
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
-        style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'65vh',padding:'1.5rem',gap:'1.5rem'}}>
+        className="flex flex-col items-center justify-center min-h-[65vh] gap-6 px-2">
 
-        <div style={{textAlign:'center'}}>
-          <motion.div animate={{scale:[1,1.06,1]}} transition={{duration:2,repeat:Infinity,ease:'easeInOut'}}>
-            <Certificate size={56} color="#e31b23" weight="fill"/>
+        <div className="text-center">
+          <motion.div animate={{scale:[1,1.06,1]}} transition={{duration:2,repeat:Infinity,ease:'easeInOut'}}
+            className="inline-flex text-accent">
+            <Award size={56}/>
           </motion.div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1,marginTop:'.5rem'}}>
-            DARK<span style={{color:'#e31b23'}}>PERSONAL</span>
+          <div className="font-display font-bold text-[1.9rem] leading-tight tracking-tight text-ink-1 mt-2">
+            Dark<span className="text-accent">Personal</span>
           </div>
-          <div style={{fontSize:'.78rem',color:'#7a7a8a',marginTop:'.4rem'}}>
+          <div className="text-[0.78rem] text-ink-2 mt-1.5">
             {step==='pin'?'Área exclusiva para personal trainers':
              step==='cref'?'Cadastre seu CREF para verificação':''}
           </div>
         </div>
 
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,width:'100%',maxWidth:340}}>
-          <CardContent style={{padding:'1.25rem',display:'grid',gap:'1rem'}}>
-            {step==='pin'&&(
-              <>
-                <div>
-                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:5}}>
-                    <Lock size={11}/> {pinSalvo?'Digite seu PIN':'Crie um PIN de acesso'}
-                  </label>
-                  <div style={{position:'relative'}}>
-                    <input type={showPin?'text':'password'} value={pin}
-                      onChange={e=>{ setPin(e.target.value.replace(/\D/g,'')); setErro(''); }}
-                      onKeyDown={e=>e.key==='Enter'&&entrarPin()}
-                      placeholder={pinSalvo?'••••':'mínimo 4 dígitos'}
-                      maxLength={8} inputMode="numeric"
-                      style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'13px 44px 13px 13px',fontSize:'1.5rem',outline:'none',letterSpacing:'.3em',textAlign:'center'}}/>
-                    <button onClick={()=>setShowPin(v=>!v)}
-                      style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'#484858',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
-                      {showPin?<EyeOff size={16}/>:<Eye size={16}/>}
-                    </button>
-                  </div>
+        <div className="card w-full max-w-[340px] p-5 grid gap-4">
+          {step==='pin'&&(
+            <>
+              <div>
+                <label className="eyebrow flex items-center gap-1.5 mb-1.5">
+                  <Lock size={11}/> {pinSalvo?'Digite seu PIN':'Crie um PIN de acesso'}
+                </label>
+                <div className="relative">
+                  <input type={showPin?'text':'password'} value={pin}
+                    onChange={e=>{ setPin(e.target.value.replace(/\D/g,'')); setErro(''); }}
+                    onKeyDown={e=>e.key==='Enter'&&entrarPin()}
+                    placeholder={pinSalvo?'••••':'mínimo 4 dígitos'}
+                    maxLength={8} inputMode="numeric"
+                    className={`field w-full h-14 pr-11 text-center text-[1.4rem] tracking-[0.3em] tnum ${erro?'border-danger/50':''}`}/>
+                  <button onClick={()=>setShowPin(v=>!v)}
+                    aria-label={showPin?'Ocultar PIN':'Mostrar PIN'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 inline-flex items-center">
+                    {showPin?<EyeOff size={16}/>:<Eye size={16}/>}
+                  </button>
                 </div>
-                {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
-                <motion.button whileTap={{scale:.97}} onClick={entrarPin} disabled={salvando||!pin}
-                  style={{width:'100%',background:pin?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',cursor:pin?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                  {salvando?<Loader2 size={16}/>:<><Lock size={15}/> {pinSalvo?'Entrar':'Criar PIN'}</>}
-                </motion.button>
-              </>
-            )}
+              </div>
+              {erro&&(
+                <div className="flex items-center gap-1.5 text-danger text-[0.75rem]">
+                  <AlertCircle size={13}/>{erro}
+                </div>
+              )}
+              <Button full onClick={entrarPin} disabled={salvando||!pin}>
+                {salvando?<Loader2 size={16} className="animate-spin"/>:<><Lock size={15}/> {pinSalvo?'Entrar':'Criar PIN'}</>}
+              </Button>
+            </>
+          )}
 
-            {step==='cref'&&(
-              <>
-                <div>
-                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:5}}>
-                    <Certificate size={11} weight="fill"/> CREF
-                  </label>
-                  <input type="text" value={crefInput}
-                    onChange={e=>{setCrefInput(e.target.value.toUpperCase());setErro('');}}
-                    onKeyDown={e=>e.key==='Enter'&&salvarCref()}
-                    placeholder="000000-G/SP"
-                    maxLength={11}
-                    style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'13px',fontSize:'1.1rem',outline:'none',letterSpacing:'.1em',textAlign:'center',fontFamily:'monospace'}}/>
-                  <div style={{fontSize:'.6rem',color:'#484858',marginTop:'.4rem'}}>Sua solicitação será analisada pela administração</div>
+          {step==='cref'&&(
+            <>
+              <div>
+                <label className="eyebrow flex items-center gap-1.5 mb-1.5">
+                  <Award size={11}/> CREF
+                </label>
+                <input type="text" value={crefInput}
+                  onChange={e=>{setCrefInput(e.target.value.toUpperCase());setErro('');}}
+                  onKeyDown={e=>e.key==='Enter'&&salvarCref()}
+                  placeholder="000000-G/SP"
+                  maxLength={11}
+                  className={`field w-full h-12 text-center text-[1.1rem] tracking-[0.1em] font-mono ${erro?'border-danger/50':''}`}/>
+                <div className="text-[0.62rem] text-ink-3 mt-1.5">Sua solicitação será analisada pela administração</div>
+              </div>
+              {erro&&(
+                <div className="flex items-center gap-1.5 text-danger text-[0.75rem]">
+                  <AlertCircle size={13}/>{erro}
                 </div>
-                {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
-                <motion.button whileTap={{scale:.97}} onClick={salvarCref} disabled={salvando||!crefInput.trim()}
-                  style={{width:'100%',background:crefInput?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',cursor:crefInput?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                  {salvando?<Loader2 size={16}/>:<><Send size={15}/> Enviar para aprovação</>}
-                </motion.button>
-                <motion.button whileTap={{scale:.97}} onClick={()=>setStep('pin')}
-                  style={{background:'none',border:'none',color:'#484858',fontSize:'.75rem',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}>
-                  <ArrowLeft size={13}/> Voltar
-                </motion.button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              )}
+              <Button full onClick={salvarCref} disabled={salvando||!crefInput.trim()}>
+                {salvando?<Loader2 size={16} className="animate-spin"/>:<><Send size={15}/> Enviar para aprovação</>}
+              </Button>
+              <motion.button whileTap={{scale:.97}} onClick={()=>setStep('pin')}
+                className="inline-flex items-center justify-center gap-1 text-ink-3 text-[0.75rem] font-semibold">
+                <ArrowLeft size={13}/> Voltar
+              </motion.button>
+            </>
+          )}
+        </div>
       </motion.div>
     </PageShell>
   );
 
   // ── ÁREA DO PERSONAL (desbloqueada) ───────────────────────────
   const TABS: {id:Tab;label:string;Icon:any}[] = [
-    {id:'alunos', label:'Alunos',  Icon:Student    },
-    {id:'fichas', label:'Fichas',  Icon:ClipboardList},
-    {id:'config', label:'Config',  Icon:Settings   },
+    {id:'alunos', label:'Alunos',  Icon:GraduationCap },
+    {id:'fichas', label:'Fichas',  Icon:ClipboardList },
+    {id:'config', label:'Config',  Icon:Settings      },
   ];
 
   return (
     <PageShell>
-      {/* Toast */}
-      <AnimatePresence>
-        {toast&&(
-          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0}}
-            style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:300,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',gap:'.4rem',pointerEvents:'none'}}>
-            <CheckCircle2 size={14}/>{toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastViewport toast={toast}/>
 
       {/* Modal convite */}
       <AnimatePresence>
         {showConvite&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}}
+            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6"
             onClick={e=>{if(e.target===e.currentTarget)setShowConvite(false);}}>
             <motion.div initial={{scale:.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.9,opacity:0}}
-              style={{background:'#0f0f13',border:'1px solid #2e2e38',borderRadius:20,padding:'1.5rem',width:'100%',maxWidth:340,textAlign:'center'}}>
-              <UserPlus size={32} color="#e31b23" style={{margin:'0 auto .75rem'}}/>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.25rem'}}>Código de Convite</div>
-              <div style={{fontSize:'.75rem',color:'#7a7a8a',marginBottom:'1rem'}}>Compartilhe com seu aluno</div>
-              <div style={{fontFamily:'monospace',fontWeight:900,fontSize:'2rem',letterSpacing:'.2em',color:'#e31b23',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
+              className="card w-full max-w-[340px] p-6 text-center shadow-float">
+              <div className="flex justify-center text-accent mb-3"><UserPlus size={32}/></div>
+              <div className="font-display font-bold text-[1.25rem] tracking-tight text-ink-1 mb-1">Código de Convite</div>
+              <div className="text-[0.75rem] text-ink-2 mb-4">Compartilhe com seu aluno</div>
+              <div className="font-mono font-bold text-[1.9rem] tracking-[0.2em] text-accent bg-accent-soft border border-accent/30 rounded-xl p-4 mb-4 tnum">
                 {codigoConvite}
               </div>
-              <div style={{fontSize:'.72rem',color:'#7a7a8a',marginBottom:'1rem',lineHeight:1.5}}>
-                O aluno deve ir em <strong style={{color:'#f0f0f2'}}>DarkPersonal → Entrar com código</strong> e digitar este código
+              <div className="text-[0.72rem] text-ink-2 mb-4 leading-relaxed">
+                O aluno deve ir em <strong className="text-ink-1">DarkPersonal → Entrar com código</strong> e digitar este código
               </div>
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.95}} onClick={copiarConvite}
-                  style={{flex:1,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'11px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+              <div className="flex gap-2">
+                <Button variant="soft" size="sm" className="flex-1" onClick={copiarConvite}>
                   {copiado?<><Check size={15}/> Copiado!</>:<><Copy size={15}/> Copiar</>}
-                </motion.button>
-                <motion.button whileTap={{scale:.95}} onClick={()=>setShowConvite(false)}
-                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'11px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                </Button>
+                <Button variant="ghost" size="sm" className="flex-1" onClick={()=>setShowConvite(false)}>
                   Fechar
-                </motion.button>
+                </Button>
               </div>
             </motion.div>
           </motion.div>
@@ -468,80 +457,72 @@ export default function PersonalPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
-        style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-            DARK<span style={{color:'#e31b23'}}>PERSONAL</span>
-          </div>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <Certificate size={11} color="#e31b23" weight="fill"/>
+      <PageHeader
+        title={<>Dark<span className="text-accent">Personal</span></>}
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            <Award size={12} className="text-accent"/>
             {personalData?.cref||'Personal Trainer'} · {alunos.length} aluno{alunos.length!==1?'s':''}
-          </div>
-        </div>
-        <motion.button whileTap={{scale:.95}} onClick={gerarConvite}
-          style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'.5rem .9rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.35rem'}}>
-          <UserPlus size={15}/> Convidar
-        </motion.button>
-      </motion.div>
+          </span>
+        }
+        right={
+          <Button variant="soft" size="sm" onClick={gerarConvite}>
+            <UserPlus size={14}/> Convidar
+          </Button>
+        }
+      />
 
       {/* Tabs */}
-      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:12,padding:'3px',gap:'3px',marginBottom:'1rem'}}>
+      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.06}}
+        className="flex bg-surface-2 border border-line rounded-xl p-1 gap-1 mb-6">
         {TABS.map(t=>{
           const TIcon = t.Icon;
+          const active = tab===t.id;
           return (
-            <motion.button key={t.id} whileTap={{scale:.95}} onClick={()=>{setTab(t.id);setAlunoSel(null);setFichaView('lista');}} style={{
-              flex:1,padding:'.5rem',borderRadius:9,border:'none',cursor:'pointer',
-              background:tab===t.id?'rgba(227,27,35,.15)':'transparent',
-              color:tab===t.id?'#e31b23':'#484858',
-              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-              fontSize:'.75rem',letterSpacing:'.04em',
-              boxShadow:tab===t.id?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',
-              outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',
-            }}>
-              <TIcon size={15} color={tab===t.id?'#e31b23':'#484858'}/>
+            <motion.button key={t.id} whileTap={{scale:.95}}
+              onClick={()=>{setTab(t.id);setAlunoSel(null);setFichaView('lista');}}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-[0.75rem] font-semibold transition-colors
+                ${active?'bg-accent-soft text-accent border border-accent/30':'text-ink-3 border border-transparent'}`}>
+              <TIcon size={14}/>
               {t.label}
             </motion.button>
           );
         })}
-      </div>
+      </motion.div>
 
       <AnimatePresence mode="wait">
         <motion.div key={tab+(alunoSel?.uid||'')+(fichaView)} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.15}}>
 
           {/* ── ALUNOS ────────────────────────────────────────── */}
           {tab==='alunos'&&(
-            <div style={{display:'grid',gap:'.55rem'}}>
+            <div className="grid gap-2.5">
               {alunos.length===0&&(
-                <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:14}}>
-                  <CardContent style={{padding:'2.5rem 1rem',textAlign:'center'}}>
-                    <Student size={44} color="#484858" weight="fill" style={{margin:'0 auto .75rem'}}/>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#484858',textTransform:'uppercase'}}>Nenhum aluno ainda</div>
-                    <div style={{fontSize:'.78rem',color:'#484858',marginTop:'.4rem'}}>Gere um convite e compartilhe com seu aluno</div>
-                    <motion.button whileTap={{scale:.97}} onClick={gerarConvite}
-                      style={{marginTop:'1rem',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'.6rem 1.2rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.4rem',margin:'.75rem auto 0'}}>
+                <EmptyState
+                  icon={<GraduationCap size={44}/>}
+                  title="Nenhum aluno ainda"
+                  subtitle="Gere um convite e compartilhe com seu aluno"
+                  action={
+                    <Button variant="soft" onClick={gerarConvite}>
                       <UserPlus size={15}/> Gerar Convite
-                    </motion.button>
-                  </CardContent>
-                </Card>
+                    </Button>
+                  }
+                />
               )}
               {alunos.map((a,i)=>(
-                <motion.div key={a.uid} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
-                  <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                    <CardContent style={{padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                      <div style={{width:42,height:42,borderRadius:'50%',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#e31b23'}}>
-                        {a.initials}
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{a.nome}</div>
-                        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'1px'}}>Último treino: {a.ultimoTreino}</div>
-                      </div>
-                      <motion.button whileTap={{scale:.9}} onClick={async()=>{setAlunoSel(a);setTab('fichas');await carregarFichasAluno(a.uid);}}
-                        style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .7rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
-                        <ClipboardList size={13}/> Fichas
-                      </motion.button>
-                    </CardContent>
-                  </Card>
+                <motion.div key={a.uid} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
+                  transition={{delay:Math.min(i*0.04,0.4)}}
+                  className="card px-4 py-3.5 flex items-center gap-3">
+                  <div className="w-[42px] h-[42px] rounded-full bg-accent-soft border border-accent/30 text-accent font-display font-bold text-[1rem] flex items-center justify-center shrink-0">
+                    {a.initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-semibold text-[1rem] text-ink-1 truncate">{a.nome}</div>
+                    <div className="text-[0.65rem] text-ink-3 mt-px">Último treino: {a.ultimoTreino}</div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="shrink-0"
+                    onClick={async()=>{setAlunoSel(a);setTab('fichas');await carregarFichasAluno(a.uid);}}>
+                    <ClipboardList size={13}/> Fichas
+                  </Button>
                 </motion.div>
               ))}
             </div>
@@ -552,122 +533,133 @@ export default function PersonalPage() {
             <div>
               {/* Selector de aluno */}
               {!alunoSel?(
-                <div style={{display:'grid',gap:'.5rem'}}>
-                  <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.25rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <Student size={12} weight="fill"/> Selecione o aluno
+                <div className="grid gap-2">
+                  <div className="eyebrow mb-1 flex items-center gap-1.5">
+                    <GraduationCap size={12}/> Selecione o aluno
                   </div>
                   {alunos.length===0?(
-                    <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-                      <CardContent style={{padding:'2rem',textAlign:'center'}}>
-                        <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhum aluno vinculado ainda</div>
-                      </CardContent>
-                    </Card>
+                    <EmptyState
+                      icon={<GraduationCap size={36}/>}
+                      title="Nenhum aluno vinculado"
+                      subtitle="Convide um aluno para começar a criar fichas."
+                    />
                   ):alunos.map((a,i)=>(
-                    <motion.button key={a.uid} whileTap={{scale:.98}} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}
+                    <motion.button key={a.uid} whileTap={{scale:.98}}
+                      initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*0.04,0.4)}}
                       onClick={async()=>{setAlunoSel(a);await carregarFichasAluno(a.uid);}}
-                      style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12,padding:'.85rem 1rem',display:'flex',alignItems:'center',gap:'.75rem',cursor:'pointer',outline:'none',textAlign:'left'}}>
-                      <div style={{width:38,height:38,borderRadius:'50%',background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',color:'#e31b23'}}>
+                      className="card px-4 py-3.5 flex items-center gap-3 text-left hover:bg-surface-2 transition-colors">
+                      <div className="w-[38px] h-[38px] rounded-full bg-accent-soft border border-accent/30 text-accent font-display font-bold text-[0.9rem] flex items-center justify-center shrink-0">
                         {a.initials}
                       </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{a.nome}</div>
-                        <div style={{fontSize:'.65rem',color:'#7a7a8a'}}>Ver e criar fichas</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-display font-semibold text-[1rem] text-ink-1 truncate">{a.nome}</div>
+                        <div className="text-[0.65rem] text-ink-3">Ver e criar fichas</div>
                       </div>
-                      <ChevronRight size={16} color="#484858"/>
+                      <ChevronRight size={16} className="text-ink-3 shrink-0"/>
                     </motion.button>
                   ))}
                 </div>
               ):fichaView==='lista'?(
                 /* Lista de fichas do aluno */
-                <div style={{display:'grid',gap:'.55rem'}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.25rem'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                      <motion.button whileTap={{scale:.9}} onClick={()=>{setAlunoSel(null);setFichasAluno([]);}}
-                        style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.3rem .65rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
+                <div className="grid gap-2.5">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Button variant="ghost" size="sm" className="shrink-0"
+                        onClick={()=>{setAlunoSel(null);setFichasAluno([]);}}>
                         <ArrowLeft size={13}/> Voltar
-                      </motion.button>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{alunoSel.nome}</div>
+                      </Button>
+                      <div className="font-display font-semibold text-[1rem] text-ink-1 truncate">{alunoSel.nome}</div>
                     </div>
-                    <motion.button whileTap={{scale:.95}} onClick={()=>{setNomeFicha('');setByDay(byDayVazio());setFichaView('builder');}}
-                      style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:8,padding:'.35rem .75rem',color:'#e31b23',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:'uppercase'}}>
+                    <Button variant="soft" size="sm" className="shrink-0"
+                      onClick={()=>{setNomeFicha('');setByDay(byDayVazio());setFichaView('builder');}}>
                       <Plus size={14}/> Nova Ficha
-                    </motion.button>
+                    </Button>
                   </div>
                   {fichasAluno.length===0?(
-                    <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-                      <CardContent style={{padding:'2rem',textAlign:'center'}}>
-                        <ClipboardList size={36} color="#484858" style={{margin:'0 auto .5rem'}}/>
-                        <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhuma ficha criada ainda</div>
-                      </CardContent>
-                    </Card>
+                    <EmptyState
+                      icon={<ClipboardList size={36}/>}
+                      title="Nenhuma ficha criada ainda"
+                      subtitle="Crie a primeira ficha de treino para este aluno."
+                    />
                   ):fichasAluno.map((f,i)=>{
                     const totalEx = Object.values(f.byDay||{}).flat().length;
                     const dias = Object.entries(f.byDay||{}).filter(([,v])=>v.length>0).map(([k])=>k.slice(0,3));
                     return (
-                      <motion.div key={f.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
-                        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                          <CardContent style={{padding:'.85rem 1rem'}}>
-                            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.4rem'}}>
-                              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#f0f0f2',textTransform:'uppercase'}}>{f.nome}</div>
-                              <motion.button whileTap={{scale:.9}} onClick={()=>deletarFicha(f.id)}
-                                style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:6,padding:'4px 7px',color:'#e31b23',cursor:'pointer',outline:'none',flexShrink:0}}>
-                                <Trash2 size={13}/>
-                              </motion.button>
-                            </div>
-                            <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}>
-                              <Badge variant="outline" style={{borderColor:'rgba(227,27,35,.2)',color:'#7a7a8a',fontSize:'.55rem'}}>{totalEx} exercícios</Badge>
-                              {dias.map(d=>(
-                                <Badge key={d} style={{background:'rgba(227,27,35,.1)',color:'#e31b23',border:'1px solid rgba(227,27,35,.2)',fontSize:'.55rem'}}>{d}</Badge>
-                              ))}
-                            </div>
-                          </CardContent>
-                        </Card>
+                      <motion.div key={f.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
+                        transition={{delay:Math.min(i*0.04,0.4)}}
+                        className="card px-4 py-3.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="font-display font-bold text-[1rem] text-ink-1 truncate mr-2">{f.nome}</div>
+                          <motion.button whileTap={{scale:.9}} onClick={()=>deletarFicha(f.id)}
+                            aria-label={`Excluir ficha ${f.nome}`}
+                            className="shrink-0 inline-flex items-center rounded-md border border-danger/30 bg-danger-soft text-danger px-1.5 py-1">
+                            <Trash2 size={13}/>
+                          </motion.button>
+                        </div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <span className="chip text-[0.55rem]">{totalEx} exercícios</span>
+                          {dias.map(d=>(
+                            <span key={d} className="inline-flex items-center rounded-full border border-accent/30 bg-accent-soft text-accent text-[0.55rem] font-semibold px-2 py-0.5">
+                              {d}
+                            </span>
+                          ))}
+                        </div>
                       </motion.div>
                     );
                   })}
                 </div>
               ):(
                 /* Builder de ficha */
-                <div style={{display:'grid',gap:'.75rem'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>setFichaView('lista')}
-                      style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.3rem .65rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.72rem',fontWeight:700}}>
+                <div className="grid gap-3">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="shrink-0" onClick={()=>setFichaView('lista')}>
                       <ArrowLeft size={13}/> Voltar
-                    </motion.button>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:'#f0f0f2'}}>Nova Ficha — {alunoSel?.nome}</div>
+                    </Button>
+                    <div className="font-display font-semibold text-[0.95rem] text-ink-1 truncate">
+                      Nova Ficha — {alunoSel?.nome}
+                    </div>
                   </div>
 
                   {/* Nome da ficha */}
                   <div>
-                    <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4}}>Nome da ficha</label>
+                    <label className="eyebrow block mb-1.5">Nome da ficha</label>
                     <input value={nomeFicha} onChange={e=>setNomeFicha(e.target.value)}
                       placeholder="Ex: Treino A — Peito e Tríceps"
-                      style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'11px 13px',fontSize:'.95rem',outline:'none',minWidth:0}}/>
+                      className="field w-full min-w-0"/>
                   </div>
 
                   {/* Seletor de dia */}
-                  <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
-                    {DIAS.map(d=>(
-                      <motion.button key={d} whileTap={{scale:.9}} onClick={()=>setDiaAtivo(d)}
-                        style={{flexShrink:0,padding:'.3rem .55rem',borderRadius:8,border:`1px solid ${diaAtivo===d?'#e31b23':'#2e2e38'}`,background:diaAtivo===d?'rgba(227,27,35,.15)':'transparent',color:diaAtivo===d?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.7rem',cursor:'pointer',outline:'none',position:'relative'}}>
-                        {d.slice(0,3)}
-                        {byDay[d].length>0&&<span style={{position:'absolute',top:-4,right:-4,width:14,height:14,borderRadius:'50%',background:'#e31b23',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.5rem',color:'#fff',fontWeight:900}}>{byDay[d].length}</span>}
-                      </motion.button>
-                    ))}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {DIAS.map(d=>{
+                      const active=diaAtivo===d;
+                      return (
+                        <motion.button key={d} whileTap={{scale:.9}} onClick={()=>setDiaAtivo(d)}
+                          className={`relative shrink-0 rounded-lg border px-2.5 py-1 text-[0.7rem] font-semibold transition-colors
+                            ${active?'border-accent/30 bg-accent-soft text-accent':'border-line text-ink-3'}`}>
+                          {d.slice(0,3)}
+                          {byDay[d].length>0&&(
+                            <span className="absolute -top-1.5 -right-1.5 w-[15px] h-[15px] rounded-full bg-accent text-accent-ink text-[0.52rem] font-bold flex items-center justify-center tnum">
+                              {byDay[d].length}
+                            </span>
+                          )}
+                        </motion.button>
+                      );
+                    })}
                   </div>
 
                   {/* Exercícios do dia */}
                   {byDay[diaAtivo].length>0&&(
-                    <div style={{display:'grid',gap:'.35rem'}}>
+                    <div className="grid gap-1.5">
                       {byDay[diaAtivo].map((ex,i)=>(
-                        <div key={i} style={{display:'flex',alignItems:'center',gap:'.5rem',background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:10,padding:'.5rem .75rem'}}>
-                          <Barbell size={14} color="#e31b23" weight="fill"/>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:'.82rem',color:'#f0f0f2',fontWeight:600}}>{ex.nome}</div>
-                            <div style={{fontSize:'.6rem',color:'#7a7a8a'}}>{ex.series} séries × {ex.reps}</div>
+                        <div key={i} className="card-2 flex items-center gap-2.5 rounded-xl px-3 py-2">
+                          <Dumbbell size={14} className="text-accent shrink-0"/>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[0.82rem] font-semibold text-ink-1 truncate">{ex.nome}</div>
+                            <div className="text-[0.6rem] text-ink-3 tnum">{ex.series} séries × {ex.reps}</div>
                           </div>
                           <motion.button whileTap={{scale:.9}} onClick={()=>removeEx(i)}
-                            style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:6,padding:'3px 6px',color:'#e31b23',cursor:'pointer',outline:'none'}}>
+                            aria-label={`Remover ${ex.nome}`}
+                            className="shrink-0 inline-flex items-center rounded-md border border-danger/30 bg-danger-soft text-danger px-1.5 py-1">
                             <X size={12}/>
                           </motion.button>
                         </div>
@@ -677,40 +669,44 @@ export default function PersonalPage() {
 
                   {/* Busca exercícios */}
                   <div>
-                    <div style={{position:'relative',marginBottom:'.5rem'}}>
-                      <Search size={14} color="#484858" style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)'}}/>
+                    <div className="relative mb-2">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none"/>
                       <input value={busca} onChange={e=>setBusca(e.target.value)}
                         placeholder="Buscar exercício..."
-                        style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'9px 13px 9px 33px',fontSize:'.85rem',outline:'none',boxSizing:'border-box' as const}}/>
+                        className="field w-full pl-9"/>
                     </div>
                     {/* Filtro por grupo */}
-                    <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.5rem'}}>
+                    <div className="flex gap-1.5 flex-wrap mb-2">
                       <motion.button whileTap={{scale:.9}} onClick={()=>setGrupoFiltro('')}
-                        style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${!grupoFiltro?'#e31b23':'#2e2e38'}`,background:!grupoFiltro?'rgba(227,27,35,.15)':'transparent',color:!grupoFiltro?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+                        className={!grupoFiltro?'chip-active shrink-0':'chip shrink-0'}>
                         Todos
                       </motion.button>
                       {GRUPOS.map(g=>(
                         <motion.button key={g} whileTap={{scale:.9}} onClick={()=>setGrupoFiltro(g)}
-                          style={{flexShrink:0,padding:'.25rem .6rem',borderRadius:6,border:`1px solid ${grupoFiltro===g?'#e31b23':'#2e2e38'}`,background:grupoFiltro===g?'rgba(227,27,35,.15)':'transparent',color:grupoFiltro===g?'#e31b23':'#7a7a8a',fontSize:'.65rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+                          className={grupoFiltro===g?'chip-active shrink-0':'chip shrink-0'}>
                           {g}
                         </motion.button>
                       ))}
                     </div>
                     {/* Lista */}
-                    <div style={{maxHeight:220,overflowY:'auto',display:'grid',gap:'.3rem',width:'100%'}}>
+                    <div className="max-h-[220px] overflow-y-auto grid gap-1.5 w-full no-scrollbar">
                       {exFiltrados.map((e,i)=>{
                         const jaAdicionado = byDay[diaAtivo].some(x=>x.nome===e.nome);
                         return (
                           <motion.button key={i} whileTap={{scale:.98}} onClick={()=>addEx(e.nome)} disabled={jaAdicionado}
-                            style={{display:'flex',alignItems:'center',gap:'.6rem',background:jaAdicionado?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:`1px solid ${jaAdicionado?'rgba(34,197,94,.2)':'#1a1a20'}`,borderRadius:9,padding:'.5rem .75rem',cursor:jaAdicionado?'default':'pointer',outline:'none',textAlign:'left'}}>
-                            <div style={{width:28,height:28,borderRadius:7,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                              <Barbell size={14} color={jaAdicionado?'#4ade80':'#7a7a8a'} weight="fill"/>
+                            className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors
+                              ${jaAdicionado?'bg-ok-soft border-ok/30 cursor-default':'bg-surface-2 border-line hover:bg-surface-3'}`}>
+                            <div className={`w-7 h-7 rounded-lg border border-line bg-surface-1 flex items-center justify-center shrink-0
+                              ${jaAdicionado?'text-ok':'text-ink-3'}`}>
+                              <Dumbbell size={14}/>
                             </div>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:'.82rem',color:jaAdicionado?'#4ade80':'#f0f0f2',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.nome}</div>
-                              <div style={{fontSize:'.58rem',color:'#484858'}}>{e.grupo} · {e.equip}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-[0.82rem] font-semibold truncate ${jaAdicionado?'text-ok':'text-ink-1'}`}>{e.nome}</div>
+                              <div className="text-[0.58rem] text-ink-3">{e.grupo} · {e.equip}</div>
                             </div>
-                            {jaAdicionado?<CheckCircle2 size={14} color="#4ade80"/>:<Plus size={14} color="#484858"/>}
+                            {jaAdicionado
+                              ?<CheckCircle2 size={14} className="text-ok shrink-0"/>
+                              :<Plus size={14} className="text-ink-3 shrink-0"/>}
                           </motion.button>
                         );
                       })}
@@ -718,11 +714,14 @@ export default function PersonalPage() {
                   </div>
 
                   {/* Erro + salvar */}
-                  {erro&&<div style={{display:'flex',alignItems:'center',gap:'.3rem',color:'#e31b23',fontSize:'.75rem'}}><AlertCircle size={13}/>{erro}</div>}
-                  <motion.button whileTap={{scale:.97}} onClick={salvarFicha} disabled={salvando}
-                    style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',boxShadow:'0 4px 20px rgba(227,27,35,.3)'}}>
-                    {salvando?<Loader2 size={16}/>:<><CheckCircle2 size={16}/> Salvar Ficha</>}
-                  </motion.button>
+                  {erro&&(
+                    <div className="flex items-center gap-1.5 text-danger text-[0.75rem]">
+                      <AlertCircle size={13}/>{erro}
+                    </div>
+                  )}
+                  <Button full onClick={salvarFicha} disabled={salvando}>
+                    {salvando?<Loader2 size={16} className="animate-spin"/>:<><CheckCircle2 size={16}/> Salvar Ficha</>}
+                  </Button>
                 </div>
               )}
             </div>
@@ -730,40 +729,38 @@ export default function PersonalPage() {
 
           {/* ── CONFIG ────────────────────────────────────────── */}
           {tab==='config'&&(
-            <div style={{display:'grid',gap:'.75rem'}}>
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'1rem'}}>
-                  <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <Certificate size={12} weight="fill" color="#e31b23"/> Perfil Professional
+            <div className="grid gap-3">
+              <div className="card p-4">
+                <div className="eyebrow mb-3 flex items-center gap-1.5">
+                  <Award size={12} className="text-accent"/> Perfil Profissional
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[0.82rem] text-ink-2">CREF</span>
+                    <span className="font-mono font-bold text-[0.88rem] text-ink-1">{personalData?.cref||'—'}</span>
                   </div>
-                  <div style={{display:'grid',gap:'.5rem'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>CREF</span>
-                      <span style={{fontFamily:'monospace',fontWeight:700,color:'#f0f0f2',fontSize:'.88rem'}}>{personalData?.cref||'—'}</span>
-                    </div>
-                    <Separator style={{background:'rgba(255,255,255,.05)'}}/>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>Status</span>
-                      <Badge style={{background:'rgba(34,197,94,.1)',color:'#4ade80',border:'1px solid rgba(34,197,94,.3)',fontSize:'.6rem'}}>Aprovado</Badge>
-                    </div>
-                    <Separator style={{background:'rgba(255,255,255,.05)'}}/>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:'.82rem',color:'#7a7a8a'}}>Alunos ativos</span>
-                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,color:'#f0f0f2',fontSize:'1rem'}}>{alunos.length}</span>
-                    </div>
+                  <div className="border-t border-line"/>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[0.82rem] text-ink-2">Status</span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-ok/30 bg-ok-soft text-ok text-[0.6rem] font-semibold px-2 py-0.5">
+                      <CheckCircle2 size={10}/> Aprovado
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="border-t border-line"/>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[0.82rem] text-ink-2">Alunos ativos</span>
+                    <span className="font-display font-bold text-[1rem] text-ink-1 tnum">{alunos.length}</span>
+                  </div>
+                </div>
+              </div>
 
-              <motion.button whileTap={{scale:.97}} onClick={gerarConvite}
-                style={{width:'100%',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'13px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+              <Button variant="soft" full onClick={gerarConvite}>
                 <UserPlus size={16}/> Gerar Novo Convite
-              </motion.button>
+              </Button>
 
-              <motion.button whileTap={{scale:.97}} onClick={()=>{setUnlocked(false);setStep('pin');setPin('');}}
-                style={{width:'100%',background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:12,padding:'13px',color:'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+              <Button variant="ghost" full onClick={()=>{setUnlocked(false);setStep('pin');setPin('');}}>
                 <Lock size={16}/> Bloquear Área
-              </motion.button>
+              </Button>
             </div>
           )}
 
