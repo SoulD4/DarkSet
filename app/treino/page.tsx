@@ -1,10 +1,21 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getGifUrls } from '@/lib/exerciseGifs';
+import {
+  Dumbbell, Plus, Minus, Trash2, Search, X, Copy, Pencil, Star,
+  ChevronDown, ChevronUp, ArrowLeft, Loader2, ClipboardList, Check, GripVertical, LogIn,
+} from 'lucide-react';
 
 const DAYS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const GROUP_ORDER = ['Peito','Ombro','Trapézio','Costas','Bíceps','Tríceps','Antebraço','Lombar','Quadríceps','Posterior de Coxa','Glúteo','Panturrilha','Abdômen'];
@@ -116,10 +127,16 @@ const ex = (name:string, sets=3):Item => {
 
 const emptyByDay = ():Record<string,Item[]> => Object.fromEntries(DAYS.map(d=>[d,[]]));
 
-const NIVEL_COR:Record<string,string> = {
-  'iniciante':'#22c55e',
-  'intermediário':'#facc15',
-  'avançado':'#e31b23',
+/* Tons semânticos por nível (tokens do design system — sem hex) */
+const LEVEL_BADGE:Record<string,string> = {
+  'iniciante':'bg-ok-soft border-ok/30 text-ok',
+  'intermediário':'bg-warn-soft border-warn/30 text-warn',
+  'avançado':'bg-danger-soft border-danger/30 text-danger',
+};
+const LEVEL_TEXT:Record<string,string> = {
+  'iniciante':'text-ok',
+  'intermediário':'text-warn',
+  'avançado':'text-danger',
 };
 
 const PRESET_PLANS:Preset[] = [
@@ -202,6 +219,7 @@ const PRESET_PLANS:Preset[] = [
   },
 ];
 
+/* ── GIF animado do exercício (alterna 2 frames) ─────────────── */
 function ExerciseGif({name, size=80}:{name:string;size?:number}) {
   const urls = getGifUrls(name);
   const [frame, setFrame] = useState(0);
@@ -212,10 +230,16 @@ function ExerciseGif({name, size=80}:{name:string;size?:number}) {
     if(!urls) return;
     const t = setInterval(()=>setFrame(f=>f===0?1:0), 900);
     return ()=>clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[name]);
 
   if(!urls) return (
-    <div style={{width:size,height:size,borderRadius:8,flexShrink:0,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>60?'1.5rem':'1rem'}}>🏋️</div>
+    <div
+      className="shrink-0 rounded-lg bg-surface-2 border border-line flex items-center justify-center text-ink-3"
+      style={{width:size,height:size}}
+    >
+      <Dumbbell size={size>60?24:16}/>
+    </div>
   );
 
   const src = frame===0 ? urls.url0 : (img1Ok ? urls.url1 : urls.url0);
@@ -224,11 +248,36 @@ function ExerciseGif({name, size=80}:{name:string;size?:number}) {
       src={src}
       alt={name}
       onError={()=>{ if(frame===1) setImg1Ok(false); }}
-      style={{width:size,height:size,borderRadius:8,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}
+      className="shrink-0 rounded-lg object-cover border border-line"
+      style={{width:size,height:size}}
     />
   );
 }
 
+/* ── Segmented control local ─────────────────────────────────── */
+function Segmented<T extends string>({options, value, onChange}:{
+  options:{key:T;label:React.ReactNode}[];
+  value:T;
+  onChange:(v:T)=>void;
+}) {
+  return (
+    <div className="card-2 flex p-1 gap-1 mb-4">
+      {options.map(o=>(
+        <button
+          key={o.key}
+          onClick={()=>onChange(o.key)}
+          className={`flex-1 h-9 rounded-lg text-[0.8rem] font-semibold transition-colors ${
+            value===o.key ? 'bg-accent-soft text-accent border border-accent/30' : 'text-ink-2 border border-transparent'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── Editor de ficha (dias, exercícios, busca/adição) ────────── */
 function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;onBack:()=>void}) {
   const [local, setLocal]     = useState<Plan>(JSON.parse(JSON.stringify(plan)));
   const [day, setDay]         = useState(DAYS[0]);
@@ -309,39 +358,54 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
 
   return (
     <PageShell>
+      {/* Modal fullscreen do GIF */}
       {showGif && (
-        <div onClick={()=>setShowGif(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.97)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1.25rem',padding:'2rem'}}>
-          <div style={{position:'relative'}}>
+        <div
+          onClick={()=>setShowGif(null)}
+          className="fixed inset-0 z-[200] bg-bg/95 backdrop-blur-sm flex flex-col items-center justify-center gap-5 p-8"
+        >
+          <div className="relative rounded-xl ring-1 ring-accent/30">
             <ExerciseGif name={showGif} size={280}/>
-            <div style={{position:'absolute',inset:0,borderRadius:12,boxShadow:'inset 0 0 0 1px rgba(227,27,35,.3)'}}/>
           </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2',textAlign:'center',letterSpacing:'.05em'}}>{showGif}</div>
-          <div style={{fontSize:'.72rem',color:'#484858',letterSpacing:'.08em',textTransform:'uppercase'}}>Toque para fechar</div>
+          <div className="font-display font-bold text-xl text-ink-1 text-center">{showGif}</div>
+          <div className="eyebrow">Toque para fechar</div>
         </div>
       )}
 
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',animation:'fadeUp .3s ease'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
-          <button onClick={onBack} style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .8rem',color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,cursor:'pointer'}}>← Voltar</button>
-          <div>
-            <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em'}}>Editando</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{local.name}</div>
+      {/* Cabeçalho do editor */}
+      <motion.div
+        initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+        className="flex items-center justify-between gap-3 mb-4"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="sm" onClick={onBack} aria-label="Voltar">
+            <ArrowLeft size={16}/>
+          </Button>
+          <div className="min-w-0">
+            <div className="eyebrow">Editando</div>
+            <div className="font-display font-bold text-lg text-ink-1 leading-tight truncate">{local.name}</div>
           </div>
         </div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#e31b23',lineHeight:1}}>
-          {totalEx}<span style={{fontSize:'.75rem',color:'#484858'}}>ex</span>
+        <div className="shrink-0 text-right">
+          <div className="font-display font-bold text-2xl text-accent leading-none tnum">{totalEx}</div>
+          <div className="eyebrow">exercícios</div>
         </div>
-      </div>
+      </motion.div>
 
-      <div style={{display:'flex',gap:'.35rem',overflowX:'auto',marginBottom:'.75rem',paddingTop:'10px',paddingBottom:'.35rem',scrollbarWidth:'none'}}>
+      {/* Seletor de dia com contadores */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pt-2 pb-2 mb-3">
         {DAYS.map(dy=>{
           const count = local.byDay[dy]?.length||0;
           const active = day===dy;
           return (
-            <button key={dy} onClick={()=>setDay(dy)} style={{flexShrink:0,minWidth:46,padding:'.45rem .6rem',borderRadius:'10px',cursor:'pointer',background:active?'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(active?'#e31b23':'#2e2e38'),color:active?'#fff':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',position:'relative',transition:'all .15s'}}>
+            <button
+              key={dy}
+              onClick={()=>setDay(dy)}
+              className={`chip shrink-0 relative min-w-[52px] justify-center ${active?'chip-active':''}`}
+            >
               {dy.slice(0,3)}
               {count>0 && (
-                <span style={{position:'absolute',top:-8,right:-6,background:active?'#fff':'#e31b23',color:active?'#e31b23':'#fff',borderRadius:'50%',width:18,height:18,fontSize:'.52rem',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,zIndex:1,boxShadow:'0 0 0 2px #0f0f13'}}>
+                <span className="absolute -top-1.5 -right-1 w-[18px] h-[18px] rounded-full bg-accent text-accent-ink text-[0.55rem] font-bold flex items-center justify-center tnum ring-2 ring-bg">
                   {count}
                 </span>
               )}
@@ -350,36 +414,40 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
         })}
       </div>
 
-      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
-        <button onClick={()=>setTab('ficha')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',textTransform:'uppercase',background:tab==='ficha'?'rgba(227,27,35,.15)':'transparent',color:tab==='ficha'?'#e31b23':'#7a7a8a',boxShadow:tab==='ficha'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>
-          Ficha {day.slice(0,3)} ({dayItems.length})
-        </button>
-        <button onClick={()=>setTab('buscar')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.8rem',textTransform:'uppercase',background:tab==='buscar'?'rgba(227,27,35,.15)':'transparent',color:tab==='buscar'?'#e31b23':'#7a7a8a',boxShadow:tab==='buscar'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>
-          + Adicionar
-        </button>
-      </div>
+      <Segmented<'ficha'|'buscar'>
+        value={tab}
+        onChange={setTab}
+        options={[
+          {key:'ficha', label:`Ficha ${day.slice(0,3)} (${dayItems.length})`},
+          {key:'buscar', label:(
+            <span className="inline-flex items-center gap-1.5"><Plus size={14}/>Adicionar</span>
+          )},
+        ]}
+      />
 
       {tab==='ficha' && (
-        <div style={{animation:'fadeUp .25s ease'}}>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}>
           {dayItems.length===0 ? (
-            <div style={{textAlign:'center',padding:'2.5rem 1rem',background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🏋️</div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#484858',marginBottom:'.4rem'}}>Vazio</div>
-              <div style={{fontSize:'.82rem',color:'#484858',marginBottom:'1rem'}}>Nenhum exercício para {day}</div>
-              <button onClick={()=>setTab('buscar')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>
-                + Adicionar Exercício
-              </button>
-            </div>
+            <EmptyState
+              icon={<Dumbbell size={36}/>}
+              title="Dia vazio"
+              subtitle={`Nenhum exercício para ${day}. Bora montar!`}
+              action={
+                <Button size="sm" onClick={()=>setTab('buscar')}>
+                  <Plus size={15}/> Adicionar exercício
+                </Button>
+              }
+            />
           ) : (
             <>
               {dayItems.length > 1 && (
-                <div style={{display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'.5rem',padding:'.3rem .6rem',background:'rgba(255,255,255,.02)',borderRadius:'8px',border:'1px solid #2e2e38'}}>
-                  <span style={{fontSize:'.7rem'}}>☰</span>
-                  <span style={{fontSize:'.6rem',color:'#484858',letterSpacing:'.05em'}}>Segure e arraste para reordenar</span>
+                <div className="flex items-center gap-2 mb-2 px-3 py-1.5 card-2">
+                  <GripVertical size={13} className="text-ink-3 shrink-0"/>
+                  <span className="text-[0.68rem] text-ink-3">Segure e arraste para reordenar</span>
                 </div>
               )}
               <div
-                style={{display:'grid',gap:'.55rem'}}
+                className="grid gap-2.5"
                 onTouchMove={e=>handleTouchMove(e,dayItems.length)}
                 onTouchEnd={handleTouchEnd}
                 onTouchCancel={handleTouchEnd}
@@ -389,141 +457,163 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
                   const isDragged = dragIdx===i;
                   const isTarget  = dragOver===i && dragIdx!==i;
                   return (
-                    <div
-                      key={i}
+                    <motion.div
+                      key={it.exId}
+                      initial={{opacity:0,y:10}}
+                      animate={{opacity:1,y:0}}
+                      transition={{delay:Math.min(i*0.04,0.4)}}
                       data-drag-idx={i}
                       onTouchStart={()=>handleTouchStart(i)}
-                      style={{
-                        background: isDragged ? 'rgba(227,27,35,.08)' : '#1e1e24',
-                        border: '1px solid ' + (isDragged ? '#e31b23' : isTarget ? 'rgba(227,27,35,.4)' : '#2e2e38'),
-                        borderRadius:'14px',
-                        padding:'.75rem',
-                        animation:'fadeUp .2s ease',
-                        transform: isDragged ? 'scale(1.02)' : isTarget ? 'translateY(-2px)' : 'none',
-                        transition:'transform .15s, border-color .15s, background .15s',
-                        boxShadow: isDragged ? '0 8px 24px rgba(0,0,0,.5)' : 'none',
-                        userSelect:'none',
-                        WebkitUserSelect:'none',
-                        position:'relative',
-                        overflow:'hidden',
-                      }}
+                      className={`card p-3 relative overflow-hidden select-none transition-[border-color,transform] ${
+                        isDragged ? 'border-accent bg-accent-soft scale-[1.02] shadow-float'
+                        : isTarget ? 'border-accent/40 -translate-y-0.5'
+                        : ''
+                      }`}
                     >
-                      {isTarget && <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'#e31b23',borderRadius:'2px 2px 0 0'}}/>}
+                      {isTarget && <div className="absolute top-0 left-0 right-0 h-0.5 bg-accent"/>}
 
-                      <div style={{display:'flex',alignItems:'center',gap:'.65rem',marginBottom:'.65rem'}}>
+                      <div className="flex items-center gap-2.5 mb-2.5">
                         <button
                           onClick={()=>!dragging&&setShowGif(it.name)}
-                          style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:10,overflow:'hidden',flexShrink:0,position:'relative',width:56,height:56}}
+                          className="relative shrink-0 rounded-lg overflow-hidden"
+                          aria-label={`Ver demonstração de ${it.name}`}
                         >
                           <ExerciseGif name={it.name} size={56}/>
-                          <div style={{position:'absolute',inset:0,borderRadius:10,display:'flex',alignItems:'flex-end',justifyContent:'flex-start',padding:'2px 3px'}}>
-                            <span style={{fontSize:'.5rem',color:'rgba(255,255,255,.7)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,lineHeight:1,background:'rgba(0,0,0,.5)',borderRadius:3,padding:'0 2px'}}>{i+1}</span>
-                          </div>
+                          <span className="absolute bottom-0.5 left-0.5 px-1 rounded bg-bg/70 text-[0.55rem] font-bold text-ink-2 tnum">
+                            {i+1}
+                          </span>
                         </button>
 
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-display font-semibold text-[0.95rem] text-ink-1 leading-tight break-words">
                             {it.name}
                           </div>
-                          <div style={{display:'flex',alignItems:'center',gap:'.3rem',marginTop:'.2rem',flexWrap:'wrap'}}>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {exInfo?.primary && (
-                              <span style={{fontSize:'.58rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:'4px',padding:'1px 5px',textTransform:'uppercase',letterSpacing:'.04em'}}>
+                              <span className="text-[0.58rem] font-bold uppercase tracking-wide text-accent bg-accent-soft rounded px-1.5 py-px">
                                 {exInfo.primary}
                               </span>
                             )}
                             {exInfo?.equipment && (
-                              <span style={{fontSize:'.58rem',color:'#484858',fontWeight:600}}>
-                                {exInfo.equipment}
-                              </span>
+                              <span className="text-[0.62rem] text-ink-3 font-medium">{exInfo.equipment}</span>
                             )}
                           </div>
                         </div>
 
-                        <div style={{flexShrink:0,display:'flex',flexDirection:'column',gap:'3px',padding:'.4rem .3rem',opacity:0.4,cursor:'grab'}}>
-                          {[0,1,2].map(r=>(
-                            <div key={r} style={{display:'flex',gap:'3px'}}>
-                              {[0,1].map(c=>(
-                                <div key={c} style={{width:3,height:3,borderRadius:'50%',background:'#7a7a8a'}}/>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
+                        <GripVertical size={16} className="text-ink-3 opacity-50 shrink-0 cursor-grab"/>
 
                         <button
                           onClick={()=>removeItem(i)}
-                          style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',color:'#e31b23',padding:'.45rem .5rem',cursor:'pointer',fontSize:'.8rem',fontWeight:700,lineHeight:1,flexShrink:0,transition:'all .15s'}}
-                        >✕</button>
+                          className="shrink-0 w-9 h-9 rounded-lg bg-danger-soft border border-danger/30 text-danger flex items-center justify-center"
+                          aria-label="Remover exercício"
+                        >
+                          <Trash2 size={14}/>
+                        </button>
                       </div>
 
-                      <div style={{display:'flex',gap:'.5rem'}}>
-                        <div style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.4rem .5rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.3rem'}}>
+                      <div className="flex gap-2">
+                        {/* Séries */}
+                        <div className="flex-1 card-2 px-2.5 py-2 flex items-center justify-between gap-2">
                           <div>
-                            <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>Séries</div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'#f0f0f2',lineHeight:1}}>{it.setsPlanned}</div>
+                            <div className="eyebrow">Séries</div>
+                            <div className="font-display font-bold text-xl text-ink-1 leading-none tnum">{it.setsPlanned}</div>
                           </div>
-                          <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
-                            <button onClick={()=>updateSets(i,String(it.setsPlanned+1))}
-                              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'5px',color:'#f0f0f2',width:24,height:22,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.8rem',lineHeight:1,fontWeight:700}}>+</button>
-                            <button onClick={()=>updateSets(i,String(it.setsPlanned-1))}
-                              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'5px',color:'#7a7a8a',width:24,height:22,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'.8rem',lineHeight:1,fontWeight:700}}>−</button>
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={()=>updateSets(i,String(it.setsPlanned+1))}
+                              className="w-7 h-6 rounded-md bg-surface-3 text-ink-1 flex items-center justify-center"
+                              aria-label="Mais uma série"
+                            ><Plus size={13}/></button>
+                            <button
+                              onClick={()=>updateSets(i,String(it.setsPlanned-1))}
+                              className="w-7 h-6 rounded-md bg-surface-3 text-ink-2 flex items-center justify-center"
+                              aria-label="Menos uma série"
+                            ><Minus size={13}/></button>
                           </div>
                         </div>
 
-                        <div style={{flex:1,background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'.4rem .5rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.3rem'}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>Reps</div>
+                        {/* Reps */}
+                        <div className="flex-1 card-2 px-2.5 py-2 flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="eyebrow">Reps</div>
                             <input
                               type="text"
                               maxLength={8}
                               value={it.repsTarget}
                               onChange={e=>updateReps(i,e.target.value)}
-                              style={{width:'100%',background:'none',border:'none',outline:'none',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'#f0f0f2',lineHeight:1,padding:0}}
+                              className="w-full bg-transparent border-none outline-none font-display font-bold text-xl text-ink-1 leading-none p-0 tnum"
                             />
                           </div>
-                          <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+                          <div className="flex flex-col gap-0.5">
                             {['8-10','10-12','12-15'].map(r=>(
                               <button
                                 key={r}
                                 onClick={()=>updateReps(i,r)}
-                                style={{background:it.repsTarget===r?'rgba(227,27,35,.15)':'rgba(255,255,255,.04)',border:'1px solid '+(it.repsTarget===r?'rgba(227,27,35,.3)':'#2e2e38'),borderRadius:'4px',color:it.repsTarget===r?'#e31b23':'#484858',fontSize:'.45rem',fontWeight:800,cursor:'pointer',padding:'2px 4px',lineHeight:1,letterSpacing:'.02em',whiteSpace:'nowrap'}}
+                                className={`text-[0.55rem] font-bold px-1.5 py-0.5 rounded border leading-none whitespace-nowrap tnum transition-colors ${
+                                  it.repsTarget===r
+                                    ? 'bg-accent-soft border-accent/30 text-accent'
+                                    : 'bg-surface-2 border-line text-ink-3'
+                                }`}
                               >{r}</button>
                             ))}
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
             </>
           )}
-        </div>
+        </motion.div>
       )}
 
       {tab==='buscar' && (
-        <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',overflow:'hidden',animation:'fadeUp .25s ease'}}>
-          <div style={{padding:'.75rem .75rem .4rem'}}>
-            <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar exercício…"
-              style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',color:'#f0f0f2',padding:'10px 13px',fontSize:'.9rem',outline:'none',marginBottom:'.5rem'}}/>
-            <div style={{display:'flex',gap:'.4rem',marginBottom:'.5rem'}}>
-              <select value={filtMuscle} onChange={e=>setFiltMuscle(e.target.value)}
-                style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtMuscle?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
-                <option value="">Músculo</option>
-                {MUSCLES.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
-              <select value={filtEquip} onChange={e=>setFiltEquip(e.target.value)}
-                style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.4rem .6rem',fontSize:'.78rem',color:filtEquip?'#f0f0f2':'#7a7a8a',cursor:'pointer',outline:'none'}}>
-                <option value="">Equipamento</option>
-                {EQUIPS.map(e=><option key={e} value={e}>{e}</option>)}
-              </select>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="card overflow-hidden">
+          <div className="p-3 pb-2">
+            {/* Busca */}
+            <div className="relative mb-2.5">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none"/>
+              <input
+                value={busca}
+                onChange={e=>setBusca(e.target.value)}
+                placeholder="Buscar exercício…"
+                className="field pl-10"
+              />
+            </div>
+
+            {/* Filtro por músculo */}
+            <div className="eyebrow mb-1.5">Músculo</div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-2">
+              <button onClick={()=>setFiltMuscle('')} className={`chip shrink-0 ${!filtMuscle?'chip-active':''}`}>Todos</button>
+              {MUSCLES.map(m=>(
+                <button key={m} onClick={()=>setFiltMuscle(filtMuscle===m?'':m)} className={`chip shrink-0 ${filtMuscle===m?'chip-active':''}`}>{m}</button>
+              ))}
+            </div>
+
+            {/* Filtro por equipamento */}
+            <div className="eyebrow mb-1.5">Equipamento</div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-2">
+              <button onClick={()=>setFiltEquip('')} className={`chip shrink-0 ${!filtEquip?'chip-active':''}`}>Todos</button>
+              {EQUIPS.map(eq=>(
+                <button key={eq} onClick={()=>setFiltEquip(filtEquip===eq?'':eq)} className={`chip shrink-0 ${filtEquip===eq?'chip-active':''}`}>{eq}</button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div className="eyebrow">{exsFiltrados.length} exercício(s)</div>
               {(busca||filtMuscle||filtEquip) && (
-                <button onClick={()=>{setBusca('');setFiltMuscle('');setFiltEquip('');}}
-                  style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'8px',padding:'.4rem .6rem',color:'#e31b23',fontSize:'.75rem',fontWeight:700,cursor:'pointer',flexShrink:0}}>✕</button>
+                <button
+                  onClick={()=>{setBusca('');setFiltMuscle('');setFiltEquip('');}}
+                  className="inline-flex items-center gap-1 text-[0.7rem] font-semibold text-danger"
+                >
+                  <X size={12}/> Limpar filtros
+                </button>
               )}
             </div>
-            <div style={{fontSize:'.6rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',paddingBottom:'.4rem'}}>{exsFiltrados.length} exercício(s)</div>
           </div>
-          <div style={{maxHeight:460,overflowY:'auto',padding:'0 .75rem .75rem'}}>
+
+          <div className="max-h-[460px] overflow-y-auto px-3 pb-3">
             {(()=>{
               const rows:React.ReactNode[] = [];
               let lastGroup = '';
@@ -531,22 +621,31 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
                 if(e.primary!==lastGroup){
                   lastGroup=e.primary;
                   rows.push(
-                    <div key={'g_'+e.primary} style={{fontSize:'.62rem',fontWeight:800,color:'#e31b23',textTransform:'uppercase',letterSpacing:'.1em',padding:'.5rem .3rem .2rem',borderBottom:'1px solid rgba(227,27,35,.15)',marginTop:idx?'.35rem':0}}>
+                    <div key={'g_'+e.primary} className={`eyebrow text-accent border-b border-accent/20 px-1 pb-1 ${idx?'mt-3':''} mb-1.5`}>
                       {e.primary}
                     </div>
                   );
                 }
                 const added = dayItems.some(it=>it.exId===e.id);
                 rows.push(
-                  <button key={e.id} onClick={()=>!added&&addEx(e)}
-                    style={{width:'100%',display:'flex',alignItems:'center',gap:'.65rem',background:added?'rgba(34,197,94,.06)':'rgba(255,255,255,.02)',border:'1px solid '+(added?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:'10px',padding:'.5rem .65rem',textAlign:'left',cursor:added?'default':'pointer',marginBottom:'.3rem',transition:'all .15s'}}>
+                  <button
+                    key={e.id}
+                    onClick={()=>!added&&addEx(e)}
+                    className={`w-full flex items-center gap-2.5 rounded-xl border p-2 mb-1.5 text-left transition-colors ${
+                      added ? 'bg-ok-soft border-ok/30 cursor-default' : 'bg-surface-2 border-line'
+                    }`}
+                  >
                     <ExerciseGif name={e.name} size={56}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:'.85rem',fontWeight:600,color:added?'#4ade80':'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.name}</div>
-                      <div style={{fontSize:'.6rem',color:'#484858',marginTop:'2px'}}>{e.equipment} · <span style={{color:NIVEL_COR[e.difficulty]||'#484858'}}>{e.difficulty}</span></div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[0.85rem] font-semibold truncate ${added?'text-ok':'text-ink-1'}`}>{e.name}</div>
+                      <div className="text-[0.65rem] text-ink-3 mt-0.5">
+                        {e.equipment} · <span className={LEVEL_TEXT[e.difficulty]||'text-ink-3'}>{e.difficulty}</span>
+                      </div>
                     </div>
-                    <span style={{flexShrink:0,width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:added?'rgba(34,197,94,.15)':'rgba(255,255,255,.06)',border:'1px solid '+(added?'rgba(34,197,94,.3)':'#2e2e38'),fontSize:'.85rem',color:added?'#4ade80':'#7a7a8a',fontWeight:700}}>
-                      {added?'✓':'+'}
+                    <span className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center ${
+                      added ? 'bg-ok-soft border-ok/30 text-ok' : 'bg-surface-3 border-line text-ink-2'
+                    }`}>
+                      {added ? <Check size={14}/> : <Plus size={14}/>}
                     </span>
                   </button>
                 );
@@ -554,19 +653,26 @@ function Builder({plan,onSave,onBack}:{plan:Plan;onSave:(p:Plan)=>Promise<void>;
               return rows;
             })()}
           </div>
-        </div>
+        </motion.div>
       )}
 
-      <button onClick={async()=>{setSaving(true);await onSave(local);setSaving(false);onBack();}} disabled={saving}
-        style={{width:'100%',marginTop:'.85rem',background:saving?'rgba(227,27,35,.4)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'14px',padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:saving?'not-allowed':'pointer',boxShadow:saving?'none':'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem',transition:'all .2s'}}>
-        {saving && <div style={{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spinCw .6s linear infinite'}}/>}
-        Salvar Ficha ✓
-      </button>
+      <Button
+        full
+        className="mt-4"
+        disabled={saving}
+        onClick={async()=>{setSaving(true);await onSave(local);setSaving(false);onBack();}}
+      >
+        {saving ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
+        {saving ? 'Salvando…' : 'Salvar ficha'}
+      </Button>
     </PageShell>
   );
 }
 
+/* ── Página principal: minhas fichas + fichas prontas ────────── */
 export default function TreinoPage() {
+  const router = useRouter();
+  const { toast, show } = useToast();
   const [uid, setUid]             = useState<string|null>(null);
   const [plans, setPlans]         = useState<Plan[]>([]);
   const [activeId, setActiveId]   = useState<string|null>(null);
@@ -577,7 +683,6 @@ export default function TreinoPage() {
   const [tab, setTab]             = useState<'minhas'|'prontas'>('minhas');
   const [previewId, setPreviewId] = useState<string|null>(null);
   const [renameId, setRenameId]   = useState<string|null>(null);
-  const [toast, setToast]         = useState('');
   const [filtLevel, setFiltLevel] = useState('todos');
 
   useEffect(()=>{
@@ -596,13 +701,11 @@ export default function TreinoPage() {
     });
   },[]);
 
-  const showToast = (msg:string) => { setToast(msg); setTimeout(()=>setToast(''),2500); };
-
   const savePlans = async (newList:Plan[], newActive:string|null) => {
     if(!uid) return;
     setSaving(true);
     try { await setDoc(doc(db,'users',uid,'data','plans'),{payload:JSON.stringify({list:newList,activeId:newActive}),updatedAt:Date.now()}); }
-    catch(e){ console.error(e); }
+    catch(e){ console.error(e); show('Erro ao salvar','danger'); }
     setSaving(false);
   };
 
@@ -614,14 +717,14 @@ export default function TreinoPage() {
     setPlans(newList); setActiveId(newActive); setNewName('');
     await savePlans(newList,newActive);
     setEditPlan(plan);
-    showToast('Ficha criada!');
+    show('Ficha criada!');
   };
 
   const handleSavePlan = async (updated:Plan) => {
     const newList = plans.map(p=>p.id===updated.id?updated:p);
     setPlans(newList);
     await savePlans(newList,activeId);
-    showToast('Ficha salva! ✓');
+    show('Ficha salva!');
   };
 
   const deletePlan = async (id:string) => {
@@ -629,7 +732,7 @@ export default function TreinoPage() {
     const newActive = activeId===id?(newList[0]?.id||null):activeId;
     setPlans(newList); setActiveId(newActive);
     await savePlans(newList,newActive);
-    showToast('Ficha excluída');
+    show('Ficha excluída');
   };
 
   const importPreset = async (preset:Preset) => {
@@ -638,7 +741,7 @@ export default function TreinoPage() {
     const newActive = activeId||plan.id;
     setPlans(newList); setActiveId(newActive);
     await savePlans(newList,newActive);
-    showToast('Ficha importada!');
+    show('Ficha importada!');
     setTab('minhas');
   };
 
@@ -649,94 +752,145 @@ export default function TreinoPage() {
 
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <div style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%',animation:'spinCw .65s linear infinite'}}/>
-      </div>
+      <Spinner full/>
+    </PageShell>
+  );
+
+  if(!uid) return (
+    <PageShell>
+      <PageHeader title="Fichas de Treino"/>
+      <EmptyState
+        icon={<LogIn size={36}/>}
+        title="Entre para montar suas fichas"
+        subtitle="Faça login para criar, editar e salvar suas fichas de treino."
+        action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
     </PageShell>
   );
 
   return (
     <PageShell>
-      {toast && (
-        <div style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',animation:'fadeUp .2s ease',backdropFilter:'blur(8px)'}}>
-          ✓ {toast}
+      <ToastViewport toast={toast}/>
+
+      <PageHeader
+        title="Fichas de Treino"
+        subtitle={`${plans.length} ficha(s)${saving?' · salvando…':''}`}
+        right={<Dumbbell size={22} className="text-accent"/>}
+      />
+
+      {/* Nova ficha */}
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="card p-4 mb-4">
+        <div className="eyebrow mb-2">Nova ficha</div>
+        <div className="flex gap-2">
+          <input
+            value={newName}
+            onChange={e=>setNewName(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&createPlan()}
+            placeholder="Nome da ficha…"
+            className="field flex-1 min-w-0"
+          />
+          <Button size="md" className="shrink-0" disabled={saving} onClick={createPlan}>
+            <Plus size={16}/> Criar
+          </Button>
         </div>
-      )}
+      </motion.div>
 
-      <div style={{marginBottom:'1.25rem',animation:'fadeUp .3s ease'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>Fichas de Treino</div>
-        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px'}}>{plans.length} ficha(s) · {saving?'💾 salvando...':''}</div>
-      </div>
-
-      <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',marginBottom:'.75rem',animation:'fadeUp .35s ease'}}>
-        <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem'}}>Nova ficha</div>
-        <div style={{display:'flex',gap:'.5rem',alignItems:'stretch'}}>
-          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createPlan()} placeholder="Nome da ficha…"
-            style={{flex:1,minWidth:0,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'11px 13px',fontSize:'.9rem',color:'#f0f0f2',outline:'none'}}/>
-          <button onClick={createPlan} disabled={saving}
-            style={{flexShrink:0,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'11px 18px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',whiteSpace:'nowrap'}}>
-            + Criar
-          </button>
-        </div>
-      </div>
-
-      <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem',animation:'fadeUp .4s ease'}}>
-        <button onClick={()=>setTab('minhas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='minhas'?'rgba(227,27,35,.15)':'transparent',color:tab==='minhas'?'#e31b23':'#7a7a8a',boxShadow:tab==='minhas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>Minhas Fichas</button>
-        <button onClick={()=>setTab('prontas')} style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:tab==='prontas'?'rgba(227,27,35,.15)':'transparent',color:tab==='prontas'?'#e31b23':'#7a7a8a',boxShadow:tab==='prontas'?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s'}}>Fichas Prontas</button>
-      </div>
+      <Segmented<'minhas'|'prontas'>
+        value={tab}
+        onChange={setTab}
+        options={[
+          {key:'minhas', label:'Minhas fichas'},
+          {key:'prontas', label:'Fichas prontas'},
+        ]}
+      />
 
       {tab==='minhas' && (
         plans.length===0 ? (
-          <div style={{textAlign:'center',padding:'3rem 1rem',border:'1px dashed #2e2e38',borderRadius:'12px',animation:'fadeUp .4s ease'}}>
-            <div style={{fontSize:'3rem',marginBottom:'.75rem'}}>📋</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Sem fichas ainda</div>
-            <div style={{fontSize:'.82rem',color:'#7a7a8a',marginBottom:'1rem'}}>Crie uma ficha ou importe uma pronta</div>
-            <button onClick={()=>setTab('prontas')} style={{background:'#e31b23',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.3)'}}>Ver fichas prontas</button>
-          </div>
+          <EmptyState
+            icon={<ClipboardList size={36}/>}
+            title="Sem fichas ainda"
+            subtitle="Crie uma ficha do zero ou importe uma pronta para começar."
+            action={<Button variant="soft" onClick={()=>setTab('prontas')}>Ver fichas prontas</Button>}
+          />
         ) : (
-          <div style={{display:'grid',gap:'.65rem'}}>
+          <div className="grid gap-2.5">
             {plans.map((pl,idx)=>{
               const isActive = activeId===pl.id;
               return (
-                <div key={pl.id} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',borderLeft:'2px solid '+(isActive?'#e31b23':'transparent'),animation:`fadeUp ${.3+idx*.05}s ease`,transition:'border-color .2s'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'.6rem'}}>
-                    <button onClick={async()=>{const nA=isActive?null:pl.id;setActiveId(nA);await savePlans(plans,nA);}}
-                      style={{width:22,height:22,borderRadius:'50%',flexShrink:0,cursor:'pointer',background:isActive?'#e31b23':'transparent',border:'2px solid '+(isActive?'#e31b23':'#484858'),display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isActive?'0 0 10px rgba(227,27,35,.5)':'none',transition:'all .2s'}}>
-                      {isActive && <div style={{width:8,height:8,borderRadius:'50%',background:'#fff'}}/>}
+                <motion.div
+                  key={pl.id}
+                  initial={{opacity:0,y:10}}
+                  animate={{opacity:1,y:0}}
+                  transition={{delay:Math.min(idx*0.04,0.4)}}
+                  className={`card p-4 border-l-2 ${isActive?'border-l-accent':'border-l-transparent'}`}
+                >
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <button
+                      onClick={async()=>{const nA=isActive?null:pl.id;setActiveId(nA);await savePlans(plans,nA);}}
+                      className={`shrink-0 ${isActive?'text-accent':'text-ink-3'}`}
+                      aria-label={isActive?'Desativar ficha':'Ativar ficha'}
+                    >
+                      <Star size={20} fill={isActive?'currentColor':'none'}/>
                     </button>
                     {renameId===pl.id ? (
-                      <input autoFocus value={pl.name}
+                      <input
+                        autoFocus
+                        value={pl.name}
                         onChange={e=>setPlans(prev=>prev.map(p=>p.id===pl.id?{...p,name:e.target.value}:p))}
                         onBlur={async()=>{setRenameId(null);await savePlans(plans,activeId);}}
                         onKeyDown={e=>{if(e.key==='Enter'){setRenameId(null);savePlans(plans,activeId);}}}
-                        style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #e31b23',borderRadius:'8px',padding:'.4rem .7rem',fontSize:'.95rem',color:'#f0f0f2',fontWeight:600,outline:'none'}}/>
+                        className="field flex-1 h-10 border-accent/40"
+                      />
                     ) : (
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                          {pl.name}
-                          {isActive && <span style={{marginLeft:'.5rem',fontSize:'.55rem',color:'#e31b23',fontWeight:700,letterSpacing:'.06em',verticalAlign:'middle',background:'rgba(227,27,35,.1)',borderRadius:'4px',padding:'1px 5px'}}>ATIVA</span>}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-display font-bold text-[1.05rem] text-ink-1 truncate">{pl.name}</span>
+                          {isActive && (
+                            <span className="shrink-0 text-[0.55rem] font-bold uppercase tracking-wide text-accent bg-accent-soft border border-accent/30 rounded px-1.5 py-px">
+                              Ativa
+                            </span>
+                          )}
                         </div>
-                        <div style={{fontSize:'.65rem',color:'#484858',marginTop:'1px'}}>{totalExsByDay(pl)} exercício(s)</div>
+                        <div className="text-[0.68rem] text-ink-3 mt-0.5">{totalExsByDay(pl)} exercício(s)</div>
                       </div>
                     )}
                   </div>
-                  <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
+
+                  {/* Contadores por dia */}
+                  <div className="flex gap-1.5 flex-wrap mb-3">
                     {DAYS.map(d=>{
                       const n = pl.byDay?.[d]?.length||0;
-                      return n>0 ? (
-                        <span key={d} style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',borderRadius:'6px',padding:'2px 8px',fontSize:'.65rem',color:'#e31b23',fontWeight:700}}>{d.slice(0,3)} {n}</span>
-                      ) : (
-                        <span key={d} style={{background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:'6px',padding:'2px 8px',fontSize:'.65rem',color:'#2e2e38'}}>{d.slice(0,3)}</span>
+                      return (
+                        <span
+                          key={d}
+                          className={`text-[0.65rem] font-semibold rounded-md border px-2 py-0.5 tnum ${
+                            n>0 ? 'bg-accent-soft border-accent/30 text-accent' : 'bg-surface-2 border-line text-ink-3 opacity-60'
+                          }`}
+                        >
+                          {d.slice(0,3)}{n>0?` ${n}`:''}
+                        </span>
                       );
                     })}
                   </div>
-                  <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
-                    <button onClick={()=>setEditPlan(pl)} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.42rem .9rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>Editar</button>
-                    <button onClick={()=>setRenameId(renameId===pl.id?null:pl.id)} style={{background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.42rem .75rem',color:'#7a7a8a',fontSize:'.75rem',fontWeight:600,cursor:'pointer'}}>Renomear</button>
-                    <button onClick={async()=>{const cl={...JSON.parse(JSON.stringify(pl)),id:'plan_'+Date.now(),name:pl.name+' (cópia)'};const nl=[...plans,cl];setPlans(nl);await savePlans(nl,activeId);showToast('Duplicada!');}} style={{background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.42rem .75rem',color:'#7a7a8a',fontSize:'.75rem',fontWeight:600,cursor:'pointer'}}>Duplicar</button>
-                    <button onClick={()=>deletePlan(pl.id)} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.18)',borderRadius:'8px',padding:'.42rem .65rem',color:'#e31b23',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}>✕</button>
+
+                  <div className="flex gap-1.5 flex-wrap">
+                    <Button size="sm" onClick={()=>setEditPlan(pl)}>
+                      <Pencil size={13}/> Editar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={()=>setRenameId(renameId===pl.id?null:pl.id)}>
+                      Renomear
+                    </Button>
+                    <Button
+                      size="sm" variant="ghost"
+                      onClick={async()=>{const cl={...JSON.parse(JSON.stringify(pl)),id:'plan_'+Date.now(),name:pl.name+' (cópia)'};const nl=[...plans,cl];setPlans(nl);await savePlans(nl,activeId);show('Duplicada!');}}
+                    >
+                      <Copy size={13}/> Duplicar
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={()=>deletePlan(pl.id)} aria-label="Excluir ficha">
+                      <Trash2 size={13}/>
+                    </Button>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -744,71 +898,85 @@ export default function TreinoPage() {
       )}
 
       {tab==='prontas' && (
-        <div style={{animation:'fadeUp .3s ease'}}>
-          <div style={{display:'flex',gap:'.4rem',marginBottom:'.75rem',overflowX:'auto',paddingBottom:'.25rem'}}>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}>
+          {/* Filtro por nível */}
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-2">
             {['todos','iniciante','intermediário','avançado'].map(l=>(
-              <button key={l} onClick={()=>setFiltLevel(l)}
-                style={{flexShrink:0,padding:'.35rem .85rem',borderRadius:'999px',cursor:'pointer',background:filtLevel===l?NIVEL_COR[l]||'#e31b23':'rgba(255,255,255,.04)',border:'1px solid '+(filtLevel===l?NIVEL_COR[l]||'#e31b23':'#2e2e38'),color:filtLevel===l?'#fff':(NIVEL_COR[l]||'#7a7a8a'),fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'capitalize',transition:'all .15s'}}>
+              <button
+                key={l}
+                onClick={()=>setFiltLevel(l)}
+                className={`chip shrink-0 capitalize ${filtLevel===l?'chip-active':''}`}
+              >
                 {l==='todos'?'Todos':l}
               </button>
             ))}
           </div>
-          <div style={{fontSize:'.62rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.6rem'}}>{presetsFiltrados.length} ficha(s)</div>
-          <div style={{display:'grid',gap:'.65rem'}}>
+          <div className="eyebrow mb-2.5">{presetsFiltrados.length} ficha(s)</div>
+
+          <div className="grid gap-2.5">
             {presetsFiltrados.map((preset,idx)=>(
-              <div key={preset.id} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'14px',padding:'1rem',animation:`fadeUp ${.3+idx*.05}s ease`}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.5rem'}}>
-                  <div style={{flex:1,minWidth:0,marginRight:'.75rem'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.05rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{preset.name}</div>
-                    <div style={{fontSize:'.72rem',color:'#7a7a8a',marginTop:'.3rem',lineHeight:1.4}}>{preset.description}</div>
+              <motion.div
+                key={preset.id}
+                initial={{opacity:0,y:10}}
+                animate={{opacity:1,y:0}}
+                transition={{delay:Math.min(idx*0.04,0.4)}}
+                className="card p-4"
+              >
+                <div className="flex justify-between items-start gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-bold text-[1rem] text-ink-1 leading-tight">{preset.name}</div>
+                    <div className="text-[0.74rem] text-ink-2 mt-1 leading-snug">{preset.description}</div>
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'.3rem',flexShrink:0}}>
-                    <span style={{background:(NIVEL_COR[preset.level]||'#7a7a8a')+'22',border:'1px solid '+(NIVEL_COR[preset.level]||'#7a7a8a')+'44',borderRadius:'5px',padding:'.2rem .55rem',fontSize:'.6rem',fontWeight:700,color:NIVEL_COR[preset.level]||'#7a7a8a',textTransform:'uppercase',letterSpacing:'.05em'}}>{preset.level}</span>
-                    <span style={{fontSize:'.65rem',color:'#7a7a8a',fontWeight:600}}>{preset.days} dias/sem</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`text-[0.6rem] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${LEVEL_BADGE[preset.level]||'bg-surface-2 border-line text-ink-2'}`}>
+                      {preset.level}
+                    </span>
+                    <span className="text-[0.68rem] text-ink-2 font-semibold tnum">{preset.days} dias/sem</span>
                   </div>
                 </div>
-                <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
+
+                <div className="flex gap-1.5 flex-wrap mb-3">
                   {DAYS.filter(d=>preset.byDay[d]?.length>0).map(d=>(
-                    <span key={d} style={{background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.15)',borderRadius:'5px',padding:'2px 7px',fontSize:'.62rem',color:'#e31b23',fontWeight:700}}>{d.slice(0,3)} {preset.byDay[d].length}ex</span>
+                    <span key={d} className="text-[0.62rem] font-semibold rounded-md bg-accent-soft border border-accent/20 text-accent px-1.5 py-0.5 tnum">
+                      {d.slice(0,3)} {preset.byDay[d].length}ex
+                    </span>
                   ))}
                 </div>
-                <div style={{display:'flex',gap:'.5rem'}}>
-                  <button onClick={()=>setPreviewId(previewId===preset.id?null:preset.id)}
-                    style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:'8px',padding:'.5rem',color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,cursor:'pointer',transition:'all .15s'}}>
-                    {previewId===preset.id?'▲ Fechar':'▼ Ver exercícios'}
-                  </button>
-                  <button onClick={()=>importPreset(preset)}
-                    style={{flex:1,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'8px',padding:'.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.82rem',textTransform:'uppercase',cursor:'pointer',boxShadow:'0 2px 10px rgba(227,27,35,.25)'}}>
-                    + Usar ficha
-                  </button>
+
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" className="flex-1" onClick={()=>setPreviewId(previewId===preset.id?null:preset.id)}>
+                    {previewId===preset.id ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                    {previewId===preset.id ? 'Fechar' : 'Ver exercícios'}
+                  </Button>
+                  <Button size="sm" className="flex-1" onClick={()=>importPreset(preset)}>
+                    <Plus size={14}/> Usar ficha
+                  </Button>
                 </div>
+
                 {previewId===preset.id && (
-                  <div style={{marginTop:'.75rem',borderTop:'1px solid #2e2e38',paddingTop:'.75rem',display:'grid',gap:'.5rem',animation:'fadeUp .2s ease'}}>
+                  <motion.div
+                    initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                    className="mt-3 pt-3 border-t border-line grid gap-2.5"
+                  >
                     {DAYS.filter(d=>preset.byDay[d]?.length>0).map(d=>(
                       <div key={d}>
-                        <div style={{fontSize:'.62rem',color:'#e31b23',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.3rem'}}>{d}</div>
+                        <div className="eyebrow text-accent mb-1.5">{d}</div>
                         {preset.byDay[d].map((it,i)=>(
-                          <div key={i} style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.3rem 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+                          <div key={i} className="flex items-center gap-2.5 py-1.5 border-b border-line/50 last:border-b-0">
                             <ExerciseGif name={it.name} size={36}/>
-                            <span style={{flex:1,fontSize:'.82rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.name}</span>
-                            <span style={{fontSize:'.7rem',color:'#7a7a8a',fontWeight:600,flexShrink:0}}>{it.setsPlanned}x {it.repsTarget}</span>
+                            <span className="flex-1 text-[0.82rem] text-ink-1 truncate">{it.name}</span>
+                            <span className="shrink-0 text-[0.7rem] text-ink-2 font-semibold tnum">{it.setsPlanned}x {it.repsTarget}</span>
                           </div>
                         ))}
                       </div>
                     ))}
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+              </motion.div>
             ))}
           </div>
-        </div>
+        </motion.div>
       )}
-
-      <style>{`
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }
-        @keyframes spinCw { to{transform:rotate(360deg)} }
-      `}</style>
     </PageShell>
   );
 }

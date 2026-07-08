@@ -1,27 +1,26 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import PageHeader from '@/components/core/PageHeader';
+import Spinner from '@/components/core/Spinner';
+import Button from '@/components/core/Button';
+import EmptyState from '@/components/core/EmptyState';
+import StatTile from '@/components/core/StatTile';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   TrendingUp, Trophy, Activity, BarChart2,
-  Dumbbell, Scale, Target, ChevronRight,
-  Zap, Calendar
+  Dumbbell, Scale, Target, Zap, Calendar,
+  HeartPulse, LogIn, type LucideIcon,
 } from 'lucide-react';
-import {
-  PersonSimpleRun, FlameIcon, Barbell,
-  ChartLineUp, Heartbeat
-} from '@phosphor-icons/react';
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Cell
+  ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 
 // ── Tipos ─────────────────────────────────────────────────────
@@ -31,11 +30,11 @@ type Session   = { planName?:string; day?:string; entries:ExEntry[]; duration?:n
 type History   = Record<string, Session>;
 type Measure   = { date:string; peso?:string; gordura?:string; cintura?:string; quadril?:string; braco?:string; coxa?:string };
 
-const TABS = [
-  { id:'treino',     label:'Treino',     Icon:Dumbbell    },
-  { id:'prs',        label:'PRs',        Icon:Trophy      },
-  { id:'corpo',      label:'Corpo',      Icon:Scale       },
-  { id:'composicao', label:'Composição', Icon:Activity    },
+const TABS: { id:string; label:string; Icon:LucideIcon }[] = [
+  { id:'treino',     label:'Treino',     Icon:Dumbbell },
+  { id:'prs',        label:'PRs',        Icon:Trophy   },
+  { id:'corpo',      label:'Corpo',      Icon:Scale    },
+  { id:'composicao', label:'Composição', Icon:Activity },
 ];
 
 const MUSCLE_MAP: Record<string,string> = {
@@ -53,10 +52,18 @@ const MUSCLE_MAP: Record<string,string> = {
   'Panturrilha em pé máquina':'Panturrilha','Abdominal crunch':'Abdômen','Prancha':'Abdômen',
 };
 
+// Paleta de gráficos do DS (tokens CSS — nunca hex direto)
+const CH = [
+  'var(--chart-1)','var(--chart-2)','var(--chart-3)','var(--chart-4)',
+  'var(--chart-5)','var(--chart-6)','var(--chart-7)','var(--chart-8)',
+];
+const GRID = 'rgba(151,163,181,0.08)';
+const TICK = { fill:'#5E6878', fontSize:10 };
+
 const MUSCLE_COLORS: Record<string,string> = {
-  'Peito':'#e31b23','Costas':'#6366f1','Quadríceps':'#22c55e','Ombro':'#f59e0b',
-  'Bíceps':'#06b6d4','Tríceps':'#a855f7','Posterior de Coxa':'#f97316',
-  'Glúteo':'#ec4899','Abdômen':'#14b8a6','Panturrilha':'#64748b','Trapézio':'#7c3aed',
+  'Peito':CH[0],'Costas':CH[1],'Quadríceps':CH[2],'Ombro':CH[3],
+  'Bíceps':CH[4],'Tríceps':CH[5],'Posterior de Coxa':CH[6],
+  'Glúteo':CH[7],'Abdômen':CH[1],'Panturrilha':CH[3],'Trapézio':CH[5],
 };
 
 const num    = (v:string) => { const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:0; };
@@ -68,21 +75,38 @@ const toWeek = (iso:string) => {
 };
 const estRM  = (w:number,r:number) => w>0?+(w*(1+r/30)).toFixed(1):r;
 
-// ── Tooltip ───────────────────────────────────────────────────
-const DarkTooltip = ({active,payload,label,unit='kg'}:any) => {
+// ── Tooltip (re-skin no estilo card do DS) ────────────────────
+const ChartTooltip = ({active,payload,label,unit='kg'}:any) => {
   if(!active||!payload?.length) return null;
   return (
-    <div style={{background:'#0f0f13',border:'1px solid #2e2e38',borderRadius:10,padding:'.5rem .75rem',boxShadow:'0 8px 24px rgba(0,0,0,.6)'}}>
-      <div style={{fontSize:'.62rem',color:'#7a7a8a',marginBottom:'3px'}}>{label}</div>
+    <div className="card px-3 py-2 shadow-float">
+      <div className="text-[0.62rem] text-ink-3 mb-0.5">{label}</div>
       {payload.map((p:any,i:number)=>(
-        <div key={i} style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:p.color||'#f0f0f2',lineHeight:1.3}}>
-          {p.name&&<span style={{fontSize:'.6rem',color:'#7a7a8a',marginRight:4}}>{p.name}</span>}
+        <div key={i} className="font-display font-bold text-[0.95rem] leading-snug tnum text-ink-1"
+          style={p.color?{color:p.color}:undefined}>
+          {p.name&&<span className="font-sans font-normal text-[0.6rem] text-ink-3 mr-1">{p.name}</span>}
           {typeof p.value==='number'?p.value.toFixed(p.value<10?1:0):p.value}{unit}
         </div>
       ))}
     </div>
   );
 };
+
+// ── Rótulo de seção de card ───────────────────────────────────
+const SectionLabel = ({icon:Icon,children,className=''}:{icon:LucideIcon;children:React.ReactNode;className?:string}) => (
+  <div className={`eyebrow flex items-center gap-1.5 ${className}`}>
+    <Icon size={12}/> {children}
+  </div>
+);
+
+// ── Chip pequeno de seleção (ranges / exercícios) ─────────────
+const PickChip = ({active,onClick,children}:{active:boolean;onClick:()=>void;children:React.ReactNode}) => (
+  <motion.button whileTap={{scale:.95}} onClick={onClick}
+    className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full border text-[0.62rem] font-bold transition-colors
+      ${active?'bg-accent-soft border-accent/40 text-accent':'bg-transparent border-line text-ink-3'}`}>
+    {children}
+  </motion.button>
+);
 
 // ── Heatmap ───────────────────────────────────────────────────
 function FreqHeatmap({history}:{history:History}) {
@@ -111,33 +135,31 @@ function FreqHeatmap({history}:{history:History}) {
 
   return (
     <div>
-      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.5rem'}}>
-        <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-          <Calendar size={11}/> Frequência — último ano
-        </div>
-        <div style={{fontSize:'.6rem',color:'#e31b23',fontWeight:700}}>{total} dias · {month} este mês</div>
+      <div className="flex items-center justify-between mb-2">
+        <SectionLabel icon={Calendar}>Frequência — último ano</SectionLabel>
+        <div className="text-[0.62rem] font-bold text-accent tnum">{total} dias · {month} este mês</div>
       </div>
-      <div style={{overflowX:'auto',paddingBottom:'.25rem'}}>
-        <div style={{display:'flex',gap:'2px',minWidth:'fit-content'}}>
+      <div className="overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-[2px] min-w-fit">
           {cells.map((week,wi)=>(
-            <div key={wi} style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+            <div key={wi} className="flex flex-col gap-[2px]">
               {week.map((cell,di)=>(
-                <div key={di} title={cell.iso} style={{
-                  width:10,height:10,borderRadius:2,
-                  background:cell.future?'transparent':cell.trained?'#e31b23':'rgba(255,255,255,.06)',
-                  boxShadow:cell.trained?'0 0 4px rgba(227,27,35,.4)':'none',
-                }}/>
+                <div key={di} title={cell.iso}
+                  className={`w-2.5 h-2.5 rounded-[2px] ${cell.future?'bg-transparent':cell.trained?'bg-accent':'bg-surface-2'}`}
+                  style={cell.trained?{boxShadow:'0 0 4px rgb(var(--accent-rgb) / 0.45)'}:undefined}
+                />
               ))}
             </div>
           ))}
         </div>
       </div>
-      <div style={{display:'flex',gap:'.5rem',marginTop:'.4rem',alignItems:'center',justifyContent:'flex-end'}}>
-        <span style={{fontSize:'.52rem',color:'#484858'}}>Menos</span>
+      <div className="flex items-center justify-end gap-2 mt-1.5">
+        <span className="text-[0.52rem] text-ink-3">Menos</span>
         {[.06,.25,.5,.75,1].map((o,i)=>(
-          <div key={i} style={{width:9,height:9,borderRadius:2,background:o<.15?'rgba(255,255,255,.06)':`rgba(227,27,35,${o})`}}/>
+          <div key={i} className="w-[9px] h-[9px] rounded-[2px]"
+            style={{background:o<.15?'var(--surface-2)':`rgb(var(--accent-rgb) / ${o})`}}/>
         ))}
-        <span style={{fontSize:'.52rem',color:'#484858'}}>Mais</span>
+        <span className="text-[0.52rem] text-ink-3">Mais</span>
       </div>
     </div>
   );
@@ -160,14 +182,14 @@ function MuscleRadar({history}:{history:History}) {
     return top.map(([muscle,val])=>({muscle,val,pct:Math.round((val/max)*100)}));
   },[history]);
 
-  if(!data.length) return <div style={{textAlign:'center',padding:'2rem',color:'#484858',fontSize:'.82rem'}}>Sem dados</div>;
+  if(!data.length) return <div className="text-center py-8 text-ink-3 text-[0.82rem]">Sem dados</div>;
   return (
     <ResponsiveContainer width="100%" height={200}>
       <RadarChart data={data} margin={{top:10,right:20,bottom:10,left:20}}>
-        <PolarGrid stroke="rgba(255,255,255,.06)"/>
-        <PolarAngleAxis dataKey="muscle" tick={{fill:'#7a7a8a',fontSize:10}}/>
-        <Radar dataKey="pct" stroke="#e31b23" fill="#e31b23" fillOpacity={0.18} strokeWidth={1.5}/>
-        <Tooltip content={<DarkTooltip unit=" séries"/>}/>
+        <PolarGrid stroke={GRID}/>
+        <PolarAngleAxis dataKey="muscle" tick={TICK}/>
+        <Radar dataKey="pct" stroke={CH[0]} fill={CH[0]} fillOpacity={0.18} strokeWidth={1.5}/>
+        <Tooltip content={<ChartTooltip unit=" séries"/>}/>
       </RadarChart>
     </ResponsiveContainer>
   );
@@ -220,153 +242,126 @@ function TabTreino({history}:{history:History}) {
   const wkDiff   = lastWk&&prevWk?Math.round(((lastWk.vol-prevWk.vol)/Math.max(prevWk.vol,1))*100):null;
 
   if(!sorted.length) return (
-    <div style={{textAlign:'center',padding:'3rem 1rem'}}>
-      <motion.div animate={{y:[0,-6,0]}} transition={{duration:2,repeat:Infinity}} style={{marginBottom:'.75rem'}}>
-        <BarChart2 size={44} color="#484858" style={{margin:'0 auto'}}/>
-      </motion.div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#484858',textTransform:'uppercase'}}>Sem dados de treino</div>
-      <div style={{fontSize:'.8rem',color:'#484858',marginTop:'.4rem'}}>Complete treinos no Modo Treino para ver os gráficos</div>
-    </div>
+    <EmptyState
+      icon={<BarChart2 size={40}/>}
+      title="Sem dados de treino"
+      subtitle="Complete treinos no Modo Treino para ver os gráficos"
+    />
   );
 
   return (
-    <div style={{display:'grid',gap:'.75rem'}}>
+    <div className="grid gap-3">
       {/* Stats */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem'}}>
-        {[
-          [String(sorted.length),'Treinos',  <Dumbbell key="d" size={16} color="#f0f0f2"/>],
-          [fmtVol(totalVol),'Volume',         <Zap key="z" size={16} color="#e31b23"/>],
-          [String(totalSets),'Séries',        <BarChart2 key="b" size={16} color="#7a7a8a"/>],
-        ].map(([v,l,icon],i)=>(
-          <motion.div key={i} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.06}}>
-            <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
-              <CardContent style={{padding:'.65rem .5rem',textAlign:'center'}}>
-                <div style={{display:'flex',justifyContent:'center',marginBottom:'.2rem'}}>{icon as any}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:i===1?'#e31b23':'#f0f0f2',lineHeight:1}}>{v as string}</div>
-                <div style={{fontSize:'.48rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>{l as string}</div>
-              </CardContent>
-            </Card>
+      <div className="grid grid-cols-3 gap-2.5">
+        {([
+          [String(sorted.length),'Treinos',<Dumbbell key="d" size={16}/>,'default'],
+          [fmtVol(totalVol),'Volume',<Zap key="z" size={16}/>,'accent'],
+          [String(totalSets),'Séries',<BarChart2 key="b" size={16}/>,'default'],
+        ] as const).map(([v,l,icon,tone],i)=>(
+          <motion.div key={l} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.06}}>
+            <StatTile value={v} label={l} icon={icon} tone={tone}/>
           </motion.div>
         ))}
       </div>
 
-      {/* Insight */}
+      {/* Insight semanal */}
       {wkDiff!==null && (
-        <motion.div initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.15}}>
-          <div style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:12,padding:'.65rem .85rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
-            <TrendingUp size={20} color={wkDiff>=0?'#4ade80':'#f87171'}/>
-            <div>
-              <div style={{fontSize:'.72rem',color:'#f0f0f2',fontWeight:600}}>
-                Esta semana: <span style={{color:wkDiff>=0?'#4ade80':'#f87171'}}>{wkDiff>=0?'+':''}{wkDiff}%</span> vs semana anterior
-              </div>
-              {bestWeek.vol>0&&<div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>Melhor semana: {bestWeek.wk} — {fmtVol(bestWeek.vol)}</div>}
+        <motion.div initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.15}}
+          className="bg-accent-soft border border-accent/30 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5">
+          <TrendingUp size={20} className={wkDiff>=0?'text-ok':'text-danger'}/>
+          <div>
+            <div className="text-[0.78rem] font-semibold text-ink-1">
+              Esta semana: <span className={`tnum ${wkDiff>=0?'text-ok':'text-danger'}`}>{wkDiff>=0?'+':''}{wkDiff}%</span> vs semana anterior
             </div>
+            {bestWeek.vol>0&&<div className="text-[0.65rem] text-ink-2 mt-px">Melhor semana: {bestWeek.wk} — {fmtVol(bestWeek.vol)}</div>}
           </div>
         </motion.div>
       )}
 
       {/* Volume semanal */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <BarChart2 size={12}/> Volume Semanal
-            </div>
-            <div style={{display:'flex',gap:'.25rem'}}>
-              {[{v:8,l:'8s'},{v:12,l:'3m'},{v:26,l:'6m'},{v:52,l:'1a'}].map(r=>(
-                <motion.button key={r.v} whileTap={{scale:.9}} onClick={()=>setRange(r.v)}
-                  style={{padding:'2px 7px',borderRadius:6,border:'1px solid '+(range===r.v?'#e31b23':'#2e2e38'),background:range===r.v?'rgba(227,27,35,.15)':'transparent',color:range===r.v?'#e31b23':'#7a7a8a',fontSize:'.6rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
-                  {r.l}
-                </motion.button>
-              ))}
-            </div>
-          </div>
-          {avgWkVol>0&&<div style={{fontSize:'.6rem',color:'#484858',marginBottom:'.5rem'}}>Média: {fmtVol(avgWkVol)}/semana</div>}
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={weeklyVol} margin={{top:4,right:4,left:-20,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" vertical={false}/>
-              <XAxis dataKey="wk" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-              <Tooltip content={<DarkTooltip unit="kg"/>}/>
-              <Bar dataKey="vol" name="Volume" radius={[4,4,0,0]} maxBarSize={32}>
-                {weeklyVol.map((_,i)=>(
-                  <Cell key={i} fill={i===weeklyVol.length-1?'#e31b23':'rgba(227,27,35,.5)'}/>
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 1RM */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.6rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <TrendingUp size={12}/> 1RM Estimado por Exercício
-          </div>
-          <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.4rem',marginBottom:'.6rem',scrollbarWidth:'none'}}>
-            {allExes.slice(0,12).map(ex=>(
-              <motion.button key={ex} whileTap={{scale:.95}} onClick={()=>setExSel(ex)}
-                style={{flexShrink:0,padding:'.28rem .65rem',borderRadius:999,border:'1px solid '+(selEx===ex?'#e31b23':'#2e2e38'),background:selEx===ex?'rgba(227,27,35,.15)':'transparent',color:selEx===ex?'#e31b23':'#7a7a8a',fontSize:'.62rem',fontWeight:700,cursor:'pointer',outline:'none',whiteSpace:'nowrap'}}>
-                {ex.length>16?ex.slice(0,14)+'…':ex}
-              </motion.button>
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <SectionLabel icon={BarChart2}>Volume Semanal</SectionLabel>
+          <div className="flex gap-1">
+            {[{v:8,l:'8s'},{v:12,l:'3m'},{v:26,l:'6m'},{v:52,l:'1a'}].map(r=>(
+              <PickChip key={r.v} active={range===r.v} onClick={()=>setRange(r.v)}>{r.l}</PickChip>
             ))}
           </div>
-          {rmData.length>1?(
-            <>
-              <div style={{display:'flex',gap:'1rem',marginBottom:'.6rem'}}>
-                <div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#e31b23',lineHeight:1}}>{rmData[rmData.length-1].rm}kg</div>
-                  <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>1RM atual</div>
-                </div>
-                {(()=>{
-                  const diff=rmData[rmData.length-1].rm-rmData[0].rm;
-                  const pct=((diff/rmData[0].rm)*100).toFixed(1);
-                  return (
-                    <div>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:diff>=0?'#4ade80':'#f87171',lineHeight:1,display:'flex',alignItems:'center',gap:'.25rem'}}>
-                        <TrendingUp size={16} color={diff>=0?'#4ade80':'#f87171'}/>{diff>=0?'+':''}{diff.toFixed(1)}kg
-                      </div>
-                      <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>evolução ({pct}%)</div>
-                    </div>
-                  );
-                })()}
+        </div>
+        {avgWkVol>0&&<div className="text-[0.62rem] text-ink-3 mb-2 tnum">Média: {fmtVol(avgWkVol)}/semana</div>}
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={weeklyVol} margin={{top:4,right:4,left:-20,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false}/>
+            <XAxis dataKey="wk" tick={TICK} axisLine={false} tickLine={false}/>
+            <YAxis tick={TICK} axisLine={false} tickLine={false}/>
+            <Tooltip content={<ChartTooltip unit="kg"/>}/>
+            <Bar dataKey="vol" name="Volume" radius={[4,4,0,0]} maxBarSize={32}>
+              {weeklyVol.map((_,i)=>(
+                <Cell key={i} fill={CH[0]} fillOpacity={i===weeklyVol.length-1?1:0.45}/>
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 1RM */}
+      <div className="card p-4">
+        <SectionLabel icon={TrendingUp} className="mb-2.5">1RM Estimado por Exercício</SectionLabel>
+        <div className="flex gap-1.5 overflow-x-auto pb-1.5 mb-2.5 no-scrollbar">
+          {allExes.slice(0,12).map(ex=>(
+            <PickChip key={ex} active={selEx===ex} onClick={()=>setExSel(ex)}>
+              {ex.length>16?ex.slice(0,14)+'…':ex}
+            </PickChip>
+          ))}
+        </div>
+        {rmData.length>1?(
+          <>
+            <div className="flex gap-4 mb-2.5">
+              <div>
+                <div className="font-display font-bold text-2xl leading-none text-accent tnum">{rmData[rmData.length-1].rm}kg</div>
+                <div className="eyebrow mt-1">1RM atual</div>
               </div>
-              <ResponsiveContainer width="100%" height={140}>
-                <LineChart data={rmData} margin={{top:4,right:4,left:-20,bottom:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-                  <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                  <Tooltip content={<DarkTooltip unit="kg"/>}/>
-                  <Line type="monotone" dataKey="rm" name="1RM" stroke="#e31b23" strokeWidth={2.5}
-                    dot={{fill:'#e31b23',r:3,strokeWidth:0}} activeDot={{r:6,fill:'#e31b23',strokeWidth:0}}/>
-                </LineChart>
-              </ResponsiveContainer>
-            </>
-          ):(
-            <div style={{textAlign:'center',padding:'1rem',color:'#484858',fontSize:'.78rem'}}>
-              {rmData.length===1?'Apenas 1 registro — treine mais para ver evolução':'Sem dados para este exercício'}
+              {(()=>{
+                const diff=rmData[rmData.length-1].rm-rmData[0].rm;
+                const pct=((diff/rmData[0].rm)*100).toFixed(1);
+                return (
+                  <div>
+                    <div className={`font-display font-bold text-2xl leading-none tnum flex items-center gap-1 ${diff>=0?'text-ok':'text-danger'}`}>
+                      <TrendingUp size={16}/>{diff>=0?'+':''}{diff.toFixed(1)}kg
+                    </div>
+                    <div className="eyebrow mt-1">evolução ({pct}%)</div>
+                  </div>
+                );
+              })()}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <ResponsiveContainer width="100%" height={140}>
+              <LineChart data={rmData} margin={{top:4,right:4,left:-20,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+                <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+                <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+                <Tooltip content={<ChartTooltip unit="kg"/>}/>
+                <Line type="monotone" dataKey="rm" name="1RM" stroke={CH[0]} strokeWidth={2.5}
+                  dot={{fill:CH[0],r:3,strokeWidth:0}} activeDot={{r:6,fill:CH[0],strokeWidth:0}}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        ):(
+          <div className="text-center py-4 text-ink-3 text-[0.78rem]">
+            {rmData.length===1?'Apenas 1 registro — treine mais para ver evolução':'Sem dados para este exercício'}
+          </div>
+        )}
+      </div>
 
       {/* Radar músculos */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <Target size={12}/> Distribuição Muscular — últimas 4 semanas
-          </div>
-          <MuscleRadar history={history}/>
-        </CardContent>
-      </Card>
+      <div className="card p-4">
+        <SectionLabel icon={Target} className="mb-2">Distribuição Muscular — últimas 4 semanas</SectionLabel>
+        <MuscleRadar history={history}/>
+      </div>
 
       {/* Heatmap */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <FreqHeatmap history={history}/>
-        </CardContent>
-      </Card>
+      <div className="card p-4">
+        <FreqHeatmap history={history}/>
+      </div>
     </div>
   );
 }
@@ -410,85 +405,78 @@ function TabPRs({history}:{history:History}) {
   },[sorted,selEx]);
 
   if(!topPRs.length) return (
-    <div style={{textAlign:'center',padding:'3rem 1rem'}}>
-      <Trophy size={44} color="#484858" style={{margin:'0 auto .75rem'}}/>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#484858',textTransform:'uppercase'}}>Nenhum PR ainda</div>
-    </div>
+    <EmptyState
+      icon={<Trophy size={40}/>}
+      title="Nenhum PR ainda"
+      subtitle="Complete treinos com carga para registrar recordes"
+    />
   );
 
   return (
-    <div style={{display:'grid',gap:'.75rem'}}>
+    <div className="grid gap-3">
       {/* Timeline */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.6rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <ChartLineUp size={14} color="#7a7a8a" weight="bold"/> Evolução do 1RM — Recordes históricos
-          </div>
-          <div style={{display:'flex',gap:'.3rem',overflowX:'auto',paddingBottom:'.4rem',marginBottom:'.6rem',scrollbarWidth:'none'}}>
-            {allExes.slice(0,10).map(ex=>(
-              <motion.button key={ex} whileTap={{scale:.95}} onClick={()=>setExSel(ex)}
-                style={{flexShrink:0,padding:'.28rem .65rem',borderRadius:999,border:'1px solid '+(selEx===ex?'#facc15':'#2e2e38'),background:selEx===ex?'rgba(250,204,21,.1)':'transparent',color:selEx===ex?'#facc15':'#7a7a8a',fontSize:'.62rem',fontWeight:700,cursor:'pointer',outline:'none',whiteSpace:'nowrap'}}>
-                {ex.length>16?ex.slice(0,14)+'…':ex}
-              </motion.button>
-            ))}
-          </div>
-          {prTimeline.length>0&&(
-            <>
-              <div style={{display:'flex',gap:'1rem',marginBottom:'.6rem',alignItems:'flex-end'}}>
-                <div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#facc15',lineHeight:1,display:'flex',alignItems:'center',gap:'.35rem'}}>
-                    <Trophy size={20} color="#facc15"/> {prMap[selEx]?.rm.toFixed(1)}kg
-                  </div>
-                  <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>1RM estimado (Epley)</div>
+      <div className="card p-4">
+        <SectionLabel icon={TrendingUp} className="mb-2.5">Evolução do 1RM — Recordes históricos</SectionLabel>
+        <div className="flex gap-1.5 overflow-x-auto pb-1.5 mb-2.5 no-scrollbar">
+          {allExes.slice(0,10).map(ex=>(
+            <PickChip key={ex} active={selEx===ex} onClick={()=>setExSel(ex)}>
+              {ex.length>16?ex.slice(0,14)+'…':ex}
+            </PickChip>
+          ))}
+        </div>
+        {prTimeline.length>0&&(
+          <>
+            <div className="flex items-end gap-4 mb-2.5">
+              <div>
+                <div className="font-display font-bold text-[1.6rem] leading-none text-warn tnum flex items-center gap-1.5">
+                  <Trophy size={20}/> {prMap[selEx]?.rm.toFixed(1)}kg
                 </div>
-                <div style={{fontSize:'.7rem',color:'#7a7a8a'}}>{prMap[selEx]?.w}kg × {prMap[selEx]?.r} reps</div>
+                <div className="eyebrow mt-1">1RM estimado (Epley)</div>
               </div>
-              <ResponsiveContainer width="100%" height={130}>
-                <LineChart data={prTimeline} margin={{top:4,right:4,left:-20,bottom:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-                  <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                  <Tooltip content={<DarkTooltip unit="kg"/>}/>
-                  <Line type="stepAfter" dataKey="rm" stroke="#facc15" strokeWidth={2.5}
-                    dot={{fill:'#facc15',r:5,strokeWidth:0}} activeDot={{r:7,fill:'#facc15',strokeWidth:0}}/>
-                </LineChart>
-              </ResponsiveContainer>
-              <div style={{fontSize:'.58rem',color:'#484858',textAlign:'center',marginTop:'.4rem',fontStyle:'italic'}}>
-                1RM = Peso × (1 + Reps/30) — Fórmula de Epley
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              <div className="text-[0.72rem] text-ink-2 tnum">{prMap[selEx]?.w}kg × {prMap[selEx]?.r} reps</div>
+            </div>
+            <ResponsiveContainer width="100%" height={130}>
+              <LineChart data={prTimeline} margin={{top:4,right:4,left:-20,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+                <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+                <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+                <Tooltip content={<ChartTooltip unit="kg"/>}/>
+                <Line type="stepAfter" dataKey="rm" name="1RM" stroke={CH[0]} strokeWidth={2.5}
+                  dot={{fill:CH[0],r:5,strokeWidth:0}} activeDot={{r:7,fill:CH[0],strokeWidth:0}}/>
+              </LineChart>
+            </ResponsiveContainer>
+            <div className="text-[0.6rem] text-ink-3 italic text-center mt-1.5">
+              1RM = Peso × (1 + Reps/30) — Fórmula de Epley
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Tabela PRs */}
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <Trophy size={12}/> Top {topPRs.length} Recordes Pessoais
-          </div>
-          <div style={{display:'grid',gap:'.4rem'}}>
-            {topPRs.slice(0,15).map(([name,pr],i)=>{
-              const muscle=MUSCLE_MAP[name];
-              const color=MUSCLE_COLORS[muscle]||'#7a7a8a';
-              return (
-                <motion.div key={name} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:i*.04}}
-                  style={{display:'flex',alignItems:'center',gap:'.6rem',background:'rgba(0,0,0,.2)',borderRadius:10,padding:'.5rem .65rem',borderLeft:`3px solid ${color}`}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',color:'rgba(255,255,255,.25)',width:18,flexShrink:0}}>#{i+1}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{name}</div>
-                    <div style={{fontSize:'.55rem',color:'#484858',marginTop:'1px'}}>{toBR(pr.date)} · {pr.w}kg × {pr.r} reps</div>
-                  </div>
-                  <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#facc15',lineHeight:1}}>{pr.rm.toFixed(1)}kg</div>
-                    <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase'}}>1RM</div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="card p-4">
+        <SectionLabel icon={Trophy} className="mb-3">Top {topPRs.length} Recordes Pessoais</SectionLabel>
+        <div className="grid gap-1.5">
+          {topPRs.slice(0,15).map(([name,pr],i)=>{
+            const muscle=MUSCLE_MAP[name];
+            const color=MUSCLE_COLORS[muscle]||'var(--ink-3)';
+            return (
+              <motion.div key={name} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:Math.min(i*.04,.4)}}
+                className="card-2 flex items-center gap-2.5 px-3 py-2"
+                style={{borderLeft:`3px solid ${color}`}}>
+                <div className="font-display font-bold text-[0.85rem] text-ink-3 w-5 shrink-0 tnum">#{i+1}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[0.85rem] text-ink-1 truncate">{name}</div>
+                  <div className="text-[0.6rem] text-ink-3 mt-px tnum">{toBR(pr.date)} · {pr.w}kg × {pr.r} reps</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-display font-bold text-[1.05rem] leading-none text-warn tnum">{pr.rm.toFixed(1)}kg</div>
+                  <div className="text-[0.5rem] uppercase text-ink-3 tracking-wider">1RM</div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -504,14 +492,14 @@ function TabCorpo({measures}:{measures:Measure[]}) {
     gordAbs:+(num(m.peso!)*num(m.gordura!)/100).toFixed(1),
   }));
   const medidas:('cintura'|'quadril'|'braco'|'coxa')[]=['cintura','quadril','braco','coxa'];
-  const mColors:Record<string,string>={cintura:'#f59e0b',quadril:'#ec4899',braco:'#06b6d4',coxa:'#a855f7'};
+  const mColors:Record<string,string>={cintura:CH[0],quadril:CH[1],braco:CH[2],coxa:CH[3]};
 
   if(!hasPeso) return (
-    <div style={{textAlign:'center',padding:'3rem 1rem'}}>
-      <Scale size={44} color="#484858" style={{margin:'0 auto .75rem'}}/>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#484858',textTransform:'uppercase',marginBottom:'.4rem'}}>Sem dados corporais</div>
-      <div style={{fontSize:'.8rem',color:'#484858'}}>Registre medições em DarkBody → Medidas</div>
-    </div>
+    <EmptyState
+      icon={<Scale size={40}/>}
+      title="Sem dados corporais"
+      subtitle="Registre medições em DarkBody → Medidas"
+    />
   );
 
   const last=sorted.filter(m=>m.peso)[sorted.filter(m=>m.peso).length-1];
@@ -519,134 +507,104 @@ function TabCorpo({measures}:{measures:Measure[]}) {
   const pesoChange=last&&first?(num(last.peso||'0')-num(first.peso||'0')).toFixed(1):null;
 
   return (
-    <div style={{display:'grid',gap:'.75rem'}}>
+    <div className="grid gap-3">
       {pesoChange!==null&&(
-        <div style={{background:'rgba(96,165,250,.06)',border:'1px solid rgba(96,165,250,.15)',borderRadius:12,padding:'.65rem .85rem',display:'flex',alignItems:'center',gap:'.6rem'}}>
-          <Scale size={20} color="#60a5fa"/>
+        <div className="bg-info-soft border border-info/30 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5">
+          <Scale size={20} className="text-info"/>
           <div>
-            <div style={{fontSize:'.72rem',color:'#f0f0f2',fontWeight:600}}>
-              Variação total: <span style={{color:Number(pesoChange)<0?'#4ade80':'#f87171'}}>{Number(pesoChange)>0?'+':''}{pesoChange}kg</span>
+            <div className="text-[0.78rem] font-semibold text-ink-1">
+              Variação total: <span className={`tnum ${Number(pesoChange)<0?'text-ok':'text-danger'}`}>{Number(pesoChange)>0?'+':''}{pesoChange}kg</span>
             </div>
-            <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>{first.peso}kg → {last.peso}kg · {sorted.filter(m=>m.peso).length} medições</div>
+            <div className="text-[0.65rem] text-ink-2 mt-px tnum">{first.peso}kg → {last.peso}kg · {sorted.filter(m=>m.peso).length} medições</div>
           </div>
         </div>
       )}
 
-      <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-        <CardContent style={{padding:'1rem'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <Scale size={12}/> Peso Corporal (kg)
-          </div>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={pesoData} margin={{top:4,right:4,left:-20,bottom:0}}>
-              <defs>
-                <linearGradient id="pesoGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-              <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-              <Tooltip content={<DarkTooltip unit="kg"/>}/>
-              <Area type="monotone" dataKey="val" name="Peso" stroke="#60a5fa" strokeWidth={2.5} fill="url(#pesoGrad)" dot={{fill:'#60a5fa',r:3,strokeWidth:0}}/>
+      {/* Peso corporal */}
+      <div className="card p-4">
+        <SectionLabel icon={Scale} className="mb-3">Peso Corporal (kg)</SectionLabel>
+        <ResponsiveContainer width="100%" height={160}>
+          <AreaChart data={pesoData} margin={{top:4,right:4,left:-20,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+            <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+            <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+            <Tooltip content={<ChartTooltip unit="kg"/>}/>
+            <Area type="monotone" dataKey="val" name="Peso" stroke={CH[0]} strokeWidth={2.5}
+              fill={CH[0]} fillOpacity={0.12} dot={{fill:CH[0],r:3,strokeWidth:0}}/>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* % Gordura */}
+      {hasGord&&(
+        <div className="card p-4">
+          <SectionLabel icon={Activity} className="mb-3">% Gordura Corporal</SectionLabel>
+          <ResponsiveContainer width="100%" height={140}>
+            <AreaChart data={gordData} margin={{top:4,right:4,left:-20,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+              <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+              <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+              <Tooltip content={<ChartTooltip unit="%"/>}/>
+              <Area type="monotone" dataKey="val" name="Gordura" stroke={CH[0]} strokeWidth={2.5}
+                fill={CH[0]} fillOpacity={0.12} dot={{fill:CH[0],r:3,strokeWidth:0}}/>
             </AreaChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {hasGord&&(
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <Activity size={12}/> % Gordura Corporal
-            </div>
-            <ResponsiveContainer width="100%" height={140}>
-              <AreaChart data={gordData} margin={{top:4,right:4,left:-20,bottom:0}}>
-                <defs>
-                  <linearGradient id="gordGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f87171" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#f87171" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-                <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                <Tooltip content={<DarkTooltip unit="%"/>}/>
-                <Area type="monotone" dataKey="val" name="Gordura" stroke="#f87171" strokeWidth={2.5} fill="url(#gordGrad)" dot={{fill:'#f87171',r:3,strokeWidth:0}}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
+      {/* Composição */}
       {massaData.length>1&&(
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <Heartbeat size={14} color="#7a7a8a" weight="bold"/> Composição Corporal (kg)
-            </div>
-            <div style={{display:'flex',gap:'1rem',marginBottom:'.65rem'}}>
-              {[['#4ade80','Massa magra'],['#f87171','Gordura']].map(([c,l])=>(
-                <div key={l} style={{display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <div style={{width:10,height:10,borderRadius:2,background:c}}/>
-                  <span style={{fontSize:'.6rem',color:'#7a7a8a'}}>{l}</span>
-                </div>
-              ))}
-            </div>
-            <ResponsiveContainer width="100%" height={150}>
-              <AreaChart data={massaData} margin={{top:4,right:4,left:-20,bottom:0}}>
-                <defs>
-                  <linearGradient id="massaG" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4ade80" stopOpacity={0.4}/><stop offset="95%" stopColor="#4ade80" stopOpacity={0.05}/>
-                  </linearGradient>
-                  <linearGradient id="gordAbsG" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f87171" stopOpacity={0.4}/><stop offset="95%" stopColor="#f87171" stopOpacity={0.05}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-                <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                <Tooltip content={<DarkTooltip unit="kg"/>}/>
-                <Area type="monotone" dataKey="massa" name="Massa magra" stroke="#4ade80" strokeWidth={2} fill="url(#massaG)" dot={false}/>
-                <Area type="monotone" dataKey="gordAbs" name="Gordura" stroke="#f87171" strokeWidth={2} fill="url(#gordAbsG)" dot={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
-            <div style={{fontSize:'.58rem',color:'#484858',textAlign:'center',marginTop:'.4rem',fontStyle:'italic'}}>Massa magra = Peso × (1 − %Gordura/100)</div>
-          </CardContent>
-        </Card>
+        <div className="card p-4">
+          <SectionLabel icon={HeartPulse} className="mb-2">Composição Corporal (kg)</SectionLabel>
+          <div className="flex gap-4 mb-2.5">
+            {[[CH[0],'Massa magra'],[CH[1],'Gordura']].map(([c,l])=>(
+              <div key={l} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-[2px]" style={{background:c}}/>
+                <span className="text-[0.62rem] text-ink-2">{l}</span>
+              </div>
+            ))}
+          </div>
+          <ResponsiveContainer width="100%" height={150}>
+            <AreaChart data={massaData} margin={{top:4,right:4,left:-20,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+              <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+              <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+              <Tooltip content={<ChartTooltip unit="kg"/>}/>
+              <Area type="monotone" dataKey="massa" name="Massa magra" stroke={CH[0]} strokeWidth={2} fill={CH[0]} fillOpacity={0.14} dot={false}/>
+              <Area type="monotone" dataKey="gordAbs" name="Gordura" stroke={CH[1]} strokeWidth={2} fill={CH[1]} fillOpacity={0.14} dot={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+          <div className="text-[0.6rem] text-ink-3 italic text-center mt-1.5">Massa magra = Peso × (1 − %Gordura/100)</div>
+        </div>
       )}
 
+      {/* Medidas */}
       {medidas.filter(k=>sorted.some(m=>m[k])).length>0&&(
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.75rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <Target size={12}/> Medidas Corporais (cm)
-            </div>
-            <div style={{display:'grid',gap:'.5rem'}}>
-              {medidas.filter(k=>sorted.some(m=>m[k])).map(key=>{
-                const data=sorted.filter(m=>m[key]).map(m=>({data:toBR(m.date),val:num((m[key] as string)||'0')}));
-                const diff=data.length>1?(data[data.length-1].val-data[0].val).toFixed(1):null;
-                return (
-                  <div key={key}>
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.4rem'}}>
-                      <div style={{fontSize:'.6rem',color:mColors[key],textTransform:'capitalize',fontWeight:700}}>{key}</div>
-                      {diff&&<div style={{fontSize:'.6rem',color:Number(diff)<0?'#4ade80':'#f87171'}}>{Number(diff)>0?'+':''}{diff}cm</div>}
-                    </div>
-                    <ResponsiveContainer width="100%" height={60}>
-                      <LineChart data={data} margin={{top:2,right:4,left:-20,bottom:2}}>
-                        <XAxis dataKey="data" tick={false} axisLine={false} tickLine={false}/>
-                        <YAxis tick={{fill:'#484858',fontSize:8}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                        <Tooltip content={<DarkTooltip unit="cm"/>}/>
-                        <Line type="monotone" dataKey="val" stroke={mColors[key]} strokeWidth={2} dot={false}/>
-                      </LineChart>
-                    </ResponsiveContainer>
+        <div className="card p-4">
+          <SectionLabel icon={Target} className="mb-3">Medidas Corporais (cm)</SectionLabel>
+          <div className="grid gap-2">
+            {medidas.filter(k=>sorted.some(m=>m[k])).map(key=>{
+              const data=sorted.filter(m=>m[key]).map(m=>({data:toBR(m.date),val:num((m[key] as string)||'0')}));
+              const diff=data.length>1?(data[data.length-1].val-data[0].val).toFixed(1):null;
+              return (
+                <div key={key}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="text-[0.62rem] font-bold capitalize" style={{color:mColors[key]}}>{key}</div>
+                    {diff&&<div className={`text-[0.62rem] tnum ${Number(diff)<0?'text-ok':'text-danger'}`}>{Number(diff)>0?'+':''}{diff}cm</div>}
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  <ResponsiveContainer width="100%" height={60}>
+                    <LineChart data={data} margin={{top:2,right:4,left:-20,bottom:2}}>
+                      <XAxis dataKey="data" tick={false} axisLine={false} tickLine={false}/>
+                      <YAxis tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+                      <Tooltip content={<ChartTooltip unit="cm"/>}/>
+                      <Line type="monotone" dataKey="val" stroke={mColors[key]} strokeWidth={2} dot={false}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -658,11 +616,11 @@ function TabComposicao({history,measures}:{history:History;measures:Measure[]}) 
   const histSorted = useMemo(()=>Object.entries(history).sort((a,b)=>a[0].localeCompare(b[0])),[history]);
 
   if(sorted.filter(m=>m.peso&&m.gordura).length<2) return (
-    <div style={{textAlign:'center',padding:'3rem 1rem'}}>
-      <Activity size={44} color="#484858" style={{margin:'0 auto .75rem'}}/>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#484858',textTransform:'uppercase',marginBottom:'.4rem'}}>Dados insuficientes</div>
-      <div style={{fontSize:'.8rem',color:'#484858'}}>Registre ao menos 2 medições de peso + gordura em DarkBody</div>
-    </div>
+    <EmptyState
+      icon={<Activity size={40}/>}
+      title="Dados insuficientes"
+      subtitle="Registre ao menos 2 medições de peso + gordura em DarkBody"
+    />
   );
 
   const wkVol:Record<string,number>={};
@@ -696,82 +654,77 @@ function TabComposicao({history,measures}:{history:History;measures:Measure[]}) 
   const massaChange=(mmLast-mmFirst).toFixed(1);
 
   return (
-    <div style={{display:'grid',gap:'.75rem'}}>
+    <div className="grid gap-3">
       {/* Variação total */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem'}}>
-        {[
-          [pesoChange,'Peso','kg','#60a5fa'],
-          [gordChange,'Gordura','%','#f87171'],
-          [massaChange,'Massa Magra','kg','#4ade80'],
-        ].map(([val,lbl,unit,color],i)=>(
-          <motion.div key={i} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.06}}>
-            <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
-              <CardContent style={{padding:'.65rem .5rem',textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.15rem',
-                  color:val===null?'#484858':Number(val)===0?'#f0f0f2':i===1?Number(val)<0?'#4ade80':'#f87171':Number(val)>0?'#4ade80':'#f87171',lineHeight:1}}>
-                  {val===null?'–':((Number(val)>0?'+':'')+val+(unit as string))}
-                </div>
-                <div style={{fontSize:'.48rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',marginTop:'2px'}}>{lbl as string}</div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+      <div className="grid grid-cols-3 gap-2.5">
+        {([
+          [pesoChange,'Peso','kg'],
+          [gordChange,'Gordura','%'],
+          [massaChange,'Massa Magra','kg'],
+        ] as const).map(([val,lbl,unit],i)=>{
+          const tone = val===null||Number(val)===0
+            ? 'default'
+            : i===1
+              ? (Number(val)<0?'ok':'danger')
+              : (Number(val)>0?'ok':'danger');
+          return (
+            <motion.div key={lbl} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.06}}>
+              <StatTile
+                value={<span className="text-[1.15rem]">{val===null?'–':((Number(val)>0?'+':'')+val+unit)}</span>}
+                label={lbl}
+                tone={tone}
+              />
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* IRC */}
       {irc.length>0&&(
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <Activity size={12}/> Índice de Recomposição Corporal
-            </div>
-            <ResponsiveContainer width="100%" height={140}>
-              <BarChart data={irc} margin={{top:4,right:4,left:-20,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" vertical={false}/>
-                <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <Tooltip content={<DarkTooltip unit=""/>}/>
-                <ReferenceLine y={0} stroke="rgba(255,255,255,.1)" strokeWidth={1}/>
-                <Bar dataKey="val" name="IRC" radius={[3,3,0,0]} maxBarSize={28}>
-                  {irc.map((d,i)=><Cell key={i} fill={d.pos?'rgba(74,222,128,.65)':'rgba(248,113,113,.55)'}/>)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div style={{fontSize:'.58rem',color:'#484858',textAlign:'center',marginTop:'.4rem',fontStyle:'italic'}}>
-              IRC = ΔMassa magra − ΔGordura absoluta · positivo = recomposição
-            </div>
-          </CardContent>
-        </Card>
+        <div className="card p-4">
+          <SectionLabel icon={Activity} className="mb-2">Índice de Recomposição Corporal</SectionLabel>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={irc} margin={{top:4,right:4,left:-20,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false}/>
+              <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+              <YAxis tick={TICK} axisLine={false} tickLine={false}/>
+              <Tooltip content={<ChartTooltip unit=""/>}/>
+              <ReferenceLine y={0} stroke="var(--line)" strokeWidth={1}/>
+              <Bar dataKey="val" name="IRC" radius={[3,3,0,0]} maxBarSize={28}>
+                {irc.map((d,i)=><Cell key={i} fill={d.pos?CH[4]:CH[2]} fillOpacity={0.75}/>)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="text-[0.6rem] text-ink-3 italic text-center mt-1.5">
+            IRC = ΔMassa magra − ΔGordura absoluta · positivo = recomposição
+          </div>
+        </div>
       )}
 
       {/* Peso × Volume */}
       {pesoVsVol.some(d=>d.vol>0)&&(
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem'}}>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <TrendingUp size={12}/> Peso × Volume de Treino Semanal
-            </div>
-            <div style={{display:'flex',gap:'1rem',marginBottom:'.5rem'}}>
-              {[['#60a5fa','Peso (kg)'],['#e31b23','Volume (t)']].map(([c,l])=>(
-                <div key={l} style={{display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <div style={{width:10,height:10,borderRadius:2,background:c}}/>
-                  <span style={{fontSize:'.6rem',color:'#7a7a8a'}}>{l}</span>
-                </div>
-              ))}
-            </div>
-            <ResponsiveContainer width="100%" height={150}>
-              <LineChart data={pesoVsVol} margin={{top:4,right:4,left:-20,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)"/>
-                <XAxis dataKey="data" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis yAxisId="left" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false} domain={['auto','auto']}/>
-                <YAxis yAxisId="right" orientation="right" tick={{fill:'#484858',fontSize:9}} axisLine={false} tickLine={false}/>
-                <Tooltip content={<DarkTooltip unit=""/>}/>
-                <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso" stroke="#60a5fa" strokeWidth={2} dot={{fill:'#60a5fa',r:3,strokeWidth:0}}/>
-                <Line yAxisId="right" type="monotone" dataKey="vol" name="Volume" stroke="#e31b23" strokeWidth={2} dot={{fill:'#e31b23',r:3,strokeWidth:0}}/>
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <div className="card p-4">
+          <SectionLabel icon={TrendingUp} className="mb-2">Peso × Volume de Treino Semanal</SectionLabel>
+          <div className="flex gap-4 mb-2">
+            {[[CH[0],'Peso (kg)'],[CH[1],'Volume (t)']].map(([c,l])=>(
+              <div key={l} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-[2px]" style={{background:c}}/>
+                <span className="text-[0.62rem] text-ink-2">{l}</span>
+              </div>
+            ))}
+          </div>
+          <ResponsiveContainer width="100%" height={150}>
+            <LineChart data={pesoVsVol} margin={{top:4,right:4,left:-20,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID}/>
+              <XAxis dataKey="data" tick={TICK} axisLine={false} tickLine={false}/>
+              <YAxis yAxisId="left" tick={TICK} axisLine={false} tickLine={false} domain={['auto','auto']}/>
+              <YAxis yAxisId="right" orientation="right" tick={TICK} axisLine={false} tickLine={false}/>
+              <Tooltip content={<ChartTooltip unit=""/>}/>
+              <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso" stroke={CH[0]} strokeWidth={2} dot={{fill:CH[0],r:3,strokeWidth:0}}/>
+              <Line yAxisId="right" type="monotone" dataKey="vol" name="Volume" stroke={CH[1]} strokeWidth={2} dot={{fill:CH[1],r:3,strokeWidth:0}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -779,6 +732,7 @@ function TabComposicao({history,measures}:{history:History;measures:Measure[]}) 
 
 // ── Página principal ──────────────────────────────────────────
 export default function EvolucaoPage() {
+  const router = useRouter();
   const [uid,      setUid]      = useState<string|null>(null);
   const [history,  setHistory]  = useState<History>({});
   const [measures, setMeasures] = useState<Measure[]>([]);
@@ -803,36 +757,42 @@ export default function EvolucaoPage() {
 
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
+    </PageShell>
+  );
+
+  if(!uid) return (
+    <PageShell>
+      <PageHeader title="Evolução" subtitle="Análise avançada do seu progresso"/>
+      <EmptyState
+        icon={<LogIn size={40}/>}
+        title="Entre para ver sua evolução"
+        subtitle="Faça login para acessar seus gráficos e recordes"
+        action={<Button size="sm" onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
     </PageShell>
   );
 
   return (
     <PageShell>
-      {/* Header */}
-      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} style={{marginBottom:'1rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-          Dark<span style={{color:'#e31b23'}}>Charts</span>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginTop:'3px'}}>
-          <div style={{fontSize:'.65rem',color:'#7a7a8a',display:'flex',alignItems:'center',gap:'.3rem'}}>
-            <ChartLineUp size={12} color="#7a7a8a" weight="bold"/> Análise avançada do seu progresso
-          </div>
-          <Badge style={{background:'rgba(227,27,35,.15)',color:'#e31b23',border:'1px solid rgba(227,27,35,.25)',fontSize:'.52rem',padding:'1px 6px'}}>ELITE</Badge>
-        </div>
-      </motion.div>
+      <PageHeader
+        title="Evolução"
+        subtitle="Análise avançada do seu progresso"
+        right={
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-accent-soft border border-accent/30 text-accent text-[0.55rem] font-bold tracking-[0.12em] uppercase">
+            Elite
+          </span>
+        }
+      />
 
       {/* Tabs */}
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}
-        style={{display:'flex',gap:'.3rem',overflowX:'auto',marginBottom:'1rem',paddingBottom:'.25rem',scrollbarWidth:'none'}}>
+        className="flex gap-2 overflow-x-auto pb-1 mb-6 no-scrollbar">
         {TABS.map(t=>{
           const TIcon = t.Icon;
           return (
             <motion.button key={t.id} whileTap={{scale:.95}} onClick={()=>setTab(t.id)}
-              style={{flexShrink:0,padding:'.38rem .85rem',borderRadius:999,border:'1px solid '+(tab===t.id?'#e31b23':'#2e2e38'),background:tab===t.id?'rgba(227,27,35,.15)':'rgba(255,255,255,.03)',color:tab===t.id?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',cursor:'pointer',outline:'none',transition:'all .15s',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:'.35rem'}}>
+              className={`chip shrink-0 ${tab===t.id?'chip-active':''}`}>
               <TIcon size={14}/> {t.label}
             </motion.button>
           );

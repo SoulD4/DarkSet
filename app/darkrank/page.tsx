@@ -193,10 +193,9 @@ export default function DarkRankPage() {
               key={r.uid}
               initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
               transition={{ delay: Math.min(i*0.04, 0.4) }}
-              className={`relative overflow-hidden rounded-xl border ${isMe||podio ? '' : 'card'}`}
+              className={`relative overflow-hidden rounded-xl border border-line ${podio ? 'bg-surface-2 shadow-card' : 'bg-surface-1'}`}
               style={isMe ? { background: rLiga.corBg, borderColor: rLiga.corBorder } : undefined}
             >
-              {podio && !isMe && <div className="absolute inset-0 bg-surface-2 -z-10" />}
               {/* Faixa lateral na cor da liga */}
               <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: rLiga.cor }} />
               <div className="flex items-center gap-2.5 py-3 pr-3.5 pl-4">

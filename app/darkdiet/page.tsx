@@ -1,24 +1,22 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import PageHeader from '@/components/core/PageHeader';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
-  X, Search, Plus, Minus, ChevronRight,
-  ArrowLeft, Droplets, Target, TrendingUp,
-  History, CheckCircle2, Trash2, Settings,
-  BarChart2, Flame, Zap, Camera, Barcode,
-  ScanLine, Pencil, Loader2, AlertCircle
+  X, Search, Plus, Minus, ChevronRight, ArrowLeft, Droplets,
+  History, CheckCircle2, Trash2, Settings, Flame, Camera,
+  ScanLine, Pencil, AlertCircle, Salad,
+  Egg, Dumbbell, Carrot, Droplet, Coffee, Cookie, Fish, Leaf, Utensils,
 } from 'lucide-react';
-import {
-  ForkKnife, Egg, Barbell, Carrot, Drop,
-  Coffee, Cookie, Fish, Leaf
-} from '@phosphor-icons/react';
 
 // ── Tipos ─────────────────────────────────────────────────────
 // ── OpenFoodFacts ─────────────────────────────────────────────
@@ -31,7 +29,7 @@ type OFFResult = {
 type Alimento = {
   nome: string; cal: number; prot: number;
   carb: number; gord: number; por: number;
-  icon: string; // phosphor icon name
+  icon: string; // nome do ícone (formato persistido — não alterar)
 };
 type ItemRefeicao = Alimento & { porcao: number; id: string };
 type Refeicao     = { nome: string; itens: ItemRefeicao[] };
@@ -40,6 +38,12 @@ type DiaRegistro  = { data: string; refeicoes: Refeicao[]; agua: number; metaCal
 // ── Constantes ────────────────────────────────────────────────
 const REFEICOES_PADRAO = ['Café da manhã','Almoço','Pré-treino','Pós-treino','Jantar','Lanche'];
 const META_AGUA = 8;
+
+// Cores de macro (tokens do design system)
+const COR_KCAL = 'var(--accent)';
+const COR_PROT = 'var(--chart-2)';
+const COR_CARB = 'var(--chart-4)';
+const COR_GORD = 'var(--chart-3)';
 
 const ALIMENTOS: Alimento[] = [
   { nome:'Frango grelhado',   cal:165, prot:31,  carb:0,  gord:3.6, por:100, icon:'fish'    },
@@ -68,17 +72,17 @@ const ALIMENTOS: Alimento[] = [
   { nome:'Lentilha cozida',   cal:116, prot:9,   carb:20, gord:0.4, por:100, icon:'leaf'     },
 ];
 
-function AliIcon({ icon, size=20, color='#7a7a8a' }: { icon:string; size?:number; color?:string }) {
-  const props = { size, color, weight: 'fill' as const };
-  if(icon==='egg')     return <Egg {...props}/>;
-  if(icon==='barbell') return <Barbell {...props}/>;
-  if(icon==='carrot')  return <Carrot {...props}/>;
-  if(icon==='drop')    return <Drop {...props}/>;
-  if(icon==='coffee')  return <Coffee {...props}/>;
-  if(icon==='cookie')  return <Cookie {...props}/>;
-  if(icon==='fish')    return <Fish {...props}/>;
-  if(icon==='leaf')    return <Leaf {...props}/>;
-  return <ForkKnife {...props}/>;
+function AliIcon({ icon, size = 18, className = '' }: { icon: string; size?: number; className?: string }) {
+  const p = { size, className };
+  if (icon === 'egg')     return <Egg {...p}/>;
+  if (icon === 'barbell') return <Dumbbell {...p}/>;
+  if (icon === 'carrot')  return <Carrot {...p}/>;
+  if (icon === 'drop')    return <Droplet {...p}/>;
+  if (icon === 'coffee')  return <Coffee {...p}/>;
+  if (icon === 'cookie')  return <Cookie {...p}/>;
+  if (icon === 'fish')    return <Fish {...p}/>;
+  if (icon === 'leaf')    return <Leaf {...p}/>;
+  return <Utensils {...p}/>;
 }
 
 const num = (v: string) => { const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:0; };
@@ -106,13 +110,71 @@ const diaVazio = (data:string, metaCal=2400, metaProt=150): DiaRegistro => ({
   refeicoes: REFEICOES_PADRAO.map(n=>({nome:n,itens:[]})),
 });
 
+// ── Subcomponentes de UI ──────────────────────────────────────
+function IconBtn({ onClick, children, tone = 'neutral', title }: {
+  onClick: () => void; children: React.ReactNode; tone?: 'neutral'|'accent'|'accent-soft'|'danger'|'info'; title?: string;
+}) {
+  const tones: Record<string,string> = {
+    'neutral':     'bg-surface-2 border-line text-ink-3 hover:bg-surface-3',
+    'accent':      'bg-accent-soft border-accent/30 text-accent',
+    'accent-soft': 'bg-surface-2 border-accent/20 text-accent',
+    'danger':      'bg-danger-soft border-danger/30 text-danger',
+    'info':        'bg-info-soft border-info/30 text-info',
+  };
+  return (
+    <motion.button whileTap={{scale:.9}} onClick={onClick} title={title}
+      className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${tones[tone]}`}>
+      {children}
+    </motion.button>
+  );
+}
+
+function StepperBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <motion.button whileTap={{scale:.9}} onClick={onClick}
+      className="h-10 w-10 rounded-xl bg-surface-2 border border-line text-ink-1 flex items-center justify-center shrink-0 hover:bg-surface-3 transition-colors">
+      {children}
+    </motion.button>
+  );
+}
+
+function PresetChips({ options, value, onSelect, suffix = '' }: {
+  options: number[]; value: string; onSelect: (v:string)=>void; suffix?: string;
+}) {
+  return (
+    <div className="flex gap-1.5 mt-2">
+      {options.map(o=>(
+        <button key={o} onClick={()=>onSelect(String(o))}
+          className={`flex-1 justify-center chip !px-1 ${value===String(o)?'chip-active':''}`}>
+          {o}{suffix}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RingMeta({ pct, over }: { pct: number; over: boolean }) {
+  const R = 34, C = 2*Math.PI*R;
+  return (
+    <svg width={88} height={88} viewBox="0 0 88 88" className="-rotate-90">
+      <circle cx={44} cy={44} r={R} fill="none" stroke="var(--surface-3)" strokeWidth={8}/>
+      <motion.circle cx={44} cy={44} r={R} fill="none"
+        stroke={over ? 'var(--danger)' : COR_KCAL} strokeWidth={8} strokeLinecap="round"
+        strokeDasharray={C}
+        initial={{strokeDashoffset:C}}
+        animate={{strokeDashoffset: C - (Math.min(100,pct)/100)*C}}
+        transition={{duration:.6,ease:'easeOut'}}/>
+    </svg>
+  );
+}
+
 // ── BarcodeScanner + OpenFoodFacts ────────────────────────────
 function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; onClose:()=>void }) {
   const videoRef  = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream|null>(null);
   const rafRef    = React.useRef<number|null>(null);
 
-  const [status,       setStatus]       = React.useState<'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual'>('requesting' as 'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual');
+  const [status,       setStatus]       = React.useState<'requesting'|'scanning'|'searching'|'preview'|'notfound'|'manual'>('requesting');
   const [camErr,       setCamErr]       = React.useState(false);
   const [preview,      setPreview]      = React.useState<OFFResult|null>(null);
   const [editPrev,     setEditPrev]     = React.useState<Partial<OFFResult>>({});
@@ -156,7 +218,7 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
         protein:  String(Math.round(prot*servQty/100)),
         carbs:    String(Math.round(carb*servQty/100)),
         fat:      String(Math.round(fat*servQty/100)),
-        note: [brand, p.serving_size?'porção: '+p.serving_size:'', !hasNutrients?'⚠️ sem macros na base':''].filter(Boolean).join(' · '),
+        note: [brand, p.serving_size?'porção: '+p.serving_size:'', !hasNutrients?'sem macros na base':''].filter(Boolean).join(' · '),
         per100g:true, servQty, hasNutrients,
       };
       setPortion(String(servQty)); setPreview(result); setEditPrev(result); setStatus('preview');
@@ -262,32 +324,24 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
     }
   };
 
-  const S = {
-    overlay: {position:'fixed' as const,inset:0,zIndex:250,background:'#06060a',display:'flex',flexDirection:'column' as const},
-    header:  {display:'flex',alignItems:'center',justifyContent:'space-between',padding:'1rem 1.25rem',borderBottom:'1px solid #1e1e24',flexShrink:0},
-    body:    {flex:1,overflowY:'auto' as const,padding:'1rem 1.25rem'},
-  };
-
   return (
-    <motion.div initial={{opacity:0}} animate={{opacity:1}} style={S.overlay}>
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      className="fixed inset-0 z-[250] bg-bg flex flex-col">
       {/* Header */}
-      <div style={S.header}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase' as const,color:'#f0f0f2',display:'flex',alignItems:'center',gap:'.5rem'}}>
-          <ScanLine size={20} color="#22c55e"/> Adicionar Alimento
+      <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
+        <div className="font-display font-bold text-lg text-ink-1 flex items-center gap-2">
+          <ScanLine size={18} className="text-accent"/> Adicionar alimento
         </div>
-        <motion.button whileTap={{scale:.9}} onClick={()=>{stopCamera();onClose();}}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:'#7a7a8a',cursor:'pointer',outline:'none'}}>
-          <X size={16}/>
-        </motion.button>
+        <IconBtn onClick={()=>{stopCamera();onClose();}}><X size={16}/></IconBtn>
       </div>
 
-      <div style={S.body}>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {/* Tabs de modo */}
         {status!=='preview'&&status!=='manual'&&(
-          <div style={{display:'flex',gap:'.4rem',marginBottom:'1rem'}}>
+          <div className="flex gap-1.5 mb-4">
             {[
-              {id:'scan', label:'Scanner',  Icon:Camera},
-              {id:'name', label:'Buscar',   Icon:Search},
+              {id:'scan',  label:'Scanner', Icon:Camera},
+              {id:'name',  label:'Buscar',  Icon:Search},
               {id:'manual',label:'Manual',  Icon:Pencil},
             ].map(({id,label,Icon})=>(
               <motion.button key={id} whileTap={{scale:.95}}
@@ -296,10 +350,7 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
                   else if(id==='scan') setStatus(camErr?'notfound':'scanning');
                   else { setStatus('notfound'); setNameResults([]); }
                 }}
-                style={{flex:1,padding:'.45rem',borderRadius:10,
-                  border:'1px solid #2e2e38',
-                  background:'rgba(255,255,255,.04)',
-                  color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.78rem',textTransform:'uppercase' as const}}>
+                className="flex-1 h-9 rounded-xl bg-surface-2 border border-line text-ink-2 text-[0.78rem] font-semibold flex items-center justify-center gap-1.5 hover:bg-surface-3 transition-colors">
                 <Icon size={14}/>{label}
               </motion.button>
             ))}
@@ -310,19 +361,20 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
           {/* Câmera */}
           {(status==='scanning'||status==='requesting')&&(
             <motion.div key="cam" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
-              <div style={{position:'relative',borderRadius:16,overflow:'hidden',background:'#000',marginBottom:'1rem',aspectRatio:'4/3'}}>
-                <video ref={videoRef} playsInline muted style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+              <div className="relative rounded-2xl overflow-hidden bg-black mb-4 aspect-[4/3]">
+                <video ref={videoRef} playsInline muted className="w-full h-full object-cover block"/>
                 {/* Guia de scan */}
-                <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <div style={{width:220,height:140,border:'2px solid #22c55e',borderRadius:12,boxShadow:'0 0 0 2000px rgba(0,0,0,.4)'}}/>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-[220px] h-[140px] border-2 border-accent rounded-xl"
+                    style={{boxShadow:'0 0 0 2000px rgba(0,0,0,.4)'}}/>
                 </div>
-                <div style={{position:'absolute',bottom:12,left:0,right:0,textAlign:'center',fontSize:'.72rem',color:'rgba(255,255,255,.7)',fontWeight:600}}>
+                <div className="absolute bottom-3 inset-x-0 text-center text-[0.72rem] text-ink-1/80 font-semibold">
                   {status==='requesting'?'Iniciando câmera...':'Aponte para o código de barras'}
                 </div>
               </div>
               {'BarcodeDetector' in window
-                ? <div style={{fontSize:'.72rem',color:'#4ade80',textAlign:'center',marginBottom:'1rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}><ScanLine size={14}/> Detecção automática ativa</div>
-                : <div style={{fontSize:'.72rem',color:'#f87171',textAlign:'center',marginBottom:'1rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.3rem'}}><AlertCircle size={14}/> Câmera sem suporte a barcode — use busca por nome</div>
+                ? <div className="text-[0.72rem] text-ok text-center mb-4 flex items-center justify-center gap-1.5"><ScanLine size={14}/> Detecção automática ativa</div>
+                : <div className="text-[0.72rem] text-danger text-center mb-4 flex items-center justify-center gap-1.5"><AlertCircle size={14}/> Câmera sem suporte a barcode — use busca por nome</div>
               }
             </motion.div>
           )}
@@ -330,52 +382,58 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
           {/* Buscando */}
           {status==='searching'&&(
             <motion.div key="searching" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-              style={{textAlign:'center',padding:'3rem 1rem'}}>
-              <motion.div animate={{rotate:360}} transition={{duration:.7,repeat:Infinity,ease:'linear'}} style={{display:'inline-block',marginBottom:'1rem'}}>
-                <Loader2 size={36} color="#22c55e"/>
-              </motion.div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1.1rem',color:'#f0f0f2'}}>Buscando na base...</div>
-              <div style={{fontSize:'.72rem',color:'#7a7a8a',marginTop:'.3rem'}}>OpenFoodFacts · 3M+ produtos</div>
+              className="text-center py-12 px-4 flex flex-col items-center gap-4">
+              <Spinner size={36}/>
+              <div>
+                <div className="font-display font-bold text-lg text-ink-1">Buscando na base...</div>
+                <div className="text-[0.72rem] text-ink-3 mt-1">OpenFoodFacts · 3M+ produtos</div>
+              </div>
             </motion.div>
           )}
 
           {/* Busca por nome */}
           {(status==='notfound'||nameResults.length>0)&&status!=='preview'&&status!=='manual'&&(
             <motion.div key="namesearch" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
-              <div style={{position:'relative',marginBottom:'.75rem'}}>
-                <Search size={15} color="#484858" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}/>
+              <div className="relative mb-3">
+                <Search size={15} className="text-ink-3 absolute left-3.5 top-1/2 -translate-y-1/2"/>
                 <input value={nameSearch} onChange={e=>setNameSearch(e.target.value)}
                   onKeyDown={e=>e.key==='Enter'&&searchByName()}
                   placeholder="Buscar alimento por nome..."
-                  style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'11px 70px 11px 36px',fontSize:'.9rem',outline:'none'}}
+                  className="field pl-10 pr-24"
                   autoFocus/>
-                <motion.button whileTap={{scale:.95}} onClick={searchByName}
-                  style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'#22c55e',border:'none',borderRadius:7,padding:'5px 10px',color:'#000',fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none'}}>
-                  {nameLoading?<Loader2 size={12}/>:'Buscar'}
-                </motion.button>
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <Button size="sm" onClick={searchByName}>
+                    {nameLoading?<Spinner size={14}/>:'Buscar'}
+                  </Button>
+                </div>
               </div>
 
-              {nameNotFound&&<div style={{textAlign:'center',padding:'1.5rem',color:'#484858',fontSize:'.82rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}><AlertCircle size={16}/> Nenhum resultado encontrado</div>}
+              {nameNotFound&&(
+                <div className="text-center py-6 text-ink-3 text-[0.82rem] flex items-center justify-center gap-1.5">
+                  <AlertCircle size={16}/> Nenhum resultado encontrado
+                </div>
+              )}
 
-              <div style={{display:'grid',gap:'.4rem'}}>
+              <div className="grid gap-1.5">
                 {nameResults.map((p:any,i:number)=>{
                   const n=p.nutriments||{};
                   const cal=parseFloat(n['energy-kcal_100g'])||0;
                   const name=p.product_name_pt||p.product_name||'Alimento';
                   return (
                     <motion.button key={i} whileTap={{scale:.98}} onClick={()=>selectNameResult(p)}
-                      style={{background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:12,padding:'.75rem 1rem',textAlign:'left' as const,cursor:'pointer',display:'flex',alignItems:'center',gap:'.75rem',outline:'none'}}>
-                      <div style={{width:36,height:36,borderRadius:9,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                        <ForkKnife size={18} color="#22c55e" weight="fill"/>
+                      initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*0.04,0.4)}}
+                      className="card-2 px-4 py-3 text-left flex items-center gap-3 w-full hover:bg-surface-3 transition-colors">
+                      <div className="w-9 h-9 rounded-lg bg-accent-soft border border-accent/20 flex items-center justify-center shrink-0">
+                        <Utensils size={17} className="text-accent"/>
                       </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:'.88rem',fontWeight:600,color:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{name}</div>
-                        <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[0.88rem] font-semibold text-ink-1 truncate">{name}</div>
+                        <div className="text-[0.62rem] text-ink-3 mt-px">
                           {cal>0?`${Math.round(cal)}kcal/100g`:'macros não disponíveis'}
                           {p.brands?` · ${p.brands.split(',')[0]}`:''}
                         </div>
                       </div>
-                      <ChevronRight size={15} color="#484858"/>
+                      <ChevronRight size={15} className="text-ink-3"/>
                     </motion.button>
                   );
                 })}
@@ -385,10 +443,8 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
 
           {/* Manual */}
           {status==='manual'&&(
-            <motion.div key="manual" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0}} style={{display:'grid',gap:'.75rem'}}>
-              <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                <Pencil size={12}/> Entrada manual
-              </div>
+            <motion.div key="manual" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0}} className="grid gap-3">
+              <div className="eyebrow flex items-center gap-1.5"><Pencil size={12}/> Entrada manual</div>
               {[
                 {key:'name',     label:'Nome do alimento', type:'text',   placeholder:'Ex: Frango grelhado'},
                 {key:'calories', label:'Calorias (kcal)',   type:'number', placeholder:'0'},
@@ -397,92 +453,75 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
                 {key:'fat',      label:'Gordura (g)',       type:'number', placeholder:'0'},
               ].map(f=>(
                 <div key={f.key}>
-                  <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.06em',display:'block',marginBottom:4}}>{f.label}</label>
+                  <label className="eyebrow block mb-1">{f.label}</label>
                   <input type={f.type} placeholder={f.placeholder}
                     value={(manualData as any)[f.key]}
                     onChange={e=>setManualData(d=>({...d,[f.key]:e.target.value}))}
-                    style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'10px 13px',fontSize:'1rem',outline:'none'}}/>
+                    className="field"/>
                 </div>
               ))}
-              <motion.button whileTap={{scale:.97}} onClick={accept} disabled={!manualData.name}
-                style={{width:'100%',background:manualData.name?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(34,197,94,.2)',border:'none',borderRadius:12,padding:'13px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase' as const,cursor:manualData.name?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+              <Button full onClick={accept} disabled={!manualData.name}>
                 <CheckCircle2 size={16}/> Adicionar
-              </motion.button>
+              </Button>
             </motion.div>
           )}
 
           {/* Preview produto */}
           {status==='preview'&&preview&&(
-            <motion.div key="preview" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} style={{display:'grid',gap:'.85rem'}}>
+            <motion.div key="preview" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="grid gap-3.5">
               {/* Info produto */}
-              <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                <CardContent style={{padding:'1rem'}}>
-                  <input value={editPrev.name||''} onChange={e=>setEditPrev(p=>({...p,name:e.target.value}))}
-                    style={{width:'100%',background:'transparent',border:'none',color:'#f0f0f2',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',outline:'none',marginBottom:'.25rem'}}/>
-                  {preview.note&&<div style={{fontSize:'.62rem',color:'#7a7a8a'}}>{preview.note}</div>}
-                  {!preview.hasNutrients&&(
-                    <div style={{display:'flex',alignItems:'center',gap:'.35rem',background:'rgba(250,204,21,.08)',border:'1px solid rgba(250,204,21,.2)',borderRadius:8,padding:'.45rem .65rem',marginTop:'.5rem'}}>
-                      <AlertCircle size={13} color="#facc15"/>
-                      <span style={{fontSize:'.68rem',color:'#facc15'}}>Macros não disponíveis para este produto. Preencha manualmente.</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="card-2 p-4">
+                <input value={editPrev.name||''} onChange={e=>setEditPrev(p=>({...p,name:e.target.value}))}
+                  className="w-full bg-transparent border-none text-ink-1 font-display font-bold text-[1.1rem] outline-none mb-1"/>
+                {preview.note&&<div className="text-[0.62rem] text-ink-3">{preview.note}</div>}
+                {!preview.hasNutrients&&(
+                  <div className="flex items-center gap-1.5 bg-warn-soft border border-warn/30 rounded-lg px-2.5 py-2 mt-2">
+                    <AlertCircle size={13} className="text-warn shrink-0"/>
+                    <span className="text-[0.68rem] text-warn">Macros não disponíveis para este produto. Preencha manualmente.</span>
+                  </div>
+                )}
+              </div>
 
               {/* Porção */}
               {preview.per100g&&(
                 <div>
-                  <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase' as const,letterSpacing:'.06em',display:'block',marginBottom:5}}>Porção (gramas)</label>
-                  <div style={{display:'flex',gap:'.4rem',alignItems:'center'}}>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(Math.max(5,numOFF(portion)-10)))}
-                      style={{width:38,height:38,borderRadius:9,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <Minus size={15}/>
-                    </motion.button>
+                  <label className="eyebrow block mb-1.5">Porção (gramas)</label>
+                  <div className="flex gap-1.5 items-center">
+                    <StepperBtn onClick={()=>handlePortionChange(String(Math.max(5,numOFF(portion)-10)))}><Minus size={15}/></StepperBtn>
                     <input type="number" value={portion} onChange={e=>handlePortionChange(e.target.value)}
-                      style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'10px',fontSize:'1rem',outline:'none',textAlign:'center' as const,fontWeight:700}}/>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(numOFF(portion)+10))}
-                      style={{width:38,height:38,borderRadius:9,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <Plus size={15}/>
-                    </motion.button>
+                      className="field flex-1 text-center font-bold tnum"/>
+                    <StepperBtn onClick={()=>handlePortionChange(String(numOFF(portion)+10))}><Plus size={15}/></StepperBtn>
                   </div>
-                  <div style={{display:'flex',gap:'.3rem',marginTop:'.5rem'}}>
-                    {[50,100,150,200,300].map(g=>(
-                      <motion.button key={g} whileTap={{scale:.9}} onClick={()=>handlePortionChange(String(g))}
-                        style={{flex:1,padding:'.3rem',borderRadius:7,border:'1px solid '+(portion===String(g)?'#22c55e':'#2e2e38'),background:portion===String(g)?'rgba(34,197,94,.15)':'transparent',color:portion===String(g)?'#22c55e':'#7a7a8a',fontSize:'.68rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
-                        {g}g
-                      </motion.button>
-                    ))}
-                  </div>
+                  <PresetChips options={[50,100,150,200,300]} value={portion} onSelect={handlePortionChange} suffix="g"/>
                 </div>
               )}
 
               {/* Macros editáveis */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem'}}>
+              <div className="grid grid-cols-4 gap-1.5">
                 {[
-                  {key:'calories', lbl:'kcal', cor:'#e31b23'},
-                  {key:'protein',  lbl:'prot',  cor:'#60a5fa'},
-                  {key:'carbs',    lbl:'carb',  cor:'#34d399'},
-                  {key:'fat',      lbl:'gord',  cor:'#f472b6'},
+                  {key:'calories', lbl:'kcal', cor:COR_KCAL},
+                  {key:'protein',  lbl:'prot', cor:COR_PROT},
+                  {key:'carbs',    lbl:'carb', cor:COR_CARB},
+                  {key:'fat',      lbl:'gord', cor:COR_GORD},
                 ].map(m=>(
-                  <div key={m.key} style={{background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:10,padding:'.5rem',textAlign:'center' as const}}>
+                  <div key={m.key} className="card-2 p-2 text-center">
                     <input type="number" value={(editPrev as any)[m.key]||'0'}
                       onChange={e=>setEditPrev(p=>({...p,[m.key]:e.target.value}))}
-                      style={{width:'100%',background:'transparent',border:'none',color:m.cor,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',outline:'none',textAlign:'center' as const}}/>
-                    <div style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase' as const,letterSpacing:'.06em'}}>{m.lbl}</div>
+                      className="w-full bg-transparent border-none font-display font-bold text-base text-center outline-none tnum"
+                      style={{color:m.cor}}/>
+                    <div className="eyebrow">{m.lbl}</div>
                   </div>
                 ))}
               </div>
 
               {/* Botões */}
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.97}} onClick={()=>{setStatus(camErr?'notfound':'scanning');setPreview(null);}}
-                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase' as const,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.35rem'}}>
+              <div className="flex gap-2">
+                <Button variant="ghost" className="flex-1" onClick={()=>{setStatus(camErr?'notfound':'scanning');setPreview(null);}}>
                   <ArrowLeft size={14}/> Voltar
-                </motion.button>
-                <motion.button whileTap={{scale:.97}} onClick={accept}
-                  style={{flex:2,background:'linear-gradient(135deg,#22c55e,#16a34a)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase' as const,letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem',boxShadow:'0 4px 16px rgba(34,197,94,.25)'}}>
+                </Button>
+                <Button className="flex-[2]" onClick={accept}>
                   <CheckCircle2 size={16}/> Adicionar
-                </motion.button>
+                </Button>
               </div>
             </motion.div>
           )}
@@ -494,6 +533,8 @@ function BarcodeScanner({ onResult, onClose }: { onResult:(r:OFFResult)=>void; o
 
 // ── Página ────────────────────────────────────────────────────
 export default function DarkDietPage() {
+  const router = useRouter();
+  const { toast, show } = useToast();
   const [uid,       setUid]       = useState<string|null>(null);
   const [dia,       setDia]       = useState<DiaRegistro>(diaVazio(hoje()));
   const [historico, setHistorico] = useState<DiaRegistro[]>([]);
@@ -508,9 +549,6 @@ export default function DarkDietPage() {
   const [porcao,    setPorcao]    = useState('100');
   const [metaCalEdit,setMetaCalEdit] = useState('2400');
   const [metaProtEdit,setMetaProtEdit] = useState('150');
-  const [toast,     setToast]     = useState('');
-
-  const showToast = (msg:string) => { setToast(msg); setTimeout(()=>setToast(''),2500); };
 
   useEffect(()=>{
     return onAuthStateChanged(auth, async u=>{
@@ -553,7 +591,7 @@ export default function DarkDietPage() {
       .sort((a,b)=>b.data.localeCompare(a.data));
     setHistorico(novoHist);
     await save(dia, novoHist);
-    showToast('Dia salvo!');
+    show('Dia salvo!');
   };
 
   const handleScanResult = (r: OFFResult, refIdx: number) => {
@@ -571,7 +609,7 @@ export default function DarkDietPage() {
       return {...d,refeicoes:refs};
     });
     setShowScanner(false); setScanRefIdx(null);
-    showToast('Adicionado: '+r.name);
+    show('Adicionado: '+r.name);
   };
 
   const addItem = () => {
@@ -593,201 +631,62 @@ export default function DarkDietPage() {
     const novoDia = {...dia, metaCal:mt.cal, metaProt:mt.prot};
     setDia(novoDia);
     await save(novoDia, undefined, mt);
-    showToast('Metas salvas!');
+    show('Metas salvas!');
     setView('home');
   };
 
   const totais   = useMemo(()=>calcMacros(dia.refeicoes.flatMap(r=>r.itens)),[dia]);
   const pctCal   = Math.min(100,Math.round((totais.cal/dia.metaCal)*100));
   const pctProt  = Math.min(100,Math.round((totais.prot/dia.metaProt)*100));
+  const overCal  = totais.cal>dia.metaCal;
   const filtrados= ALIMENTOS.filter(a=>a.nome.toLowerCase().includes(busca.toLowerCase()));
 
   // ── LOADING ──────────────────────────────────────────────
-  if(loading) return (
+  if(loading) return <PageShell><Spinner full/></PageShell>;
+
+  // ── NÃO LOGADO ────────────────────────────────────────────
+  if(!uid) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <PageHeader title="DarkDiet" subtitle="Nutrição, macros e hidratação"/>
+      <EmptyState
+        icon={<Salad size={40}/>}
+        title="Entre para registrar sua dieta"
+        subtitle="Faça login para salvar refeições, acompanhar macros e bater suas metas."
+        action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
     </PageShell>
-  );
-
-  // ── MODAL BUSCA ───────────────────────────────────────────
-  const ModalBusca = () => (
-    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-      style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.88)',backdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end'}}
-      onClick={e=>{if(e.target===e.currentTarget){setModalRef(null);setAlimentoSel(null);setBusca('');}}}>
-      <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
-        transition={{type:'spring',stiffness:300,damping:32}}
-        style={{background:'#0f0f13',borderTop:'1px solid #2e2e38',borderRadius:'24px 24px 0 0',width:'100%',maxHeight:'88vh',display:'flex',flexDirection:'column'}}>
-
-        <div style={{display:'flex',justifyContent:'center',padding:'12px 0 0'}}>
-          <div style={{width:40,height:4,background:'rgba(255,255,255,.15)',borderRadius:2}}/>
-        </div>
-
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'1rem 1.25rem .5rem'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2'}}>
-            {modalRef!==null?dia.refeicoes[modalRef].nome:''}
-          </div>
-          <motion.button whileTap={{scale:.9}} onClick={()=>{setModalRef(null);setAlimentoSel(null);setBusca('');}}
-            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:'#7a7a8a',cursor:'pointer',outline:'none'}}>
-            <X size={16}/>
-          </motion.button>
-        </div>
-
-        <div style={{flex:1,overflowY:'auto',padding:'0 1.25rem 1.25rem'}}>
-          <AnimatePresence mode="wait">
-            {!alimentoSel ? (
-              <motion.div key="busca" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
-                <div style={{position:'relative',marginBottom:'.75rem'}}>
-                  <Search size={15} color="#484858" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}/>
-                  <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar alimento..."
-                    style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'10px 13px 10px 36px',fontSize:'.9rem',outline:'none'}}
-                    autoFocus/>
-                </div>
-                <div style={{display:'grid',gap:'.4rem'}}>
-                  {filtrados.map((a,i)=>(
-                    <motion.button key={i} whileTap={{scale:.98}} onClick={()=>setAlimentoSel(a)}
-                      style={{background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:12,padding:'.75rem 1rem',textAlign:'left',cursor:'pointer',display:'flex',alignItems:'center',gap:'.75rem',outline:'none'}}>
-                      <div style={{width:38,height:38,borderRadius:9,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                        <AliIcon icon={a.icon} size={18} color="#e31b23"/>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:'.9rem',fontWeight:600,color:'#f0f0f2'}}>{a.nome}</div>
-                        <div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'2px'}}>
-                          {a.cal}kcal · P:{a.prot}g · C:{a.carb}g · G:{a.gord}g /100g
-                        </div>
-                      </div>
-                      <ChevronRight size={16} color="#484858"/>
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="porcao" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0}} style={{display:'grid',gap:'1rem'}}>
-                <div style={{display:'flex',alignItems:'center',gap:'.75rem',background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:12,padding:'.85rem'}}>
-                  <div style={{width:44,height:44,borderRadius:10,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                    <AliIcon icon={alimentoSel.icon} size={22} color="#e31b23"/>
-                  </div>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:'1rem',color:'#f0f0f2'}}>{alimentoSel.nome}</div>
-                    <div style={{fontSize:'.62rem',color:'#7a7a8a'}}>por 100g</div>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:5}}>Porção (gramas)</label>
-                  <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>setPorcao(p=>String(Math.max(5,parseFloat(p)||100)-5))}
-                      style={{width:40,height:40,borderRadius:10,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',fontSize:'1.2rem',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <Minus size={16}/>
-                    </motion.button>
-                    <input type="number" value={porcao} onChange={e=>setPorcao(e.target.value)}
-                      style={{flex:1,background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'11px 13px',fontSize:'1.1rem',outline:'none',fontWeight:600,textAlign:'center'}}/>
-                    <motion.button whileTap={{scale:.9}} onClick={()=>setPorcao(p=>String((parseFloat(p)||100)+5))}
-                      style={{width:40,height:40,borderRadius:10,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#f0f0f2',fontSize:'1.2rem',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <Plus size={16}/>
-                    </motion.button>
-                  </div>
-                  {/* Presets rápidos */}
-                  <div style={{display:'flex',gap:'.35rem',marginTop:'.5rem'}}>
-                    {[50,100,150,200,300].map(g=>(
-                      <motion.button key={g} whileTap={{scale:.9}} onClick={()=>setPorcao(String(g))}
-                        style={{flex:1,padding:'.3rem',borderRadius:7,border:'1px solid '+(porcao===String(g)?'#e31b23':'#2e2e38'),background:porcao===String(g)?'rgba(227,27,35,.15)':'transparent',color:porcao===String(g)?'#e31b23':'#7a7a8a',fontSize:'.7rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
-                        {g}g
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Preview macros */}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem'}}>
-                  {[
-                    {val:Math.round(alimentoSel.cal *num(porcao)/100), lbl:'kcal', cor:'#e31b23'},
-                    {val:Math.round(alimentoSel.prot*num(porcao)/100), lbl:'prot', cor:'#60a5fa'},
-                    {val:Math.round(alimentoSel.carb*num(porcao)/100), lbl:'carb', cor:'#34d399'},
-                    {val:Math.round(alimentoSel.gord*num(porcao)/100), lbl:'gord', cor:'#f472b6'},
-                  ].map((m,i)=>(
-                    <Card key={i} style={{background:'rgba(0,0,0,.3)',border:'1px solid #2e2e38',borderRadius:10}}>
-                      <CardContent style={{padding:'.5rem',textAlign:'center'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:m.cor}}>{m.val}</div>
-                        <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>{m.lbl}</div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                <div style={{display:'flex',gap:'.5rem'}}>
-                  <motion.button whileTap={{scale:.97}} onClick={()=>setAlimentoSel(null)}
-                    style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                    <ArrowLeft size={15}/> Voltar
-                  </motion.button>
-                  <motion.button whileTap={{scale:.97}} onClick={addItem}
-                    style={{flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',boxShadow:'0 4px 16px rgba(227,27,35,.28)',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                    <CheckCircle2 size={16}/> Adicionar
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 
   // ── METAS ─────────────────────────────────────────────────
   if(view==='metas') return (
     <PageShell>
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
-        style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1.25rem'}}>
-        <motion.button whileTap={{scale:.95}} onClick={()=>setView('home')}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .8rem',color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.35rem'}}>
-          <ArrowLeft size={14}/> Voltar
-        </motion.button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2'}}>Metas</div>
-      </motion.div>
+      <ToastViewport toast={toast}/>
+      <PageHeader title="Metas" subtitle="Defina seus alvos diários"
+        right={<Button variant="ghost" size="sm" onClick={()=>setView('home')}><ArrowLeft size={14}/> Voltar</Button>}/>
 
-      <div style={{display:'grid',gap:'1rem'}}>
-        <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'1rem',display:'grid',gap:'.75rem'}}>
-            <div>
-              <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:6}}>
-                <Flame size={12} color="#e31b23"/> Meta de Calorias (kcal/dia)
-              </label>
-              <input type="number" value={metaCalEdit} onChange={e=>setMetaCalEdit(e.target.value)}
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.2rem',outline:'none',fontWeight:700}}/>
-              <div style={{display:'flex',gap:'.35rem',marginTop:'.5rem'}}>
-                {[1800,2000,2200,2500,2800,3000].map(c=>(
-                  <motion.button key={c} whileTap={{scale:.9}} onClick={()=>setMetaCalEdit(String(c))}
-                    style={{flex:1,padding:'.3rem',borderRadius:7,border:'1px solid '+(metaCalEdit===String(c)?'#e31b23':'#2e2e38'),background:metaCalEdit===String(c)?'rgba(227,27,35,.15)':'transparent',color:metaCalEdit===String(c)?'#e31b23':'#7a7a8a',fontSize:'.62rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
-                    {c}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-            <Separator style={{background:'rgba(255,255,255,.05)'}}/>
-            <div>
-              <label style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.3rem',marginBottom:6}}>
-                <Barbell size={12} color="#60a5fa" weight="fill"/> Meta de Proteína (g/dia)
-              </label>
-              <input type="number" value={metaProtEdit} onChange={e=>setMetaProtEdit(e.target.value)}
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.2rem',outline:'none',fontWeight:700}}/>
-              <div style={{display:'flex',gap:'.35rem',marginTop:'.5rem'}}>
-                {[100,120,150,175,200,220].map(p=>(
-                  <motion.button key={p} whileTap={{scale:.9}} onClick={()=>setMetaProtEdit(String(p))}
-                    style={{flex:1,padding:'.3rem',borderRadius:7,border:'1px solid '+(metaProtEdit===String(p)?'#60a5fa':'#2e2e38'),background:metaProtEdit===String(p)?'rgba(96,165,250,.15)':'transparent',color:metaProtEdit===String(p)?'#60a5fa':'#7a7a8a',fontSize:'.62rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
-                    {p}g
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4">
+        <div className="card p-4 grid gap-4">
+          <div>
+            <label className="eyebrow flex items-center gap-1.5 mb-1.5">
+              <Flame size={12} className="text-accent"/> Meta de calorias (kcal/dia)
+            </label>
+            <input type="number" value={metaCalEdit} onChange={e=>setMetaCalEdit(e.target.value)}
+              className="field text-[1.15rem] font-bold tnum"/>
+            <PresetChips options={[1800,2000,2200,2500,2800,3000]} value={metaCalEdit} onSelect={setMetaCalEdit}/>
+          </div>
+          <div className="border-t border-line pt-4">
+            <label className="eyebrow flex items-center gap-1.5 mb-1.5">
+              <Dumbbell size={12} style={{color:COR_PROT}}/> Meta de proteína (g/dia)
+            </label>
+            <input type="number" value={metaProtEdit} onChange={e=>setMetaProtEdit(e.target.value)}
+              className="field text-[1.15rem] font-bold tnum"/>
+            <PresetChips options={[100,120,150,175,200,220]} value={metaProtEdit} onSelect={setMetaProtEdit} suffix="g"/>
+          </div>
+        </div>
 
-        <motion.button whileTap={{scale:.97}} onClick={salvarMetas}
-          style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',outline:'none',boxShadow:'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
-          <CheckCircle2 size={18}/> Salvar Metas
-        </motion.button>
+        <Button full size="lg" onClick={salvarMetas}>
+          <CheckCircle2 size={18}/> Salvar metas
+        </Button>
       </div>
     </PageShell>
   );
@@ -795,58 +694,48 @@ export default function DarkDietPage() {
   // ── HISTÓRICO ─────────────────────────────────────────────
   if(view==='historico') return (
     <PageShell>
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
-        style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1.25rem'}}>
-        <motion.button whileTap={{scale:.95}} onClick={()=>setView('home')}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .8rem',color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.35rem'}}>
-          <ArrowLeft size={14}/> Voltar
-        </motion.button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#f0f0f2'}}>Histórico</div>
-      </motion.div>
+      <ToastViewport toast={toast}/>
+      <PageHeader title="Histórico" subtitle="Seus dias registrados"
+        right={<Button variant="ghost" size="sm" onClick={()=>setView('home')}><ArrowLeft size={14}/> Voltar</Button>}/>
 
       {historico.length===0 ? (
-        <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:14}}>
-          <CardContent style={{padding:'3rem 1rem',textAlign:'center'}}>
-            <motion.div animate={{y:[0,-6,0]}} transition={{duration:2,repeat:Infinity}} style={{marginBottom:'.75rem'}}>
-              <History size={44} color="#484858" style={{margin:'0 auto'}}/>
-            </motion.div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:'#484858',textTransform:'uppercase'}}>Nenhum registro ainda</div>
-            <div style={{fontSize:'.8rem',color:'#484858',marginTop:'.4rem'}}>Salve o dia atual para ver o histórico</div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<History size={40}/>}
+          title="Nenhum registro ainda"
+          subtitle="Salve o dia atual para ver o histórico."
+          action={<Button variant="soft" onClick={()=>setView('home')}>Registrar hoje</Button>}
+        />
       ) : (
-        <div style={{display:'grid',gap:'.6rem'}}>
+        <div className="grid gap-2.5">
           {historico.map((d,i)=>{
             const t=calcMacros(d.refeicoes.flatMap(r=>r.itens));
             const ok=t.cal<=d.metaCal;
             return (
-              <motion.div key={d.data} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
-                <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12}}>
-                  <CardContent style={{padding:'1rem'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.6rem'}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{fmtData(d.data)}</div>
-                      <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:ok?'#22c55e':'#e31b23'}}>{t.cal} kcal</div>
-                        <Badge style={{background:ok?'rgba(34,197,94,.12)':'rgba(227,27,35,.12)',color:ok?'#4ade80':'#e31b23',border:`1px solid ${ok?'rgba(34,197,94,.3)':'rgba(227,27,35,.3)'}`,fontSize:'.5rem'}}>
-                          {ok?'Na meta':'Acima'}
-                        </Badge>
-                      </div>
+              <motion.div key={d.data} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*0.04,0.4)}}
+                className="card p-4">
+                <div className="flex justify-between items-start mb-2.5">
+                  <div className="font-display font-bold text-ink-1">{fmtData(d.data)}</div>
+                  <div className="flex items-center gap-2">
+                    <div className={`font-display font-bold text-[1.05rem] tnum ${ok?'text-ok':'text-danger'}`}>{t.cal} kcal</div>
+                    <span className={`text-[0.58rem] font-bold uppercase tracking-wide rounded-full border px-2 py-0.5 ${ok?'bg-ok-soft border-ok/30 text-ok':'bg-danger-soft border-danger/30 text-danger'}`}>
+                      {ok?'Na meta':'Acima'}
+                    </span>
+                  </div>
+                </div>
+                <div className="h-1 rounded-full bg-surface-3 overflow-hidden mb-2">
+                  <div className={`h-full rounded-full ${ok?'bg-ok':'bg-danger'}`}
+                    style={{width:`${Math.min(100,Math.round(t.cal/d.metaCal*100))}%`}}/>
+                </div>
+                <div className="flex gap-3.5 items-center text-[0.72rem] text-ink-2">
+                  {[['P',t.prot+'g',COR_PROT],['C',t.carb+'g',COR_CARB],['G',t.gord+'g',COR_GORD]].map(([l,v,c])=>(
+                    <div key={l as string}>
+                      <span className="font-bold" style={{color:c as string}}>{l}</span> {v}
                     </div>
-                    <div style={{background:'rgba(255,255,255,.05)',borderRadius:3,height:3,marginBottom:'.5rem',overflow:'hidden'}}>
-                      <div style={{height:'100%',borderRadius:3,background:ok?'#22c55e':'#e31b23',width:`${Math.min(100,Math.round(t.cal/d.metaCal*100))}%`}}/>
-                    </div>
-                    <div style={{display:'flex',gap:'.85rem',alignItems:'center'}}>
-                      {[['P',t.prot+'g','#60a5fa'],['C',t.carb+'g','#34d399'],['G',t.gord+'g','#f472b6']].map(([l,v,c])=>(
-                        <div key={l} style={{fontSize:'.72rem',color:'#7a7a8a'}}>
-                          <span style={{color:c,fontWeight:700}}>{l}</span> {v}
-                        </div>
-                      ))}
-                      <div style={{fontSize:'.72rem',color:'#7a7a8a',marginLeft:'auto',display:'flex',alignItems:'center',gap:'.2rem'}}>
-                        <Droplets size={11}/>{d.agua}/{META_AGUA}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  ))}
+                  <div className="ml-auto flex items-center gap-1 text-info">
+                    <Droplets size={11}/>{d.agua}/{META_AGUA}
+                  </div>
+                </div>
               </motion.div>
             );
           })}
@@ -859,9 +748,110 @@ export default function DarkDietPage() {
   return (
     <>
       <AnimatePresence>
-        {modalRef!==null && <ModalBusca/>}
+        {/* Modal de busca (bottom sheet) */}
+        {modalRef!==null && (
+          <motion.div key="modal-busca" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end"
+            onClick={e=>{if(e.target===e.currentTarget){setModalRef(null);setAlimentoSel(null);setBusca('');}}}>
+            <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
+              transition={{type:'spring',stiffness:300,damping:32}}
+              className="bg-surface-1 border-t border-line rounded-t-3xl w-full max-h-[88vh] flex flex-col">
+
+              <div className="flex justify-center pt-3">
+                <div className="w-10 h-1 rounded-full bg-surface-3"/>
+              </div>
+
+              <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                <div className="font-display font-bold text-lg text-ink-1">
+                  {dia.refeicoes[modalRef].nome}
+                </div>
+                <IconBtn onClick={()=>{setModalRef(null);setAlimentoSel(null);setBusca('');}}><X size={16}/></IconBtn>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 pb-5">
+                <AnimatePresence mode="wait">
+                  {!alimentoSel ? (
+                    <motion.div key="busca" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+                      <div className="relative mb-3">
+                        <Search size={15} className="text-ink-3 absolute left-3.5 top-1/2 -translate-y-1/2"/>
+                        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar alimento..."
+                          className="field pl-10" autoFocus/>
+                      </div>
+                      <div className="grid gap-1.5">
+                        {filtrados.map((a,i)=>(
+                          <motion.button key={a.nome} whileTap={{scale:.98}} onClick={()=>setAlimentoSel(a)}
+                            initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*0.02,0.3)}}
+                            className="card-2 px-4 py-3 text-left flex items-center gap-3 w-full hover:bg-surface-3 transition-colors">
+                            <div className="w-9 h-9 rounded-lg bg-accent-soft border border-accent/20 flex items-center justify-center shrink-0">
+                              <AliIcon icon={a.icon} size={17} className="text-accent"/>
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-[0.9rem] font-semibold text-ink-1">{a.nome}</div>
+                              <div className="text-[0.62rem] text-ink-3 mt-0.5 tnum">
+                                {a.cal}kcal · P:{a.prot}g · C:{a.carb}g · G:{a.gord}g /100g
+                              </div>
+                            </div>
+                            <ChevronRight size={16} className="text-ink-3"/>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div key="porcao" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0}} className="grid gap-4">
+                      <div className="card-2 p-3.5 flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-accent-soft border border-accent/20 flex items-center justify-center shrink-0">
+                          <AliIcon icon={alimentoSel.icon} size={21} className="text-accent"/>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-ink-1">{alimentoSel.nome}</div>
+                          <div className="text-[0.62rem] text-ink-3">por 100g</div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="eyebrow block mb-1.5">Porção (gramas)</label>
+                        <div className="flex items-center gap-2">
+                          <StepperBtn onClick={()=>setPorcao(p=>String(Math.max(5,parseFloat(p)||100)-5))}><Minus size={16}/></StepperBtn>
+                          <input type="number" value={porcao} onChange={e=>setPorcao(e.target.value)}
+                            className="field flex-1 text-center font-semibold text-[1.05rem] tnum"/>
+                          <StepperBtn onClick={()=>setPorcao(p=>String((parseFloat(p)||100)+5))}><Plus size={16}/></StepperBtn>
+                        </div>
+                        <PresetChips options={[50,100,150,200,300]} value={porcao} onSelect={setPorcao} suffix="g"/>
+                      </div>
+
+                      {/* Preview macros */}
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          {val:Math.round(alimentoSel.cal *num(porcao)/100), lbl:'kcal', cor:COR_KCAL},
+                          {val:Math.round(alimentoSel.prot*num(porcao)/100), lbl:'prot', cor:COR_PROT},
+                          {val:Math.round(alimentoSel.carb*num(porcao)/100), lbl:'carb', cor:COR_CARB},
+                          {val:Math.round(alimentoSel.gord*num(porcao)/100), lbl:'gord', cor:COR_GORD},
+                        ].map((m,i)=>(
+                          <div key={i} className="card-2 p-2 text-center">
+                            <div className="font-display font-bold text-[1.05rem] tnum" style={{color:m.cor}}>{m.val}</div>
+                            <div className="eyebrow">{m.lbl}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button variant="ghost" className="flex-1" onClick={()=>setAlimentoSel(null)}>
+                          <ArrowLeft size={15}/> Voltar
+                        </Button>
+                        <Button className="flex-[2]" onClick={addItem}>
+                          <CheckCircle2 size={16}/> Adicionar
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showScanner && scanRefIdx!==null && (
-          <BarcodeScanner
+          <BarcodeScanner key="scanner"
             onResult={(r)=>handleScanResult(r, scanRefIdx)}
             onClose={()=>{setShowScanner(false);setScanRefIdx(null);}}
           />
@@ -869,181 +859,149 @@ export default function DarkDietPage() {
       </AnimatePresence>
 
       <PageShell>
-        <AnimatePresence>
-          {toast && (
-            <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0}}
-              style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',gap:'.4rem'}}>
-              <CheckCircle2 size={14}/>{toast}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <ToastViewport toast={toast}/>
 
-        {/* Header */}
-        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}
-          style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-              DARK<span style={{color:'#22c55e'}}>DIET</span>
+        <PageHeader
+          title="DarkDiet"
+          subtitle={
+            <span className="inline-flex items-center gap-1.5">
+              <Salad size={12}/> {fmtData(hoje())}{saving && <span className="text-ink-3"> · salvando...</span>}
+            </span>
+          }
+          right={
+            <div className="flex gap-1.5">
+              <Button variant="ghost" size="sm" onClick={()=>setView('metas')}><Settings size={14}/> Metas</Button>
+              <Button variant="ghost" size="sm" onClick={()=>setView('historico')} aria-label="Histórico"><History size={14}/></Button>
             </div>
-            <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.3rem'}}>
-              <ForkKnife size={11} color="#7a7a8a" weight="fill"/> {fmtData(hoje())}
-              {saving && <span style={{color:'#484858'}}> · salvando...</span>}
-            </div>
-          </div>
-          <div style={{display:'flex',gap:'.4rem'}}>
-            <motion.button whileTap={{scale:.95}} onClick={()=>setView('metas')}
-              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .7rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.75rem',fontWeight:700}}>
-              <Settings size={14}/> Metas
-            </motion.button>
-            <motion.button whileTap={{scale:.95}} onClick={()=>setView('historico')}
-              style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'.4rem .7rem',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.75rem',fontWeight:700}}>
-              <History size={14}/>
-            </motion.button>
-          </div>
-        </motion.div>
+          }
+        />
 
         {/* Resumo do dia */}
-        <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}>
-          <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,marginBottom:'.75rem',overflow:'hidden',position:'relative'}}>
-            <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 0% 0%,rgba(34,197,94,.08),transparent 60%)',pointerEvents:'none'}}/>
-            <CardContent style={{padding:'1rem',position:'relative'}}>
-              {/* Calorias */}
-              <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',marginBottom:'.75rem'}}>
-                <div>
-                  <div style={{display:'flex',alignItems:'baseline',gap:'.35rem'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',color:totais.cal>dia.metaCal?'#e31b23':'#f0f0f2',lineHeight:1}}>{totais.cal}</div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'1rem',color:'#484858'}}>/ {dia.metaCal} kcal</div>
-                  </div>
-                  <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                    <Flame size={11} color={totais.cal>dia.metaCal?'#e31b23':'#7a7a8a'}/> calorias hoje
-                  </div>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.05}}
+          className="card p-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              <RingMeta pct={pctCal} over={overCal}/>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`font-display font-bold text-[1.05rem] tnum ${overCal?'text-danger':'text-accent'}`}>{pctCal}%</span>
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className={`font-display font-bold text-[2.4rem] leading-none tnum ${overCal?'text-danger':'text-ink-1'}`}>{totais.cal}</span>
+                <span className="text-ink-3 text-sm tnum">/ {dia.metaCal} kcal</span>
+              </div>
+              <div className="eyebrow mt-1.5 flex items-center gap-1">
+                <Flame size={11} className={overCal?'text-danger':'text-accent'}/> calorias hoje
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5 mt-4">
+            {[
+              {val:totais.prot, meta:dia.metaProt, lbl:'Proteína',    cor:COR_PROT, pct:pctProt},
+              {val:totais.carb, meta:0,            lbl:'Carboidrato', cor:COR_CARB, pct:0},
+              {val:totais.gord, meta:0,            lbl:'Gordura',     cor:COR_GORD, pct:0},
+            ].map((m)=>(
+              <div key={m.lbl} className="card-2 px-2 py-2.5 text-center">
+                <div className="font-display font-bold text-[1.2rem] leading-none tnum" style={{color:m.cor}}>
+                  {m.val}<span className="text-[0.65rem] text-ink-3">g</span>
                 </div>
-                <div style={{textAlign:'right'}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:totais.cal>dia.metaCal?'#e31b23':'#22c55e',lineHeight:1}}>{pctCal}%</div>
-                  <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>da meta</div>
-                </div>
-              </div>
-
-              {/* Barra caloria */}
-              <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:6,marginBottom:'1rem',overflow:'hidden'}}>
-                <motion.div animate={{width:`${pctCal}%`}} transition={{duration:.5,ease:'easeOut'}}
-                  style={{height:'100%',borderRadius:4,background:totais.cal>dia.metaCal?'#e31b23':'#22c55e',boxShadow:`0 0 8px ${totais.cal>dia.metaCal?'rgba(227,27,35,.5)':'rgba(34,197,94,.5)'}`}}/>
-              </div>
-
-              <Separator style={{background:'rgba(255,255,255,.05)',marginBottom:'.85rem'}}/>
-
-              {/* Macros */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem'}}>
-                {[
-                  {val:totais.prot, meta:dia.metaProt, lbl:'Proteína', unit:'g', cor:'#60a5fa', pct:pctProt},
-                  {val:totais.carb, meta:0, lbl:'Carboidrato', unit:'g', cor:'#34d399', pct:0},
-                  {val:totais.gord, meta:0, lbl:'Gordura',     unit:'g', cor:'#f472b6', pct:0},
-                ].map((m,i)=>(
-                  <div key={i} style={{background:'rgba(0,0,0,.2)',borderRadius:10,padding:'.6rem .5rem',textAlign:'center'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:m.cor,lineHeight:1}}>{m.val}<span style={{fontSize:'.65rem',color:'#484858'}}>{m.unit}</span></div>
-                    {m.meta>0 && <div style={{background:'rgba(255,255,255,.06)',borderRadius:2,height:3,margin:'.3rem 0 .2rem',overflow:'hidden'}}><div style={{height:'100%',borderRadius:2,background:m.cor,width:`${Math.min(100,m.pct)}%`}}/></div>}
-                    <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>{m.lbl}{m.meta>0?` · ${m.pct}%`:''}</div>
+                {m.meta>0 && (
+                  <div className="h-1 rounded-full bg-surface-3 overflow-hidden mt-1.5">
+                    <motion.div className="h-full rounded-full" style={{background:m.cor}}
+                      animate={{width:`${Math.min(100,m.pct)}%`}} transition={{duration:.5,ease:'easeOut'}}/>
                   </div>
-                ))}
+                )}
+                <div className="eyebrow mt-1">{m.lbl}{m.meta>0?` · ${m.pct}%`:''}</div>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </motion.div>
 
         {/* Água */}
-        <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.14}}>
-          <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14,marginBottom:'.75rem'}}>
-            <CardContent style={{padding:'.85rem'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                  <Droplets size={18} color="#38bdf8"/>
-                  <div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2',lineHeight:1}}>Hidratação</div>
-                    <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>{dia.agua} de {META_AGUA} copos (250ml)</div>
-                  </div>
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                  <motion.button whileTap={{scale:.9}} onClick={()=>setDia(d=>({...d,agua:Math.max(0,d.agua-1)}))}
-                    style={{width:34,height:34,borderRadius:9,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',color:'#7a7a8a',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    <Minus size={15}/>
-                  </motion.button>
-                  <div style={{display:'flex',gap:'3px'}}>
-                    {Array.from({length:META_AGUA},(_,i)=>(
-                      <motion.div key={i} whileTap={{scale:.8}}
-                        onClick={()=>setDia(d=>({...d,agua:i+1}))}
-                        style={{width:14,height:22,borderRadius:3,background:i<dia.agua?'#38bdf8':'rgba(255,255,255,.06)',border:`1px solid ${i<dia.agua?'rgba(56,189,248,.4)':'#2e2e38'}`,cursor:'pointer',transition:'all .15s'}}/>
-                    ))}
-                  </div>
-                  <motion.button whileTap={{scale:.9}} onClick={()=>setDia(d=>({...d,agua:Math.min(META_AGUA,d.agua+1)}))}
-                    style={{width:34,height:34,borderRadius:9,background:'rgba(56,189,248,.1)',border:'1px solid rgba(56,189,248,.3)',color:'#38bdf8',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    <Plus size={15}/>
-                  </motion.button>
-                </div>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.1}}
+          className="card p-3.5 mb-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Droplets size={18} className="text-info shrink-0"/>
+              <div className="min-w-0">
+                <div className="font-display font-semibold text-ink-1 leading-none">Hidratação</div>
+                <div className="text-[0.6rem] text-ink-3 mt-1 tnum">{dia.agua} de {META_AGUA} copos (250ml)</div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="flex items-center gap-2">
+              <IconBtn onClick={()=>setDia(d=>({...d,agua:Math.max(0,d.agua-1)}))}><Minus size={15}/></IconBtn>
+              <div className="flex gap-[3px]">
+                {Array.from({length:META_AGUA},(_,i)=>(
+                  <motion.button key={i} whileTap={{scale:.8}}
+                    onClick={()=>setDia(d=>({...d,agua:i+1}))}
+                    aria-label={`${i+1} copos`}
+                    className={`w-3.5 h-[22px] rounded-[3px] border transition-colors ${
+                      i<dia.agua ? 'bg-info border-info/40' : 'bg-surface-2 border-line'
+                    }`}/>
+                ))}
+              </div>
+              <IconBtn tone="info" onClick={()=>setDia(d=>({...d,agua:Math.min(META_AGUA,d.agua+1)}))}><Plus size={15}/></IconBtn>
+            </div>
+          </div>
         </motion.div>
 
         {/* Refeições */}
-        <div style={{display:'grid',gap:'.55rem',marginBottom:'.85rem'}}>
+        <div className="grid gap-2.5 mb-6">
           {dia.refeicoes.map((ref,ri)=>{
             const macRef = calcMacros(ref.itens);
             return (
-              <motion.div key={ri} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.18+ri*.04}}>
-                <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14}}>
-                  <CardContent style={{padding:'0'}}>
-                    {/* Header refeição */}
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.75rem 1rem',borderBottom:ref.itens.length>0?'1px solid rgba(255,255,255,.05)':'none'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                        <ForkKnife size={14} color="#7a7a8a" weight="fill"/>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',color:'#f0f0f2',letterSpacing:'.03em'}}>{ref.nome}</div>
-                        {ref.itens.length>0 && <Badge variant="outline" style={{borderColor:'rgba(34,197,94,.2)',color:'#4ade80',fontSize:'.5rem'}}>{macRef.cal} kcal</Badge>}
-                      </div>
-                      <div style={{display:'flex',gap:'.3rem'}}>
-                        <motion.button whileTap={{scale:.9}} onClick={()=>{setScanRefIdx(ri);setShowScanner(true);}}
-                          style={{width:30,height:30,borderRadius:8,background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.15)',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}
-                          title="Scanner / OpenFoodFacts">
-                          <Camera size={14}/>
-                        </motion.button>
-                        <motion.button whileTap={{scale:.9}} onClick={()=>setModalRef(ri)}
-                          style={{width:30,height:30,borderRadius:8,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',color:'#4ade80',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center'}}
-                          title="Buscar na lista">
-                          <Plus size={15}/>
-                        </motion.button>
+              <motion.div key={ri} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+                transition={{delay:Math.min(.14+ri*0.04,0.4)}}
+                className="card overflow-hidden">
+                {/* Header refeição */}
+                <div className={`flex items-center justify-between px-4 py-3 ${ref.itens.length>0?'border-b border-line':''}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Utensils size={14} className="text-ink-3 shrink-0"/>
+                    <div className="font-display font-semibold text-[0.92rem] text-ink-1 truncate">{ref.nome}</div>
+                    {ref.itens.length>0 && (
+                      <span className="text-[0.58rem] font-bold text-accent bg-accent-soft border border-accent/20 rounded-full px-2 py-0.5 tnum shrink-0">
+                        {macRef.cal} kcal
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <IconBtn tone="accent-soft" title="Scanner / OpenFoodFacts"
+                      onClick={()=>{setScanRefIdx(ri);setShowScanner(true);}}>
+                      <Camera size={14}/>
+                    </IconBtn>
+                    <IconBtn tone="accent" title="Buscar na lista" onClick={()=>setModalRef(ri)}>
+                      <Plus size={15}/>
+                    </IconBtn>
+                  </div>
+                </div>
+
+                {/* Itens */}
+                {ref.itens.map((it,ii)=>(
+                  <motion.div key={it.id} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:Math.min(ii*0.03,0.3)}}
+                    className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line/50 last:border-b-0">
+                    <div className="w-8 h-8 rounded-lg bg-surface-2 border border-line flex items-center justify-center shrink-0">
+                      <AliIcon icon={it.icon} size={15} className="text-ink-3"/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[0.82rem] text-ink-1 font-semibold truncate">{it.nome}</div>
+                      <div className="text-[0.6rem] text-ink-3 mt-px tnum">
+                        {it.porcao}g · {Math.round(it.cal*it.porcao/100)}kcal · P:{Math.round(it.prot*it.porcao/100)}g
                       </div>
                     </div>
-
-                    {/* Itens */}
-                    {ref.itens.map((it,ii)=>(
-                      <motion.div key={it.id} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:ii*.03}}
-                        style={{display:'flex',alignItems:'center',gap:'.6rem',padding:'.55rem 1rem',borderBottom:'1px solid rgba(255,255,255,.03)'}}>
-                        <div style={{width:32,height:32,borderRadius:8,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                          <AliIcon icon={it.icon} size={16} color="#7a7a8a"/>
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:'.82rem',color:'#f0f0f2',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.nome}</div>
-                          <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'1px'}}>
-                            {it.porcao}g · {Math.round(it.cal*it.porcao/100)}kcal · P:{Math.round(it.prot*it.porcao/100)}g
-                          </div>
-                        </div>
-                        <motion.button whileTap={{scale:.9}} onClick={()=>removeItem(ri,it.id)}
-                          style={{background:'rgba(227,27,35,.07)',border:'1px solid rgba(227,27,35,.15)',borderRadius:6,padding:'4px 7px',color:'#e31b23',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',flexShrink:0}}>
-                          <Trash2 size={12}/>
-                        </motion.button>
-                      </motion.div>
-                    ))}
-                  </CardContent>
-                </Card>
+                    <IconBtn tone="danger" onClick={()=>removeItem(ri,it.id)}><Trash2 size={13}/></IconBtn>
+                  </motion.div>
+                ))}
               </motion.div>
             );
           })}
         </div>
 
         {/* Salvar dia */}
-        <motion.button whileTap={{scale:.97}} onClick={salvarDia} disabled={saving}
-          style={{width:'100%',background:saving?'rgba(34,197,94,.3)':'linear-gradient(135deg,#22c55e,#16a34a)',border:'none',borderRadius:14,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:saving?'not-allowed':'pointer',outline:'none',boxShadow:saving?'none':'0 4px 20px rgba(34,197,94,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
-          <CheckCircle2 size={18}/> Salvar Dia
-        </motion.button>
+        <Button full size="lg" onClick={salvarDia} disabled={saving}>
+          <CheckCircle2 size={18}/> Salvar dia
+        </Button>
       </PageShell>
     </>
   );

@@ -1,5 +1,9 @@
 'use client';
 import { useState } from 'react';
+import { Loader2, Medal, ExternalLink } from 'lucide-react';
+import PageShell from '@/components/layout/PageShell';
+import PageHeader from '@/components/core/PageHeader';
+import Button from '@/components/core/Button';
 
 const PROXY = 'https://replicate-proxy.rybocatto.workers.dev';
 const MODEL = 'ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4';
@@ -43,7 +47,13 @@ const SELOS = [
   {id:'elite_badge',title:'DarkSet Elite',rar:'epico',p:'dark fantasy RPG badge, elite lightning bolt crown, purple electric gothic shield, black bg, game icon, no text'},
   {id:'darkgod_badge',title:'DarkGod Founder',rar:'lendario',p:'dark fantasy RPG badge, god darkness throne golden skull crown divine, legendary radiant gothic shield, black bg, game icon, no text'},
 ];
-const COR:Record<string,string>={comum:'#9898a8',raro:'#60a5fa',epico:'#a78bfa',lendario:'#facc15'};
+/* Cor por raridade — sempre via tokens CSS (design system), nunca hex. */
+const COR:Record<string,string>={
+  comum:'var(--ink-2)',
+  raro:'var(--info)',
+  epico:'var(--chart-6)',
+  lendario:'var(--warn)',
+};
 export default function GerarSelos() {
   const [res,setRes]=useState<Record<string,any>>({});
   const [run,setRun]=useState(false);
@@ -83,40 +93,77 @@ export default function GerarSelos() {
     setRun(false);setCur('');setProg('Concluido!');
   };
   return(
-    <div style={{background:'#0f0f13',minHeight:'100vh',padding:16,fontFamily:"'Barlow Condensed',sans-serif"}}>
-      <div style={{fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#e31b23',marginBottom:8}}>
-        DARK<span style={{color:'#f0f0f2'}}>SELOS</span> Gerador
-      </div>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,alignItems:'center'}}>
-        <button onClick={()=>{setRun(true);gen(SELOS[0]).then(()=>{setRun(false);setCur('');});}} disabled={run}
-          style={{background:'rgba(255,255,255,.08)',border:'1px solid #2e2e38',borderRadius:8,padding:'8px 14px',color:'#f0f0f2',fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer',fontFamily:'inherit'}}>
+    <PageShell hideBottomNav>
+      <PageHeader
+        title="Gerador de Selos"
+        subtitle={`Ferramenta interna — gera as artes dos ${SELOS.length} DarkSelos via IA.`}
+      />
+
+      {/* Controles */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-4">
+        <Button
+          size="sm" variant="ghost" disabled={run}
+          onClick={()=>{setRun(true);gen(SELOS[0]).then(()=>{setRun(false);setCur('');});}}
+        >
           Testar 1
-        </button>
-        <button onClick={genAll} disabled={run}
-          style={{background:run?'rgba(227,27,35,.3)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:8,padding:'8px 14px',color:'#fff',fontWeight:700,fontSize:'.78rem',textTransform:'uppercase',cursor:'pointer',fontFamily:'inherit'}}>
+        </Button>
+        <Button size="sm" disabled={run} onClick={genAll}>
+          {run && <Loader2 size={14} className="animate-spin" />}
           {run?'Gerando...':'Gerar Todos ('+SELOS.length+')'}
-        </button>
-        {prog&&<span style={{color:'#4ade80',fontSize:'.75rem'}}>{prog}</span>}
-        {cur&&<span style={{color:'#facc15',fontSize:'.72rem'}}>→ {cur}</span>}
+        </Button>
+        {prog&&<span className="text-[0.75rem] font-semibold text-ok tnum">{prog}</span>}
+        {cur&&<span className="text-[0.72rem] text-warn truncate">{cur}</span>}
       </div>
+
+      {/* URLs geradas */}
       {urls.length>0&&(
-        <details style={{marginBottom:10}}>
-          <summary style={{fontSize:'.7rem',color:'#7a7a8a',cursor:'pointer'}}>URLs ({urls.length})</summary>
-          <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:8,padding:8,maxHeight:120,overflowY:'auto',marginTop:4}}>
-            {urls.map(u=><div key={u.id} style={{fontSize:'.56rem',marginBottom:2}}><span style={{color:'#60a5fa'}}>{u.id}</span>: <a href={u.url} target="_blank" rel="noreferrer" style={{color:'#4ade80'}}>{u.url}</a></div>)}
+        <details className="mb-4">
+          <summary className="text-[0.7rem] text-ink-3 cursor-pointer select-none">
+            URLs ({urls.length})
+          </summary>
+          <div className="card-2 p-2.5 mt-1.5 max-h-[120px] overflow-y-auto">
+            {urls.map(u=>(
+              <div key={u.id} className="text-[0.58rem] mb-0.5 break-all">
+                <span className="text-info font-semibold">{u.id}</span>:{' '}
+                <a href={u.url} target="_blank" rel="noreferrer" className="text-ok underline">{u.url}</a>
+              </div>
+            ))}
           </div>
         </details>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
+
+      {/* Grade de selos */}
+      <div className="grid grid-cols-4 gap-1.5">
         {SELOS.map(s=>{const r=res[s.id];const cor=COR[s.rar];return(
-          <div key={s.id} style={{background:'#1e1e24',border:'1px solid '+(r?.status==='ok'?cor:'#2e2e38'),borderRadius:8,padding:5,textAlign:'center'}}>
-            {r?.status==='ok'&&r.url?<a href={r.url} target="_blank" rel="noreferrer"><img src={r.url} alt={s.title} style={{width:'100%',borderRadius:6,aspectRatio:'1/1',objectFit:'cover',display:'block'}}/></a>
-              :<div style={{width:'100%',aspectRatio:'1/1',background:'#0a0a0f',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>{r?.status==='loading'?'⏳':'⚔️'}</div>}
-            <div style={{fontSize:'.52rem',color:'#9898a8',marginTop:3,textTransform:'uppercase',lineHeight:1.2}}>{s.title}</div>
-            <div style={{fontSize:'.48rem',fontWeight:700,color:cor,textTransform:'uppercase'}}>{s.rar}</div>
-            {r?.status==='error'&&<div style={{fontSize:'.45rem',color:'#e31b23'}}>{String(r.msg).slice(0,30)}</div>}
+          <div
+            key={s.id}
+            className="card-2 p-1.5 text-center"
+            style={r?.status==='ok'?{borderColor:cor}:undefined}
+          >
+            {r?.status==='ok'&&r.url?(
+              <a href={r.url} target="_blank" rel="noreferrer" aria-label={`Abrir arte de ${s.title}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={r.url} alt={s.title} className="w-full rounded-lg aspect-square object-cover block"/>
+              </a>
+            ):(
+              <div className="w-full aspect-square rounded-lg bg-bg flex items-center justify-center text-ink-3">
+                {r?.status==='loading'
+                  ? <Loader2 size={16} className="animate-spin text-accent" />
+                  : <Medal size={16} />}
+              </div>
+            )}
+            <div className="text-[0.52rem] text-ink-2 mt-1 uppercase leading-tight">{s.title}</div>
+            <div className="text-[0.48rem] font-bold uppercase" style={{color:cor}}>{s.rar}</div>
+            {r?.status==='error'&&(
+              <div className="text-[0.45rem] text-danger">{String(r.msg).slice(0,30)}</div>
+            )}
           </div>);})}
       </div>
-    </div>
+
+      {/* Nota de contexto */}
+      <p className="flex items-center justify-center gap-1 text-[0.62rem] text-ink-3 mt-4">
+        <ExternalLink size={11} /> As imagens abrem em nova aba para download.
+      </p>
+    </PageShell>
   );
 }
