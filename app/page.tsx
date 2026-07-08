@@ -1,11 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import EmptyState from '@/components/core/EmptyState';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { getLiga, LIGAS } from '@/lib/rankSystem';
+import {
+  Play, Flame, Globe, ChevronRight, Dumbbell,
+  History, Medal, HeartPulse, Salad, Swords, Flower2,
+} from 'lucide-react';
 
 type UserData = { name: string; photoURL: string | null; weeklyGoal: number; trainDays: number[]; };
 type HistoryEntry = { date: string; entries: {sets:{w:string;r:string}[]}[]; };
@@ -15,12 +23,12 @@ const DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domi
 const DIAS_LABEL = ['S','T','Q','Q','S','S','D'];
 
 const ATALHOS = [
-  {icon:'📋', label:'Histórico', href:'/historico'},
-  {icon:'🏅', label:'Selos',     href:'/darkselos'},
-  {icon:'🏃', label:'Cardio',    href:'/cardio'},
-  {icon:'🥗', label:'DarkDiet',  href:'/darkdiet'},
-  {icon:'⚔️', label:'Squad',     href:'/darksquad'},
-  {icon:'🧘', label:'DarkZen',   href:'/darkzen'},
+  { icon: History,    label: 'Histórico', href: '/historico' },
+  { icon: Medal,      label: 'Selos',     href: '/darkselos' },
+  { icon: HeartPulse, label: 'Cardio',    href: '/cardio' },
+  { icon: Salad,      label: 'DarkDiet',  href: '/darkdiet' },
+  { icon: Swords,     label: 'Squad',     href: '/darksquad' },
+  { icon: Flower2,    label: 'DarkZen',   href: '/darkzen' },
 ];
 
 function calcStreak(history: Record<string,HistoryEntry>, trainDays: number[]): number {
@@ -79,6 +87,8 @@ function getNextTrainDay(ficha: Ficha|null) {
   return null;
 }
 
+const fmtVol = (v: number) => v>=1000 ? (v/1000).toFixed(1)+'t' : Math.round(v)+'kg';
+
 export default function HomePage() {
   const router = useRouter();
   const [user,      setUser]      = useState<any>(null);
@@ -136,131 +146,179 @@ export default function HomePage() {
   const ligaPct       = proxLiga ? Math.min(100,Math.round(((meuRank?.pontos||0)-liga.min)/(proxLiga.min-liga.min)*100)) : 100;
   const nome          = userData.name||user?.displayName||'Atleta';
   const initials      = nome.slice(0,2).toUpperCase();
+  const primeiroNome  = nome.split(' ')[0];
 
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <div style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%',animation:'spinCw .65s linear infinite'}}/>
-      </div>
+      <Spinner full />
     </PageShell>
   );
 
   if(!user) return (
     <PageShell>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:'1rem',textAlign:'center'}}>
-        <div style={{fontSize:'3rem'}}>🏋️</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',textTransform:'uppercase',color:'#f0f0f2'}}>DARK<span style={{color:'#e31b23'}}>SET</span></div>
-        <div style={{fontSize:'.88rem',color:'#7a7a8a'}}>Faça login para ver seus treinos</div>
-        <button onClick={()=>router.push('/login')} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'12px',padding:'13px 32px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',cursor:'pointer'}}>
-          Entrar
-        </button>
+      <div className="pt-10">
+        <EmptyState
+          icon={<Dumbbell size={40} strokeWidth={1.5} />}
+          title="Bem-vindo ao DarkSet"
+          subtitle="Faça login para ver seus treinos, streak e evolução."
+          action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+        />
       </div>
     </PageShell>
   );
 
   return (
     <PageShell>
-      {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
-        <div>
-          <p style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.12em',color:'#7a7a8a',margin:0}}>
+      {/* Saudação + data + avatar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between gap-3 mb-6"
+      >
+        <div className="min-w-0">
+          <p className="eyebrow">
             {new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
           </p>
-          <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.9rem',textTransform:'uppercase',color:'#f0f0f2',margin:0,lineHeight:1,marginTop:2}}>
-            {nome.split(' ')[0]?`E aí, ${nome.split(' ')[0]}!`:'Bora Treinar!'}
+          <h1 className="font-display font-bold text-[1.7rem] leading-tight tracking-tight text-ink-1 mt-0.5 truncate">
+            {primeiroNome ? `E aí, ${primeiroNome}!` : 'Bora treinar!'}
           </h1>
         </div>
-        <button onClick={()=>router.push('/perfil')} style={{background:'none',border:'none',padding:0,cursor:'pointer'}}>
+        <button
+          onClick={()=>router.push('/perfil')}
+          aria-label="Perfil"
+          className="w-11 h-11 rounded-full overflow-hidden border border-line bg-surface-3 flex items-center justify-center shrink-0"
+        >
           {userData.photoURL
-            ?<img src={userData.photoURL} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',objectFit:'cover'}} alt="avatar"/>
-            :<div style={{width:44,height:44,borderRadius:'50%',border:'2px solid #2e2e38',background:'linear-gradient(135deg,#e31b23,#6b0a0e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',color:'#fff'}}>{initials}</div>
-          }
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={userData.photoURL} alt="" className="w-full h-full object-cover" />
+            : <span className="font-display font-bold text-[0.8rem] text-ink-2">{initials}</span>}
         </button>
-      </div>
+      </motion.div>
 
-      {/* Streak Hero */}
-      <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'16px',padding:'1.1rem',marginBottom:'.75rem',position:'relative',overflow:'hidden'}}>
-        {streak>0&&<div style={{position:'absolute',top:-30,right:-30,width:120,height:120,borderRadius:'50%',background:'radial-gradient(circle,rgba(227,27,35,.15),transparent 70%)',pointerEvents:'none'}}/>}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-          <div style={{display:'flex',alignItems:'baseline',gap:'.4rem'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.5rem',lineHeight:1,color:streak>0?'#e31b23':'#484858'}}>{streak}</div>
+      {/* Hero de streak */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
+        className="card p-5 mb-6 shadow-card"
+      >
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div className="flex items-baseline gap-2.5">
+            <span className={`font-display font-bold text-[3.4rem] leading-none tnum ${streak>0?'text-accent':'text-ink-3'}`}>
+              {streak}
+            </span>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',color:streak>0?'#f0f0f2':'#484858'}}>dias</div>
-              <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em'}}>streak</div>
+              <div className={`flex items-center gap-1 font-display font-semibold text-[0.92rem] ${streak>0?'text-ink-1':'text-ink-3'}`}>
+                <Flame size={14} className={streak>0?'text-accent':'text-ink-3'} />
+                dias
+              </div>
+              <div className="eyebrow">streak</div>
             </div>
           </div>
-          <div style={{display:'flex',gap:'1.2rem'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#f0f0f2',lineHeight:1}}>
-                {thisWeek}<span style={{fontSize:'.9rem',color:'#484858'}}>/{userData.weeklyGoal}</span>
+          <div className="flex gap-3">
+            <div className="card-2 rounded-xl px-3 py-2 text-center">
+              <div className="font-display font-bold text-[1.25rem] leading-none tnum text-ink-1">
+                {thisWeek}<span className="text-[0.8rem] text-ink-3">/{userData.weeklyGoal}</span>
               </div>
-              <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>semana</div>
+              <div className="eyebrow mt-1">semana</div>
             </div>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:'#f0f0f2',lineHeight:1}}>
-                {weekVol>=1000?(weekVol/1000).toFixed(1)+'t':weekVol+'kg'}
+            <div className="card-2 rounded-xl px-3 py-2 text-center">
+              <div className="font-display font-bold text-[1.25rem] leading-none tnum text-ink-1">
+                {fmtVol(weekVol)}
               </div>
-              <div style={{fontSize:'.52rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.07em',marginTop:'.1rem'}}>volume</div>
+              <div className="eyebrow mt-1">volume</div>
             </div>
           </div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',padding:'0 .1rem'}}>
+
+        {/* Heatmap semanal */}
+        <div className="flex justify-between items-end px-0.5">
           {weekDots.map(({trained,isTrainDay,label},i)=>(
-            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'.25rem',opacity:isTrainDay?1:0.35}}>
-              <div style={{width:trained?12:8,height:trained?12:8,borderRadius:'50%',background:trained?'#e31b23':isTrainDay?'#2e2e38':'transparent',border:trained?'none':`1px solid ${isTrainDay?'#3e3e48':'#2e2e38'}`,boxShadow:trained?'0 0 8px rgba(227,27,35,.5)':'none',transition:'all .2s'}}/>
-              <span style={{fontSize:'.58rem',color:trained?'#b0b0be':'#484858',fontWeight:trained?700:400}}>{label}</span>
+            <div key={i} className={`flex flex-col items-center gap-1.5 ${isTrainDay?'':'opacity-35'}`}>
+              <span
+                className={`rounded-full transition-all ${
+                  trained
+                    ? 'w-3 h-3 bg-accent shadow-volt'
+                    : isTrainDay
+                      ? 'w-2 h-2 bg-surface-3 border border-line'
+                      : 'w-2 h-2 border border-line'
+                }`}
+              />
+              <span className={`text-[0.6rem] ${trained?'font-bold text-ink-2':'text-ink-3'}`}>{label}</span>
             </div>
           ))}
         </div>
-      </div>
+      </motion.section>
 
-      {/* Modo Treino */}
-      <button onClick={()=>router.push('/modo-treino')} style={{width:'100%',marginBottom:'.75rem',background:'linear-gradient(135deg,#e31b23,#8b0000)',border:'none',borderRadius:'14px',padding:'1.1rem 1.25rem',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',position:'relative',overflow:'hidden',boxShadow:'0 4px 24px rgba(227,27,35,.25)'}}>
-        <div style={{position:'absolute',right:-10,top:-10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:'5.5rem',fontWeight:900,color:'rgba(0,0,0,.12)',lineHeight:1,pointerEvents:'none'}}>▶</div>
-        <div style={{textAlign:'left'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:'1.4rem',fontWeight:900,color:'#fff',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:1}}>Modo Treino</div>
-          <div style={{fontSize:'.72rem',color:'rgba(255,255,255,.6)',marginTop:'.25rem'}}>
-            {nextTreino?`${nextTreino.day} · ${nextTreino.exs.slice(0,2).map((e:any)=>e.name||e.nome).join(', ')}${nextTreino.exs.length>2?'...':''}`:activeFicha?activeFicha.name:'Com ou sem ficha'}
+      {/* CTA Modo Treino */}
+      <motion.button
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={()=>router.push('/modo-treino')}
+        className="w-full mb-6 bg-accent text-accent-ink rounded-2xl shadow-volt px-5 py-4 flex items-center justify-between gap-4 text-left"
+      >
+        <div className="min-w-0">
+          <div className="font-display font-bold text-[1.15rem] leading-tight tracking-tight">Modo Treino</div>
+          <div className="text-[0.74rem] opacity-75 mt-0.5 truncate">
+            {nextTreino
+              ? `${nextTreino.day} · ${nextTreino.exs.slice(0,2).map((e:any)=>e.name||e.nome).join(', ')}${nextTreino.exs.length>2?'...':''}`
+              : activeFicha ? activeFicha.name : 'Com ou sem ficha'}
           </div>
         </div>
-        <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <div style={{width:0,height:0,borderTop:'9px solid transparent',borderBottom:'9px solid transparent',borderLeft:'15px solid #fff',marginLeft:3}}/>
-        </div>
-      </button>
+        <span className="w-11 h-11 rounded-full bg-accent-ink/15 flex items-center justify-center shrink-0">
+          <Play size={20} fill="currentColor" />
+        </span>
+      </motion.button>
 
-      {/* Card Rank Global */}
-      <button onClick={()=>router.push('/darkrank')} style={{width:'100%',marginBottom:'.75rem',background:liga.corBg,border:`1px solid ${liga.corBorder}`,borderRadius:'16px',padding:'.9rem 1.1rem',display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer',position:'relative',overflow:'hidden',textAlign:'left'}}>
-        <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 0% 50%,${liga.cor}12 0%,transparent 60%)`,pointerEvents:'none'}}/>
-        <div style={{flex:1,minWidth:0,position:'relative'}}>
-          <div style={{fontSize:'.52rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,marginBottom:'2px'}}>🌐 RANK GLOBAL</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',textTransform:'uppercase',letterSpacing:'.05em',lineHeight:1,color:liga.cor,marginBottom:'.4rem'}}>{liga.nome}</div>
-          <div style={{background:'rgba(255,255,255,.08)',borderRadius:'3px',height:'4px',marginBottom:'3px'}}>
-            <div style={{height:'100%',borderRadius:'3px',background:liga.cor,width:`${ligaPct}%`,boxShadow:`0 0 8px ${liga.cor}66`}}/>
+      {/* Rank global — cores da liga são dinâmicas (exceção permitida) */}
+      <motion.button
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={()=>router.push('/darkrank')}
+        className="w-full mb-6 rounded-2xl border px-4 py-4 flex items-center gap-3 text-left"
+        style={{ background: liga.corBg, borderColor: liga.corBorder }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 eyebrow mb-0.5" style={{ color: liga.cor }}>
+            <Globe size={11} />
+            Rank global
           </div>
-          <div style={{display:'flex',justifyContent:'space-between'}}>
-            <div style={{fontSize:'.52rem',color:'#7a7a8a'}}>{liga.nome}</div>
-            <div style={{fontSize:'.52rem',color:liga.cor,fontWeight:700}}>{proxLiga?`${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}`:'Rank máximo'}</div>
+          <div className="font-display font-bold text-[1.35rem] leading-none tracking-tight mb-2.5" style={{ color: liga.cor }}>
+            {liga.nome}
+          </div>
+          <div className="h-1 rounded-full bg-surface-3 mb-1.5 overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${ligaPct}%`, background: liga.cor }} />
+          </div>
+          <div className="flex justify-between text-[0.62rem]">
+            <span className="text-ink-3 tnum">{meuRank?.pontos||0} pts</span>
+            <span className="font-semibold tnum" style={{ color: liga.cor }}>
+              {proxLiga ? `${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}` : 'Rank máximo'}
+            </span>
           </div>
         </div>
-        <span style={{color:'#484858',fontSize:'.9rem',position:'relative'}}>›</span>
-      </button>
+        <ChevronRight size={16} className="text-ink-3 shrink-0" />
+      </motion.button>
 
       {/* Atalhos */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.75rem'}}>
-        {ATALHOS.map(a=>(
-          <button key={a.href} onClick={()=>router.push(a.href)} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'12px',padding:'.75rem .5rem',display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',cursor:'pointer'}}>
-            <span style={{fontSize:'1.3rem'}}>{a.icon}</span>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#b0b0be'}}>{a.label}</span>
-          </button>
+      <div className="grid grid-cols-3 gap-2.5 mb-6">
+        {ATALHOS.map(({icon:Icon,label,href},i)=>(
+          <motion.button
+            key={href}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(0.14 + i*0.04, 0.4) }}
+            whileTap={{ scale: 0.97 }}
+            onClick={()=>router.push(href)}
+            className="card px-2 py-3.5 flex flex-col items-center gap-2 hover:bg-surface-3 transition-colors"
+          >
+            <Icon size={19} className="text-accent" strokeWidth={1.8} />
+            <span className="text-[0.72rem] font-semibold text-ink-2">{label}</span>
+          </motion.button>
         ))}
       </div>
 
       {/* Últimos treinos */}
-      {ultimosTreinos.length>0&&(
-        <>
-          <p style={{fontSize:'.65rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#7a7a8a',margin:'0 0 .5rem'}}>Últimos treinos</p>
-          <div style={{display:'grid',gap:'.45rem'}}>
-            {ultimosTreinos.map(([date,entry])=>{
+      {ultimosTreinos.length>0 && (
+        <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <p className="eyebrow mb-2.5">Últimos treinos</p>
+          <div className="grid gap-2.5">
+            {ultimosTreinos.map(([date,entry],i)=>{
               const d = new Date(date+'T12:00:00');
               const hoje = new Date().toISOString().slice(0,10);
               const ontem = new Date(Date.now()-86400000).toISOString().slice(0,10);
@@ -268,31 +326,34 @@ export default function HomePage() {
               const totalSets = (entry.entries||[]).reduce((s,e)=>s+(e.sets||[]).length,0);
               const vol = (entry.entries||[]).reduce((s,e)=>(e.sets||[]).reduce((s2:number,set:any)=>s2+parseFloat(String(set.w||0))*parseFloat(String(set.r||0)),s),0);
               return (
-                <div key={date} style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:'12px',padding:'.85rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <motion.div
+                  key={date}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(0.22 + i*0.04, 0.4) }}
+                  className="card px-4 py-3.5 flex items-center justify-between"
+                >
                   <div>
-                    <div style={{fontSize:'.65rem',textTransform:'uppercase',letterSpacing:'.04em',color:'#7a7a8a',marginBottom:'2px'}}>{label}</div>
-                    <div style={{fontWeight:600,fontSize:'.9rem',color:'#f0f0f2'}}>{totalSets} séries</div>
+                    <div className="eyebrow mb-0.5">{label}</div>
+                    <div className="font-semibold text-[0.9rem] text-ink-1 tnum">{totalSets} séries</div>
                   </div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#e31b23'}}>
-                    {vol>=1000?(vol/1000).toFixed(1)+'t':Math.round(vol)+'kg'}
+                  <div className="font-display font-bold text-[1.05rem] text-accent tnum">
+                    {fmtVol(vol)}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
-        </>
+        </motion.section>
       )}
 
       {/* Estado vazio */}
-      {totalSessions===0&&(
-        <div style={{textAlign:'center',padding:'2rem',border:'1px dashed #2e2e38',borderRadius:'12px',marginTop:'.5rem'}}>
-          <div style={{fontSize:'2.5rem',marginBottom:'.75rem'}}>💪</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.4rem'}}>Nenhum treino ainda</div>
-          <div style={{fontSize:'.82rem',color:'#7a7a8a',marginBottom:'1rem'}}>Comece seu primeiro treino agora!</div>
-          <button onClick={()=>router.push('/modo-treino')} style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:'10px',padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer'}}>
-            Iniciar Treino
-          </button>
-        </div>
+      {totalSessions===0 && (
+        <EmptyState
+          icon={<Dumbbell size={36} strokeWidth={1.5} />}
+          title="Nenhum treino ainda"
+          subtitle="Comece seu primeiro treino agora!"
+          action={<Button onClick={()=>router.push('/modo-treino')}><Play size={16} fill="currentColor" />Iniciar Treino</Button>}
+        />
       )}
     </PageShell>
   );

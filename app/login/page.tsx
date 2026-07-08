@@ -1,6 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Dumbbell, TrendingUp, HeartPulse, Swords, ChevronLeft, Loader2,
+  CheckCircle2, XCircle,
+} from 'lucide-react';
+import Button from '@/components/core/Button';
+import { Logo } from '@/components/layout/AppChrome';
 import { auth } from '@/lib/firebase';
 import {
   signInWithEmailAndPassword,
@@ -13,11 +20,9 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 
-const BG = 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80&auto=format&fit=crop';
-const BG_FALLBACK = 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&q=80&auto=format&fit=crop';
-
+/* Logotipo oficial do Google — cores da marca Google (asset de terceiro). */
 const GoogleIcon = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
+  <svg viewBox="0 0 24 24" width="20" height="20" className="shrink-0" aria-hidden="true">
     <path fill="#4285F4" d="M23.5 12.27c0-.84-.07-1.45-.22-2.09H12.22v3.8h6.42c-.13 1.01-.83 2.53-2.39 3.55l-.02.13 3.47 2.69.24.02c2.19-2.02 3.46-4.99 3.46-8.1z"/>
     <path fill="#34A853" d="M12.22 23.5c3.14 0 5.77-1.03 7.69-2.82l-3.66-2.83c-.98.67-2.31 1.14-4.03 1.14-3.08 0-5.68-2.02-6.61-4.82l-.12.01-3.58 2.77-.05.11C2.83 21 7.19 23.5 12.22 23.5z"/>
     <path fill="#FBBC05" d="M5.61 14.17c-.24-.73-.38-1.52-.38-2.35 0-.82.14-1.61.37-2.35l-.01-.16-3.62-2.8-.12.06C.75 8.26.22 10.06.22 11.82c0 1.76.53 3.56 1.63 5.25l3.76-2.9z"/>
@@ -39,6 +44,19 @@ const errMsg = (code: string) => ({
 
 type Mode = 'signIn' | 'signUp' | 'forgot';
 
+const FEATURES = [
+  { icon: Dumbbell,   label: 'Fichas' },
+  { icon: TrendingUp, label: 'Evolução' },
+  { icon: HeartPulse, label: 'Cardio' },
+  { icon: Swords,     label: 'Squad' },
+];
+
+const STATS: [string, string][] = [
+  ['10k+', 'Atletas'],
+  ['500+', 'Exercícios'],
+  ['4.8★', 'Avaliação'],
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
@@ -50,7 +68,6 @@ export default function LoginPage() {
   const [loading, setLoading]     = useState(false);
   const [erro, setErro]           = useState('');
   const [sucesso, setSucesso]     = useState('');
-  const [imgLoaded, setImgLoaded] = useState(false);
 
   useEffect(()=>{
     const unsub = onAuthStateChanged(auth, u => { if(u) router.replace('/'); });
@@ -96,7 +113,7 @@ export default function LoginPage() {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), senha);
         if(nome.trim()) await updateProfile(cred.user, {displayName: nome.trim()});
         await sendEmailVerification(cred.user);
-        setSucesso(`✅ Conta criada! Verifique seu email (${email}) antes de entrar.`);
+        setSucesso(`Conta criada! Verifique seu email (${email}) antes de entrar.`);
         setMode('signIn');
       }
     } catch(e:any){
@@ -104,324 +121,251 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
-  const inp = {
-    width:'100%', background:'rgba(0,0,0,.4)',
-    border:'1px solid rgba(255,255,255,.1)', borderRadius:'12px',
-    color:'#fff', padding:'12px 14px', fontSize:'1rem',
-    outline:'none', fontFamily:'Inter,sans-serif',
-  } as React.CSSProperties;
-
-  const inpFocus = (e:React.FocusEvent<HTMLInputElement>) => {
-    e.target.style.borderColor = 'rgba(227,27,35,.6)';
-  };
-  const inpBlur = (e:React.FocusEvent<HTMLInputElement>) => {
-    e.target.style.borderColor = 'rgba(255,255,255,.1)';
-  };
-
   return (
     <>
-      {/* ── SPLASH SCREEN ─────────────────────────────────────── */}
-      <div style={{
-        position:'fixed', inset:0,
-        display:'flex', flexDirection:'column',
-        overflow:'hidden',
-        background:'#0a0a0e',
-      }}>
-        {/* Background com foto sempre visível via CSS */}
-        <div style={{
-          position:'absolute',inset:0,
-          backgroundImage:`url(${BG})`,
-          backgroundSize:'cover',
-          backgroundPosition:'center',
-          backgroundRepeat:'no-repeat',
-          backgroundAttachment:'scroll',
-        }}/>
+      {/* ── SPLASH IMERSIVO ───────────────────────────────────── */}
+      <div className="fixed inset-0 flex flex-col overflow-hidden bg-bg">
+        {/* Glow volt sutil ao fundo (tokens, sem hex) */}
+        <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[480px] h-[480px] rounded-full bg-accent/10 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-[-180px] right-[-120px] w-[380px] h-[380px] rounded-full bg-accent/5 blur-3xl" />
 
-        {/* Gradiente forte para legibilidade */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(8,8,16,.82) 0%,rgba(8,8,16,.65) 30%,rgba(8,8,16,.88) 65%,rgba(8,8,16,1) 88%)'}}/>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 40%,rgba(227,27,35,.1) 0%,transparent 55%)'}}/>
+        <div className="relative z-[1] flex flex-col h-full px-6 max-w-[480px] mx-auto w-full">
+          {/* Centro: badge + logo + slogan + features */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="flex-1 flex flex-col items-center justify-center gap-2"
+          >
+            <span className="chip chip-active mb-2 cursor-default">Seu app de treino</span>
 
-        {/* Conteúdo */}
-        <div style={{
-          position:'relative', zIndex:1,
-          display:'flex', flexDirection:'column',
-          height:'100%', padding:'0 1.5rem',
-        }}>
-          {/* Logo — centro superior */}
-          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'.5rem'}}>
-            {/* Badge */}
-            <div style={{
-              background:'rgba(227,27,35,.15)',
-              border:'1px solid rgba(227,27,35,.3)',
-              borderRadius:'999px', padding:'.3rem .9rem',
-              fontSize:'.65rem', fontWeight:700, color:'rgba(227,27,35,.9)',
-              textTransform:'uppercase', letterSpacing:'.15em',
-              marginBottom:'.5rem',
-            }}>Seu app de treino</div>
+            <Logo size="3.6rem" />
 
-            {/* Logo */}
-            <h1 style={{
-              fontFamily:"'Barlow Condensed',sans-serif",
-              fontWeight:900, fontSize:'5rem',
-              letterSpacing:'.06em', color:'#fff', lineHeight:1,
-              textShadow:'0 4px 32px rgba(0,0,0,.8)',
-              margin:0,
-            }}>
-              DARK<span style={{color:'#e31b23'}}>SET</span>
-            </h1>
-
-            {/* Slogan */}
-            <p style={{
-              fontSize:'.88rem', color:'rgba(255,255,255,.7)',
-              letterSpacing:'.12em', textTransform:'uppercase',
-              fontWeight:500, marginTop:'.25rem',
-            }}>
+            <p className="eyebrow !text-ink-2 tracking-[0.14em] mt-1">
               Seu Treino. Sua Evolução.
             </p>
 
-            {/* Features rápidas */}
-            <div style={{
-              display:'flex', gap:'.75rem', marginTop:'1.5rem', flexWrap:'wrap',
-              justifyContent:'center',
-            }}>
-              {['🏋️ Fichas', '📈 Evolução', '🏃 Cardio', '⚔️ Squad'].map(f=>(
-                <div key={f} style={{
-                  background:'rgba(255,255,255,.08)',
-                  border:'1px solid rgba(255,255,255,.12)',
-                  borderRadius:'999px', padding:'.3rem .75rem',
-                  fontSize:'.72rem', color:'rgba(255,255,255,.7)', fontWeight:600,
-                }}>{f}</div>
+            <div className="flex flex-wrap justify-center gap-2 mt-6">
+              {FEATURES.map(({ icon: Icon, label }) => (
+                <span key={label} className="chip cursor-default">
+                  <Icon size={13} className="text-accent" />
+                  {label}
+                </span>
               ))}
             </div>
-          </div>
+          </motion.div>
 
-          {/* Botões inferiores */}
-          <div style={{paddingBottom:'max(env(safe-area-inset-bottom),2rem)', display:'grid', gap:'.75rem'}}>
-            {/* Stats */}
-            <div style={{
-              display:'flex', justifyContent:'center', gap:'2rem',
-              marginBottom:'.5rem',
-            }}>
-              {[['10k+','Atletas'],['500+','Exercícios'],['4.8★','Avaliação']].map(([v,l])=>(
-                <div key={l} style={{textAlign:'center'}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:'#fff',lineHeight:1}}>{v}</div>
-                  <div style={{fontSize:'.6rem',color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>{l}</div>
+          {/* Rodapé: stats + CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="grid gap-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 2rem)' }}
+          >
+            <div className="flex justify-center gap-8 mb-1">
+              {STATS.map(([v, l]) => (
+                <div key={l} className="text-center">
+                  <div className="font-display font-bold text-xl leading-none text-ink-1 tnum">{v}</div>
+                  <div className="eyebrow mt-1">{l}</div>
                 </div>
               ))}
             </div>
 
-            <button onClick={()=>openModal('signIn')} style={{
-              width:'100%',
-              background:'linear-gradient(135deg,#e31b23,#8b0000)',
-              border:'none', borderRadius:'16px',
-              padding:'16px', color:'#fff',
-              fontFamily:"'Barlow Condensed',sans-serif",
-              fontWeight:900, fontSize:'1.1rem',
-              textTransform:'uppercase', letterSpacing:'.08em',
-              cursor:'pointer',
-              boxShadow:'0 4px 24px rgba(227,27,35,.4)',
-            }}>
+            <Button size="lg" full onClick={()=>openModal('signIn')}>
               Entrar
-            </button>
-
-            <button onClick={()=>openModal('signUp')} style={{
-              width:'100%',
-              background:'rgba(255,255,255,.08)',
-              border:'1px solid rgba(255,255,255,.18)',
-              borderRadius:'16px', padding:'16px', color:'#fff',
-              fontFamily:"'Barlow Condensed',sans-serif",
-              fontWeight:900, fontSize:'1.1rem',
-              textTransform:'uppercase', letterSpacing:'.08em',
-              cursor:'pointer', backdropFilter:'blur(10px)',
-            }}>
+            </Button>
+            <Button size="lg" full variant="ghost" onClick={()=>openModal('signUp')}>
               Criar conta grátis
-            </button>
+            </Button>
 
-            <p style={{textAlign:'center',fontSize:'.65rem',color:'rgba(255,255,255,.25)',lineHeight:1.4}}>
+            <p className="text-center text-[0.65rem] text-ink-3 leading-relaxed">
               Ao continuar, você concorda com os Termos de Uso e Política de Privacidade do DarkSet.
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
 
-      {/* ── MODAL ─────────────────────────────────────────────── */}
-      {showModal && (
-        <>
-          {/* Overlay */}
-          <div onClick={()=>setShowModal(false)} style={{
-            position:'fixed', inset:0, zIndex:90,
-            background:'rgba(0,0,0,.6)',
-            backdropFilter:'blur(4px)',
-            animation:'fadeIn .2s ease',
-          }}/>
+      {/* ── MODAL (bottom sheet) ──────────────────────────────── */}
+      <AnimatePresence>
+        {showModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={()=>setShowModal(false)}
+              className="fixed inset-0 z-[90] bg-black/70"
+              style={{ backdropFilter: 'blur(4px)' }}
+            />
+            <motion.div
+              role="dialog" aria-modal="true" aria-label="Acessar conta"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 40 }}
+              className="fixed bottom-0 inset-x-0 z-[91] max-w-[480px] mx-auto
+                         bg-surface-1 border-t border-line rounded-t-3xl
+                         px-6 pt-6 max-h-[92vh] overflow-y-auto"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+            >
+              {/* Handle */}
+              <div className="w-9 h-1 rounded-full bg-surface-3 mx-auto -mt-2 mb-5" />
 
-          {/* Sheet */}
-          <div style={{
-            position:'fixed', bottom:0, left:0, right:0, zIndex:91,
-            background:'#111115',
-            borderTop:'1px solid rgba(255,255,255,.08)',
-            borderRadius:'24px 24px 0 0',
-            padding:'1.5rem 1.5rem max(env(safe-area-inset-bottom),1.5rem)',
-            maxHeight:'92vh', overflowY:'auto',
-            animation:'slideUp .28s cubic-bezier(.4,0,.2,1)',
-          }}>
-            {/* Handle */}
-            <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,.15)',margin:'-0.5rem auto 1.25rem'}}/>
-
-            {/* Logo mini */}
-            <div style={{textAlign:'center',marginBottom:'1.25rem'}}>
-              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#fff',letterSpacing:'.06em'}}>
-                DARK<span style={{color:'#e31b23'}}>SET</span>
-              </span>
-            </div>
-
-            {/* Tabs */}
-            {mode!=='forgot' && (
-              <div style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'12px',padding:'3px',gap:'3px',marginBottom:'1.25rem'}}>
-                {(['signIn','signUp'] as Mode[]).map(m=>(
-                  <button key={m} onClick={()=>{setMode(m);resetForm();}} style={{
-                    flex:1, padding:'.5rem', borderRadius:'9px', border:'none',
-                    cursor:'pointer', fontFamily:"'Barlow Condensed',sans-serif",
-                    fontWeight:800, fontSize:'.9rem', textTransform:'uppercase',
-                    letterSpacing:'.05em', transition:'all .15s',
-                    background: mode===m ? '#e31b23' : 'transparent',
-                    color: mode===m ? '#fff' : 'rgba(255,255,255,.35)',
-                    boxShadow: mode===m ? '0 2px 12px rgba(227,27,35,.3)' : 'none',
-                  }}>
-                    {m==='signIn'?'Entrar':'Criar conta'}
-                  </button>
-                ))}
+              {/* Logo mini */}
+              <div className="text-center mb-5">
+                <Logo size="1.6rem" />
               </div>
-            )}
 
-            {/* Botão Google */}
-            {mode!=='forgot' && (
-              <>
-                <button onClick={handleGoogle} disabled={loading} style={{
-                  width:'100%', background:'#fff', border:'none', borderRadius:'12px',
-                  padding:'.85rem', display:'flex', alignItems:'center',
-                  justifyContent:'center', gap:'.75rem', cursor:'pointer',
-                  fontWeight:700, fontSize:'.9rem', color:'#1a1a1a',
-                  marginBottom:'.75rem', opacity: loading?.6:1,
-                  boxShadow:'0 2px 12px rgba(0,0,0,.3)',
-                }}>
-                  <GoogleIcon/> Continuar com Google
-                </button>
-                <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
-                  <div style={{flex:1,height:1,background:'rgba(255,255,255,.08)'}}/>
-                  <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.3)'}}>ou</span>
-                  <div style={{flex:1,height:1,background:'rgba(255,255,255,.08)'}}/>
+              {/* Tabs Entrar / Criar conta */}
+              {mode!=='forgot' && (
+                <div className="flex gap-1 bg-surface-2 border border-line rounded-xl p-1 mb-5">
+                  {(['signIn','signUp'] as Mode[]).map(m=>(
+                    <button
+                      key={m}
+                      onClick={()=>{setMode(m);resetForm();}}
+                      className={`flex-1 h-9 rounded-lg text-[0.82rem] font-bold transition-colors
+                        ${mode===m ? 'bg-accent text-accent-ink shadow-volt' : 'text-ink-3'}`}
+                    >
+                      {m==='signIn'?'Entrar':'Criar conta'}
+                    </button>
+                  ))}
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Título forgot */}
-            {mode==='forgot' && (
-              <div style={{marginBottom:'1.25rem'}}>
-                <button onClick={()=>{setMode('signIn');resetForm();}} style={{background:'none',border:'none',color:'rgba(255,255,255,.4)',fontSize:'.82rem',cursor:'pointer',padding:0,marginBottom:'.5rem',display:'block'}}>
-                  ← Voltar
-                </button>
-                <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',textTransform:'uppercase',color:'#fff',margin:0}}>
-                  Redefinir senha
-                </h2>
-                <p style={{fontSize:'.8rem',color:'rgba(255,255,255,.4)',marginTop:'.3rem'}}>
-                  Enviaremos um link para seu email.
-                </p>
+              {/* Botão Google */}
+              {mode!=='forgot' && (
+                <>
+                  <button
+                    onClick={handleGoogle}
+                    disabled={loading}
+                    className="w-full h-12 rounded-xl bg-ink-1 text-bg font-semibold text-[0.9rem]
+                               flex items-center justify-center gap-3 shadow-card
+                               disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <GoogleIcon /> Continuar com Google
+                  </button>
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-line" />
+                    <span className="text-[0.72rem] text-ink-3">ou</span>
+                    <div className="flex-1 h-px bg-line" />
+                  </div>
+                </>
+              )}
+
+              {/* Cabeçalho do modo "esqueci a senha" */}
+              {mode==='forgot' && (
+                <div className="mb-5">
+                  <button
+                    onClick={()=>{setMode('signIn');resetForm();}}
+                    className="flex items-center gap-1 text-[0.82rem] text-ink-3 mb-2"
+                  >
+                    <ChevronLeft size={15} /> Voltar
+                  </button>
+                  <h2 className="font-display font-bold text-xl tracking-tight text-ink-1">
+                    Redefinir senha
+                  </h2>
+                  <p className="text-[0.8rem] text-ink-2 mt-1">
+                    Enviaremos um link para seu email.
+                  </p>
+                </div>
+              )}
+
+              {/* Formulário */}
+              <div className="grid gap-3 mb-4">
+                {mode==='signUp' && (
+                  <div>
+                    <label className="eyebrow block mb-1.5" htmlFor="login-nome">Nome</label>
+                    <input id="login-nome" className="field" type="text" placeholder="Seu nome" value={nome}
+                      onChange={e=>{setNome(e.target.value);setErro('');}} autoComplete="name"/>
+                  </div>
+                )}
+                <div>
+                  <label className="eyebrow block mb-1.5" htmlFor="login-email">Email</label>
+                  <input id="login-email" className="field" type="email" placeholder="email@exemplo.com" value={email}
+                    onChange={e=>{setEmail(e.target.value);setErro('');}} autoComplete="email"/>
+                </div>
+                {mode!=='forgot' && (
+                  <div>
+                    <label className="eyebrow block mb-1.5" htmlFor="login-senha">Senha</label>
+                    <input id="login-senha" className="field" type="password" placeholder="••••••••" value={senha}
+                      onChange={e=>{setSenha(e.target.value);setErro('');}}
+                      onKeyDown={e=>e.key==='Enter'&&handleSubmit()}
+                      autoComplete={mode==='signUp'?'new-password':'current-password'}/>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Formulário */}
-            <div style={{display:'grid',gap:'.75rem',marginBottom:'1rem'}}>
+              {/* Termos (signup) */}
               {mode==='signUp' && (
-                <div>
-                  <label style={{fontSize:'.65rem',color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:'.1em',display:'block',marginBottom:'5px'}}>Nome</label>
-                  <input style={inp} type="text" placeholder="Seu nome" value={nome}
-                    onFocus={inpFocus} onBlur={inpBlur}
-                    onChange={e=>{setNome(e.target.value);setErro('');}} autoComplete="name"/>
-                </div>
+                <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
+                  <input
+                    type="checkbox" checked={termos}
+                    onChange={e=>setTermos(e.target.checked)}
+                    className="mt-0.5 shrink-0"
+                    style={{ accentColor: 'var(--accent)' }}
+                  />
+                  <span className="text-[0.72rem] text-ink-3 leading-relaxed">
+                    Li e concordo com os{' '}
+                    <a href="/privacidade.html" target="_blank" className="text-ink-2 underline">Termos de Uso</a>
+                    {' '}do DarkSet.
+                  </span>
+                </label>
               )}
-              <div>
-                <label style={{fontSize:'.65rem',color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:'.1em',display:'block',marginBottom:'5px'}}>Email</label>
-                <input style={inp} type="email" placeholder="email@exemplo.com" value={email}
-                  onFocus={inpFocus} onBlur={inpBlur}
-                  onChange={e=>{setEmail(e.target.value);setErro('');}} autoComplete="email"/>
-              </div>
-              {mode!=='forgot' && (
-                <div>
-                  <label style={{fontSize:'.65rem',color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:'.1em',display:'block',marginBottom:'5px'}}>Senha</label>
-                  <input style={inp} type="password" placeholder="••••••••" value={senha}
-                    onFocus={inpFocus} onBlur={inpBlur}
-                    onChange={e=>{setSenha(e.target.value);setErro('');}}
-                    onKeyDown={e=>e.key==='Enter'&&handleSubmit()}
-                    autoComplete={mode==='signUp'?'new-password':'current-password'}/>
-                </div>
-              )}
-            </div>
 
-            {/* Termos signup */}
-            {mode==='signUp' && (
-              <label style={{display:'flex',alignItems:'flex-start',gap:'.6rem',marginBottom:'1rem',cursor:'pointer'}}>
-                <input type="checkbox" checked={termos} onChange={e=>setTermos(e.target.checked)}
-                  style={{marginTop:'.15rem',accentColor:'#e31b23',flexShrink:0}}/>
-                <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.4)',lineHeight:1.5}}>
-                  Li e concordo com os{' '}
-                  <a href="/privacidade.html" target="_blank" style={{color:'rgba(255,255,255,.65)',textDecoration:'none'}}>Termos de Uso</a>
-                  {' '}do DarkSet.
-                </span>
-              </label>
-            )}
+              {/* Erro / Sucesso */}
+              <AnimatePresence mode="wait">
+                {erro && (
+                  <motion.div
+                    key="erro"
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    role="alert"
+                    className="flex items-start gap-2 bg-danger-soft border border-danger/30 rounded-xl
+                               px-3.5 py-3 mb-3.5 text-[0.82rem] text-danger leading-snug"
+                  >
+                    <XCircle size={15} className="shrink-0 mt-0.5" />
+                    {erro}
+                  </motion.div>
+                )}
+                {sucesso && (
+                  <motion.div
+                    key="sucesso"
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    role="status"
+                    className="flex items-start gap-2 bg-ok-soft border border-ok/30 rounded-xl
+                               px-3.5 py-3 mb-3.5 text-[0.82rem] text-ok leading-snug"
+                  >
+                    <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+                    {sucesso}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-            {/* Erro / Sucesso */}
-            {erro && (
-              <div style={{background:'rgba(227,27,35,.12)',border:'1px solid rgba(227,27,35,.3)',borderRadius:'10px',padding:'.7rem .9rem',marginBottom:'.85rem',fontSize:'.82rem',color:'#fca5a5',lineHeight:1.4}}>
-                {erro}
-              </div>
-            )}
-            {sucesso && (
-              <div style={{background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:'10px',padding:'.7rem .9rem',marginBottom:'.85rem',fontSize:'.82rem',color:'#86efac',lineHeight:1.4}}>
-                {sucesso}
-              </div>
-            )}
+              {/* Submit */}
+              <Button size="lg" full onClick={handleSubmit} disabled={loading}>
+                {loading && <Loader2 size={17} className="animate-spin" />}
+                {mode==='signIn'?'Entrar':mode==='signUp'?'Criar conta':'Enviar link'}
+              </Button>
 
-            {/* Botão submit */}
-            <button onClick={handleSubmit} disabled={loading} style={{
-              width:'100%',
-              background: loading ? 'rgba(227,27,35,.4)' : 'linear-gradient(135deg,#e31b23,#b31217)',
-              border:'none', borderRadius:'14px', padding:'15px', color:'#fff',
-              fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900,
-              fontSize:'1.05rem', textTransform:'uppercase', letterSpacing:'.06em',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: loading ? 'none' : '0 4px 20px rgba(227,27,35,.3)',
-              display:'flex', alignItems:'center', justifyContent:'center', gap:'.5rem',
-            }}>
-              {loading && <div style={{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spinCw .6s linear infinite'}}/>}
-              {mode==='signIn'?'Entrar':mode==='signUp'?'Criar conta':'Enviar link'}
-            </button>
-
-            {/* Links */}
-            <div style={{textAlign:'center',marginTop:'.85rem',display:'flex',flexDirection:'column',gap:'.35rem'}}>
-              {mode==='signIn' && (
-                <button onClick={()=>{setMode('forgot');resetForm();}} style={{background:'none',border:'none',color:'rgba(255,255,255,.3)',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline'}}>
-                  Esqueci minha senha
-                </button>
-              )}
-              {mode!=='forgot' && (
-                <p style={{fontSize:'.78rem',color:'rgba(255,255,255,.25)',margin:0}}>
-                  {mode==='signIn' ? 'Ainda não tem conta? ' : 'Já tem uma conta? '}
-                  <button onClick={()=>{setMode(mode==='signIn'?'signUp':'signIn');resetForm();}} style={{background:'none',border:'none',color:'rgba(255,255,255,.55)',fontSize:'.78rem',cursor:'pointer',fontWeight:700,textDecoration:'underline'}}>
-                    {mode==='signIn' ? 'Criar conta' : 'Entrar'}
+              {/* Links secundários */}
+              <div className="text-center mt-3.5 flex flex-col gap-1.5">
+                {mode==='signIn' && (
+                  <button
+                    onClick={()=>{setMode('forgot');resetForm();}}
+                    className="text-[0.78rem] text-ink-3 underline"
+                  >
+                    Esqueci minha senha
                   </button>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <style>{`
-            @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-            @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-          `}</style>
-        </>
-      )}
+                )}
+                {mode!=='forgot' && (
+                  <p className="text-[0.78rem] text-ink-3">
+                    {mode==='signIn' ? 'Ainda não tem conta? ' : 'Já tem uma conta? '}
+                    <button
+                      onClick={()=>{setMode(mode==='signIn'?'signUp':'signIn');resetForm();}}
+                      className="text-ink-2 font-bold underline"
+                    >
+                      {mode==='signIn' ? 'Criar conta' : 'Entrar'}
+                    </button>
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }
