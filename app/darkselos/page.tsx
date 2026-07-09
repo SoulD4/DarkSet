@@ -1,16 +1,21 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import StatTile from '@/components/core/StatTile';
+import EmptyState from '@/components/core/EmptyState';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Trophy, Star, Lock, ChevronRight, Flame, Zap } from 'lucide-react';
 import {
-  SealCheck, Lightning, Medal, Crown
-} from '@phosphor-icons/react';
+  Trophy, Lock, Flame, Zap, Medal, Crown, BadgeCheck,
+  Dumbbell, TrendingUp, HeartPulse, LogIn,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────
 type HistEntry = { entries:{name?:string;sets:{w:string;r:string}[]}[]; startTime?:string };
@@ -27,26 +32,18 @@ type Extra = {
   runCount:number; bikeCount:number;
 };
 
-// ── Cores por raridade ─────────────────────────────────────────
-const RCOR:Record<Raridade,string> = {
-  comum:'#9898a8', raro:'#60a5fa', epico:'#a78bfa', lendario:'#facc15'
+// ── Raridades — cores via tokens (nunca hex) ───────────────────
+const RAR: Record<Raridade,{ label:string; cor:string; Icon:LucideIcon }> = {
+  comum:   { label:'comum',    cor:'var(--ink-3)',   Icon:BadgeCheck },
+  raro:    { label:'raro',     cor:'var(--info)',    Icon:Medal      },
+  epico:   { label:'épico',    cor:'var(--chart-6)', Icon:Zap        },
+  lendario:{ label:'lendário', cor:'var(--warn)',    Icon:Crown      },
 };
-const RBG:Record<Raridade,string> = {
-  comum:'rgba(152,152,168,.1)', raro:'rgba(96,165,250,.12)',
-  epico:'rgba(167,139,250,.14)', lendario:'rgba(250,204,21,.14)'
-};
-const RBORDER:Record<Raridade,string> = {
-  comum:'rgba(152,152,168,.2)', raro:'rgba(96,165,250,.25)',
-  epico:'rgba(167,139,250,.3)', lendario:'rgba(250,204,21,.3)'
-};
+const mix = (v:string,p:number)=>`color-mix(in srgb, ${v} ${p}%, transparent)`;
 
-// ── Ícone por raridade ─────────────────────────────────────────
 function RaridadeIcon({r,size=14}:{r:Raridade;size?:number}) {
-  const cor = RCOR[r];
-  if(r==='lendario') return <Crown size={size} color={cor} weight="fill"/>;
-  if(r==='epico')    return <Lightning size={size} color={cor} weight="fill"/>;
-  if(r==='raro')     return <Medal size={size} color={cor} weight="fill"/>;
-  return <SealCheck size={size} color={cor} weight="fill"/>;
+  const { cor, Icon } = RAR[r];
+  return <Icon size={size} style={{color:cor}}/>;
 }
 
 // ── Helpers de cálculo ─────────────────────────────────────────
@@ -181,43 +178,48 @@ function AnimUnlock({selo, onClose}:{selo:Selo&{desbloqueado:boolean};onClose:()
     const t3=setTimeout(()=>setFase(3),1500);
     return()=>{clearTimeout(t1);clearTimeout(t2);clearTimeout(t3);};
   },[]);
-  const cor = RCOR[selo.raridade];
+  const cor = RAR[selo.raridade].cor;
+  const particulas = [cor,'var(--accent)','var(--warn)','var(--ink-1)'];
   return (
-    <motion.div initial={{opacity:0}} animate={{opacity:1}}
-      style={{position:'fixed',inset:0,zIndex:300,background:'rgba(6,6,8,.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem'}}
-      onClick={onClose}>
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      onClick={onClose}
+      className="fixed inset-0 z-[300] flex flex-col items-center justify-center p-8"
+      style={{background:'color-mix(in srgb, var(--bg) 97%, transparent)'}}>
       {/* Partículas */}
       {fase>=2&&Array.from({length:12}).map((_,i)=>(
         <motion.div key={i}
           initial={{opacity:.8,x:0,y:0,scale:1}}
           animate={{opacity:0,x:(Math.random()-.5)*200,y:(Math.random()-.5)*200,scale:0}}
           transition={{duration:1.2,delay:i*.05}}
-          style={{position:'absolute',width:Math.random()*8+3,height:Math.random()*8+3,borderRadius:'50%',background:[cor,'#e31b23','#facc15','#fff'][i%4],pointerEvents:'none'}}/>
+          className="absolute rounded-full pointer-events-none"
+          style={{width:Math.random()*8+3,height:Math.random()*8+3,background:particulas[i%4]}}/>
       ))}
       <motion.div initial={{scale:.5,opacity:0}} animate={{scale:fase>=1?1:.5,opacity:fase>=1?1:0}}
         transition={{type:'spring',stiffness:200,damping:15}}
-        style={{textAlign:'center',zIndex:1}}>
-        <div style={{width:120,height:120,borderRadius:'50%',background:RBG[selo.raridade],border:`2px solid ${cor}`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 1.5rem',boxShadow:`0 0 40px ${cor}55,0 0 80px ${cor}22`,fontSize:'3.5rem'}}>
+        className="text-center z-[1]">
+        <div className="w-[120px] h-[120px] rounded-full flex items-center justify-center mx-auto mb-6"
+          style={{background:mix(cor,14),border:`2px solid ${cor}`,boxShadow:`0 0 40px ${mix(cor,35)}, 0 0 80px ${mix(cor,14)}`}}>
           <RaridadeIcon r={selo.raridade} size={48}/>
         </div>
         <motion.div initial={{opacity:0}} animate={{opacity:fase>=2?1:0}} transition={{delay:.3}}
-          style={{fontSize:'.7rem',color:cor,textTransform:'uppercase',letterSpacing:'.2em',fontWeight:700,marginBottom:'.5rem'}}>
-          Selo Desbloqueado!
+          className="eyebrow mb-2" style={{color:cor}}>
+          Selo desbloqueado!
         </motion.div>
         <motion.div initial={{opacity:0,y:10}} animate={{opacity:fase>=2?1:0,y:fase>=2?0:10}} transition={{delay:.4}}
-          style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',textTransform:'uppercase',color:'#fff',lineHeight:1,marginBottom:'.5rem'}}>
+          className="font-display font-bold text-[1.9rem] tracking-tight leading-tight text-ink-1 mb-2">
           {selo.title}
         </motion.div>
         <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:.6}}
-          style={{fontSize:'.88rem',color:'#9898a8',maxWidth:260,lineHeight:1.5,margin:'0 auto 1.5rem'}}>
+          className="text-[0.88rem] text-ink-2 max-w-[260px] leading-relaxed mx-auto mb-6">
           {selo.desc}
         </motion.div>
         <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:.8}}
-          style={{display:'inline-block',background:RBG[selo.raridade],border:`1px solid ${RBORDER[selo.raridade]}`,borderRadius:999,padding:'.35rem .9rem',fontSize:'.65rem',color:cor,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>
-          {selo.raridade}
+          className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-[0.1em]"
+          style={{background:mix(cor,12),borderColor:mix(cor,30),color:cor}}>
+          <RaridadeIcon r={selo.raridade} size={11}/>{RAR[selo.raridade].label}
         </motion.div>
         <motion.div initial={{opacity:0}} animate={{opacity:fase>=3?1:0}} transition={{delay:1.2}}
-          style={{marginTop:'2rem',fontSize:'.75rem',color:'#484858'}}>
+          className="mt-8 text-[0.75rem] text-ink-3">
           Toque para continuar
         </motion.div>
       </motion.div>
@@ -227,6 +229,7 @@ function AnimUnlock({selo, onClose}:{selo:Selo&{desbloqueado:boolean};onClose:()
 
 // ── Página ─────────────────────────────────────────────────────
 export default function DarkSelosPage() {
+  const router = useRouter();
   const [uid,       setUid]       = useState<string|null>(null);
   const [loading,   setLoading]   = useState(true);
   const [history,   setHistory]   = useState<Record<string,HistEntry>>({});
@@ -239,7 +242,6 @@ export default function DarkSelosPage() {
   const [selosFirebase, setSelosFirebase] = useState<Record<string,boolean>>({});
   const [catAtiva,  setCatAtiva]  = useState('todos');
   const [seloAnim,  setSeloAnim]  = useState<(Selo&{desbloqueado:boolean})|null>(null);
-  const [featuredId,setFeaturedId]= useState<string|null>(null);
 
   useEffect(()=>{
     return onAuthStateChanged(auth, async u=>{
@@ -349,13 +351,22 @@ export default function DarkSelosPage() {
   // ── LOADING ──────────────────────────────────────────────────
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
     </PageShell>
   );
 
+  // ── NÃO LOGADO ───────────────────────────────────────────────
+  if(!uid) return (
+    <PageShell>
+      <PageHeader title="DarkSelos" subtitle="Suas conquistas no ferro"/>
+      <EmptyState
+        icon={<LogIn size={40}/>}
+        title="Entre para ver seus selos"
+        subtitle="Faça login para acompanhar suas conquistas."
+        action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
+    </PageShell>
+  );
 
   return (
     <PageShell>
@@ -363,100 +374,84 @@ export default function DarkSelosPage() {
         {seloAnim&&<AnimUnlock selo={seloAnim} onClose={()=>setSeloAnim(null)}/>}
       </AnimatePresence>
 
-      {/* Header */}
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{marginBottom:'1.25rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-          DARK<span style={{color:'#e31b23'}}>SELOS</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.4rem'}}>
-          <Trophy size={11} color="#7a7a8a"/> {totalUnlock}/{totalSelos} selos · {pct}% completo
-        </div>
-      </motion.div>
+      <PageHeader
+        title="DarkSelos"
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            <Trophy size={12}/> {totalUnlock}/{totalSelos} selos · {pct}% completo
+          </span>
+        }
+      />
+
       {/* Stats rápidos */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.1}}
-        style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.4rem',marginBottom:'.75rem'}}>
-        {[
-          {val:extra.totalTreinos, lbl:'Treinos',  cor:'#e31b23'},
-          {val:extra.streak,       lbl:'Streak',   cor:'#f97316'},
-          {val:extra.prCount,      lbl:'PRs',      cor:'#a78bfa'},
-          {val:extra.cardioCount,  lbl:'Cardio',   cor:'#34d399'},
-        ].map((s,i)=>(
-          <motion.div key={i} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:.12+i*.04}}>
-            <Card style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:10}}>
-              <CardContent style={{padding:'.5rem',textAlign:'center'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',color:s.cor,lineHeight:1}}>{s.val}</div>
-                <div style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.lbl}</div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.08}}
+        className="grid grid-cols-2 gap-2.5 mb-6">
+        <StatTile value={extra.totalTreinos} label="Treinos" tone="accent" icon={<Dumbbell size={16}/>}/>
+        <StatTile value={extra.streak} label="Streak" tone="warn" icon={<Flame size={16}/>}/>
+        <StatTile value={extra.prCount} label="PRs" tone="info" icon={<TrendingUp size={16}/>}/>
+        <StatTile value={extra.cardioCount} label="Cardio" tone="ok" icon={<HeartPulse size={16}/>}/>
       </motion.div>
 
       {/* Filtros de categoria */}
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.14}}
-        style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'1rem'}}>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.12}}
+        className="flex gap-1.5 flex-wrap mb-6">
         {CATS.map(cat=>(
           <motion.button key={cat.id} whileTap={{scale:.92}} onClick={()=>setCatAtiva(cat.id)}
-            style={{padding:'.3rem .65rem',borderRadius:8,border:`1px solid ${catAtiva===cat.id?'#e31b23':'#2e2e38'}`,background:catAtiva===cat.id?'rgba(227,27,35,.15)':'transparent',color:catAtiva===cat.id?'#e31b23':'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.72rem',cursor:'pointer',outline:'none',textTransform:'uppercase' as const}}>
+            className={catAtiva===cat.id?'chip chip-active':'chip'}>
             {cat.label}
           </motion.button>
         ))}
       </motion.div>
 
       {/* Grid de selos */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'.5rem'}}>
+      <div className="grid grid-cols-2 gap-2.5">
         {selosFiltrados.map((selo,i)=>{
           const done = unlocked.has(selo.id);
-          const cor  = RCOR[selo.raridade];
+          const { cor, label } = RAR[selo.raridade];
           return (
             <motion.div key={selo.id}
               initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.03,.3)}}
               whileTap={{scale:.97}}
               onClick={()=>done&&setSeloAnim({...selo,desbloqueado:done})}
-              style={{cursor:done?'pointer':'default'}}>
-              <Card style={{
-                background:done?RBG[selo.raridade]:'rgba(255,255,255,.02)',
-                border:`1px solid ${done?RBORDER[selo.raridade]:'#1a1a20'}`,
-                borderRadius:14,
-                opacity:done?1:.55,
-                height:'100%',
-              }}>
-                <CardContent style={{padding:'.85rem .75rem'}}>
-                  {/* Ícone + raridade */}
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem'}}>
-                    <div style={{width:40,height:40,borderRadius:10,background:done?`${cor}22`:'rgba(255,255,255,.04)',border:`1px solid ${done?`${cor}44`:'#2e2e38'}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      {done
-                        ? <RaridadeIcon r={selo.raridade} size={20}/>
-                        : <Lock size={16} color="#484858"/>
-                      }
-                    </div>
-                    <div style={{display:'flex',alignItems:'center',gap:'.2rem',background:done?RBG[selo.raridade]:'rgba(255,255,255,.04)',border:`1px solid ${done?RBORDER[selo.raridade]:'#2e2e38'}`,borderRadius:6,padding:'2px 6px'}}>
-                      <RaridadeIcon r={selo.raridade} size={10}/>
-                      <span style={{fontSize:'.52rem',color:done?cor:'#484858',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.06em'}}>{selo.raridade}</span>
-                    </div>
+              className={done?'cursor-pointer':'cursor-default'}>
+              <div
+                className={`h-full rounded-2xl border p-3 ${done?'':'bg-surface-1 border-line opacity-55'}`}
+                style={done?{background:mix(cor,10),borderColor:mix(cor,28)}:undefined}>
+                {/* Ícone + raridade */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${done?'':'bg-surface-2 border-line'}`}
+                    style={done?{background:mix(cor,16),borderColor:mix(cor,35)}:undefined}>
+                    {done
+                      ? <RaridadeIcon r={selo.raridade} size={20}/>
+                      : <Lock size={16} className="text-ink-3"/>
+                    }
                   </div>
-                  {/* Título */}
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.9rem',color:done?'#f0f0f2':'#484858',textTransform:'uppercase' as const,lineHeight:1.1,marginBottom:'.3rem'}}>
-                    {selo.title}
+                  <div className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 ${done?'':'bg-surface-2 border-line'}`}
+                    style={done?{background:mix(cor,12),borderColor:mix(cor,28)}:undefined}>
+                    <RaridadeIcon r={selo.raridade} size={10}/>
+                    <span className={`text-[0.52rem] font-bold uppercase tracking-[0.06em] ${done?'':'text-ink-3'}`}
+                      style={done?{color:cor}:undefined}>{label}</span>
                   </div>
-                  {/* Desc */}
-                  <div style={{fontSize:'.62rem',color:done?'#9898a8':'#2e2e38',lineHeight:1.4}}>
-                    {selo.desc}
+                </div>
+                {/* Título */}
+                <div className={`font-display font-semibold text-[0.9rem] leading-tight mb-1 ${done?'text-ink-1':'text-ink-3'}`}>
+                  {selo.title}
+                </div>
+                {/* Desc */}
+                <div className={`text-[0.64rem] leading-snug ${done?'text-ink-2':'text-ink-3'}`}>
+                  {selo.desc}
+                </div>
+                {/* Badge desbloqueado */}
+                {done&&(
+                  <div className="mt-2 flex items-center gap-1 text-[0.58rem] font-semibold" style={{color:cor}}>
+                    <BadgeCheck size={12}/> Desbloqueado
                   </div>
-                  {/* Badge desbloqueado */}
-                  {done&&(
-                    <div style={{marginTop:'.5rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                      <SealCheck size={12} color={cor} weight="fill"/>
-                      <span style={{fontSize:'.58rem',color:cor,fontWeight:700}}>Desbloqueado</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                )}
+              </div>
             </motion.div>
           );
         })}
       </div>
-
     </PageShell>
   );
 }

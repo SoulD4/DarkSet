@@ -1,6 +1,9 @@
-import Drawer from './Drawer';
-import BottomNav from './BottomNav';
+import { TopBar, TabBar } from './AppChrome';
 
+/**
+ * Shell padrão de todas as páginas: TopBar fixa + conteúdo + TabBar.
+ * `hideBottomNav` para telas imersivas (sessão de treino, share, timers).
+ */
 export default function PageShell({
   children,
   className = '',
@@ -11,26 +14,20 @@ export default function PageShell({
   hideBottomNav?: boolean;
 }) {
   return (
-    <div style={{ minHeight: '100dvh', background: '#060608' }}>
-      <Drawer />
+    <div className="min-h-[100dvh] bg-bg">
+      <TopBar />
       <main
-        className={className}
+        className={`px-4 max-w-[480px] mx-auto overflow-x-hidden ${className}`}
         style={{
-          paddingTop: 'calc(max(env(safe-area-inset-top), 0px) + 56px)',
-          paddingLeft: '1rem',
-          paddingRight: '1rem',
-          // Espaço para bottom nav (60px) + safe area + margem extra
+          paddingTop: 'calc(max(env(safe-area-inset-top), 0px) + 64px)',
           paddingBottom: hideBottomNav
             ? '2rem'
-            : 'calc(max(env(safe-area-inset-bottom), 0px) + 76px)',
-          maxWidth: 480,
-          overflowX: 'hidden',
-          margin: '0 auto',
+            : 'calc(max(env(safe-area-inset-bottom), 0px) + 92px)',
         }}
       >
         {children}
       </main>
-      {!hideBottomNav && <BottomNav />}
+      {!hideBottomNav && <TabBar />}
     </div>
   );
 }

@@ -1,30 +1,29 @@
 'use client';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, addDoc, collection,
   onSnapshot, query, orderBy, limit,
   serverTimestamp, where, getDocs,
-  updateDoc, arrayUnion, Timestamp
+  updateDoc
 } from 'firebase/firestore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   Users, Link2, Copy, Check, LogOut,
-  Send, Plus, X, Trophy, Flame,
-  MessageCircle, ChevronRight, Clock,
+  Send, Trophy, Flame, MessageCircle, Clock,
   Dumbbell, CheckCircle2, UserPlus,
   Medal, Target, Crown, Activity,
-  Lock, Eye, EyeOff, Loader2, AlertCircle
+  Lock, Eye, EyeOff, Loader2, AlertCircle,
+  Swords, Rocket, Flag
 } from 'lucide-react';
-import {
-  Sword, UsersThree, ChatCircle,
-  RocketLaunch, Flag
-} from '@phosphor-icons/react';
 
 // ── Tipos ─────────────────────────────────────────────────────
 type SquadInfo = {
@@ -98,24 +97,68 @@ const fmtTempo = (ts: any): string => {
 };
 
 // ── Componentes auxiliares ─────────────────────────────────────
-function Avatar({initials,size=36,cor='#e31b23'}:{initials:string;size?:number;cor?:string}) {
+type AvatarTone = 'accent'|'muted'|'gold';
+const AVATAR_TONES: Record<AvatarTone,string> = {
+  accent: 'bg-accent-soft border-accent/30 text-accent',
+  muted:  'bg-surface-3 border-line text-ink-3',
+  gold:   'bg-warn-soft border-warn/30 text-warn',
+};
+function Avatar({initials,size=36,tone='accent'}:{initials:string;size?:number;tone?:AvatarTone}) {
   return (
-    <div style={{width:size,height:size,borderRadius:'50%',background:`${cor}22`,border:`1px solid ${cor}44`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:size*0.38,color:cor}}>
+    <div
+      style={{width:size,height:size,fontSize:size*0.36}}
+      className={`rounded-full border flex items-center justify-center shrink-0 font-display font-bold ${AVATAR_TONES[tone]}`}
+    >
       {initials}
     </div>
   );
 }
 
 function DesafioIcon({tipo}:{tipo:string}) {
-  if(tipo==='treino') return <Dumbbell size={22} color="#e31b23"/>;
-  if(tipo==='cardio') return <Activity  size={22} color="#f97316"/>;
-  if(tipo==='streak') return <Flame     size={22} color="#facc15"/>;
-  if(tipo==='pr')     return <Trophy    size={22} color="#a78bfa"/>;
-  return <Target size={22} color="#7a7a8a"/>;
+  if(tipo==='treino') return <Dumbbell size={20} className="text-accent"/>;
+  if(tipo==='cardio') return <Activity size={20} className="text-info"/>;
+  if(tipo==='streak') return <Flame    size={20} className="text-warn"/>;
+  if(tipo==='pr')     return <Trophy   size={20} className="text-ok"/>;
+  return <Target size={20} className="text-ink-3"/>;
+}
+
+function FieldLabel({children}:{children:React.ReactNode}) {
+  return <label className="eyebrow flex items-center gap-1.5 mb-1.5">{children}</label>;
+}
+
+function ErroInline({msg}:{msg:string}) {
+  if(!msg) return null;
+  return (
+    <div className="flex items-center gap-1.5 text-danger text-[0.78rem] mb-3">
+      <AlertCircle size={14}/>{msg}
+    </div>
+  );
+}
+
+/** Bottom-sheet padrão */
+function Sheet({onClose,children}:{onClose:()=>void;children:React.ReactNode}) {
+  return (
+    <motion.div
+      initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      className="fixed inset-0 z-[200] bg-bg/85 backdrop-blur-sm flex items-end"
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
+        transition={{type:'spring',stiffness:300,damping:32}}
+        className="bg-surface-1 border-t border-line rounded-t-3xl w-full p-6 max-h-[85vh] overflow-y-auto"
+      >
+        <div className="w-10 h-1 bg-surface-3 rounded-full mx-auto mb-4"/>
+        {children}
+      </motion.div>
+    </motion.div>
+  );
 }
 
 // ── Página principal ───────────────────────────────────────────
 export default function DarkSquadPage() {
+  const router = useRouter();
+
   // Auth + user
   const [uid,          setUid]          = useState<string|null>(null);
   const [userName,     setUserName]     = useState('');
@@ -145,10 +188,9 @@ export default function DarkSquadPage() {
   const [erro,         setErro]         = useState('');
   const [copiado,      setCopiado]      = useState(false);
   const [salvando,     setSalvando]     = useState(false);
-  const [toast,        setToast]        = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
 
-  const showToast = (m:string)=>{ setToast(m); setTimeout(()=>setToast(''),2500); };
+  const { toast, show } = useToast();
 
   // ── Auth + carregar squad ──────────────────────────────────
   useEffect(()=>{
@@ -321,7 +363,7 @@ export default function DarkSquadPage() {
         uid, nome:userName, initials:userInitials,
         treinos:0, checkinHoje:false, ultimo:'Hoje', dono:true,
       }]);
-      showToast('Squad criado!');
+      show('Squad criado!');
     } catch(e){ setErro('Erro ao criar squad. Tente novamente.'); }
     setSalvando(false);
   };
@@ -369,7 +411,7 @@ export default function DarkSquadPage() {
       });
       setSquadId(squadDoc.id);
       setShowEntrar(false); setCodigoInput(''); setSenhaInput('');
-      showToast('Bem-vindo ao squad!');
+      show('Bem-vindo ao squad!');
     } catch(e){ setErro('Erro ao entrar. Tente novamente.'); }
     setSalvando(false);
   };
@@ -406,7 +448,7 @@ export default function DarkSquadPage() {
         criadoEm:serverTimestamp(),
       });
     } catch(e){ setCheckin(false); }
-    showToast('Presença marcada!');
+    show('Presença marcada!');
   };
 
   // ── Sair do squad ──────────────────────────────────────────
@@ -417,149 +459,164 @@ export default function DarkSquadPage() {
     } catch(_){}
     setSquadId(null); setSquad(null);
     setMembros([]); setChatMsgs([]); setRanking([]);
-    showToast('Saiu do squad');
+    show('Saiu do squad');
   };
 
   const copiarCodigo = ()=>{
     navigator.clipboard?.writeText(squad?.codigo||'').catch(()=>{});
     setCopiado(true); setTimeout(()=>setCopiado(false),2000);
-    showToast('Código copiado!');
+    show('Código copiado!');
   };
 
   const checkinCount = membros.filter(m=>m.checkinHoje).length + (checkinFeito&&!membros.find(m=>m.uid===uid)?.checkinHoje?1:0);
 
   const TABS: {id:Tab;label:string;Icon:any;badge?:number}[] = [
-    {id:'feed',     label:'Feed',    Icon:RocketLaunch},
-    {id:'ranking',  label:'Rank',    Icon:Trophy      },
-    {id:'chat',     label:'Chat',    Icon:ChatCircle  },
-    {id:'desafios', label:'Desafios',Icon:Flag        },
-    {id:'membros',  label:'Time',    Icon:UsersThree  },
+    {id:'feed',     label:'Feed',    Icon:Rocket       },
+    {id:'ranking',  label:'Rank',    Icon:Trophy       },
+    {id:'chat',     label:'Chat',    Icon:MessageCircle},
+    {id:'desafios', label:'Desafios',Icon:Flag         },
+    {id:'membros',  label:'Time',    Icon:Users        },
   ];
 
   // ── Loading ────────────────────────────────────────────────
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
+    </PageShell>
+  );
+
+  // ── Não logado ─────────────────────────────────────────────
+  if(!uid) return (
+    <PageShell>
+      <PageHeader title="DarkSquad" subtitle="Treine em grupo e compita no ranking"/>
+      <EmptyState
+        icon={<Swords size={40}/>}
+        title="Faça login para acessar"
+        subtitle="Entre na sua conta para criar ou participar de um squad."
+        action={<Button onClick={()=>router.push('/login')}>Entrar</Button>}
+      />
     </PageShell>
   );
 
   // ── Sem squad ──────────────────────────────────────────────
   if(!squadId) return (
     <PageShell>
+      <ToastViewport toast={toast}/>
       <AnimatePresence>
         {/* Modal entrar */}
         {showEntrar && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',backdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end'}}
-            onClick={e=>{if(e.target===e.currentTarget){setShowEntrar(false);setErro('');}}}>
-            <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
-              transition={{type:'spring',stiffness:300,damping:32}}
-              style={{background:'#0f0f13',borderTop:'1px solid #2e2e38',borderRadius:'24px 24px 0 0',width:'100%',padding:'1.5rem'}}>
-              <div style={{width:40,height:4,background:'rgba(255,255,255,.15)',borderRadius:2,margin:'0 auto 1rem'}}/>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.5rem'}}>
-                <Link2 size={18} color="#e31b23"/> Entrar com código
-              </div>
-              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4}}>Código do Squad</label>
-              <input value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.toUpperCase());setErro('');}}
-                placeholder="Ex: DWAR2026"
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.2rem',outline:'none',fontFamily:'monospace',letterSpacing:'.15em',marginBottom:'.65rem'}}/>
-              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4}}>Senha <span style={{color:'#484858',fontWeight:400,fontSize:'.58rem',textTransform:'none'}}>(se o squad tiver)</span></label>
-              <div style={{position:'relative',marginBottom:'1rem'}}>
-                <input value={senhaInput} onChange={e=>{setSenhaInput(e.target.value);setErro('');}}
-                  type={mostrarSenha?'text':'password'} placeholder="Deixe em branco se não tiver"
-                  style={{width:'100%',background:'rgba(0,0,0,.4)',border:`1px solid ${erro?'rgba(227,27,35,.5)':'#2e2e38'}`,borderRadius:10,color:'#f0f0f2',padding:'12px 40px 12px 13px',fontSize:'1rem',outline:'none'}}/>
-                <button onClick={()=>setMostrarSenha(v=>!v)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'#484858',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
-                  {mostrarSenha?<EyeOff size={16}/>:<Eye size={16}/>}
-                </button>
-              </div>
-              {erro&&<div style={{display:'flex',alignItems:'center',gap:'.4rem',color:'#e31b23',fontSize:'.78rem',marginBottom:'.75rem'}}><AlertCircle size={14}/>{erro}</div>}
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.97}} onClick={()=>{setShowEntrar(false);setErro('');setCodigoInput('');setSenhaInput('');}}
-                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-                  Cancelar
-                </motion.button>
-                <motion.button whileTap={{scale:.97}} onClick={entrarSquad} disabled={salvando||!codigoInput.trim()}
-                  style={{flex:2,background:codigoInput.trim()?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:codigoInput.trim()?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                  {salvando?<Loader2 size={16} className="animate-spin"/>:<><UserPlus size={16}/> Entrar</>}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <Sheet onClose={()=>{setShowEntrar(false);setErro('');}}>
+            <div className="font-display font-bold text-xl text-ink-1 mb-4 flex items-center gap-2">
+              <Link2 size={18} className="text-accent"/> Entrar com código
+            </div>
+            <FieldLabel>Código do Squad</FieldLabel>
+            <input
+              value={codigoInput}
+              onChange={e=>{setCodigoInput(e.target.value.toUpperCase());setErro('');}}
+              placeholder="Ex: DWAR2026"
+              className={`field font-mono tracking-[0.15em] text-lg mb-3 ${erro?'border-danger/50':''}`}
+            />
+            <FieldLabel>Senha <span className="text-ink-3 font-normal normal-case tracking-normal">(se o squad tiver)</span></FieldLabel>
+            <div className="relative mb-4">
+              <input
+                value={senhaInput}
+                onChange={e=>{setSenhaInput(e.target.value);setErro('');}}
+                type={mostrarSenha?'text':'password'}
+                placeholder="Deixe em branco se não tiver"
+                className={`field pr-11 ${erro?'border-danger/50':''}`}
+              />
+              <button
+                onClick={()=>setMostrarSenha(v=>!v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 flex items-center"
+                aria-label={mostrarSenha?'Ocultar senha':'Mostrar senha'}
+              >
+                {mostrarSenha?<EyeOff size={16}/>:<Eye size={16}/>}
+              </button>
+            </div>
+            <ErroInline msg={erro}/>
+            <div className="flex gap-2.5">
+              <Button variant="ghost" className="flex-1" onClick={()=>{setShowEntrar(false);setErro('');setCodigoInput('');setSenhaInput('');}}>
+                Cancelar
+              </Button>
+              <Button className="flex-[2]" onClick={entrarSquad} disabled={salvando||!codigoInput.trim()}>
+                {salvando?<Loader2 size={16} className="animate-spin"/>:<><UserPlus size={16}/> Entrar</>}
+              </Button>
+            </div>
+          </Sheet>
         )}
 
         {/* Modal criar */}
         {showCriar && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',backdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end'}}
-            onClick={e=>{if(e.target===e.currentTarget){setShowCriar(false);setErro('');}}}>
-            <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
-              transition={{type:'spring',stiffness:300,damping:32}}
-              style={{background:'#0f0f13',borderTop:'1px solid #2e2e38',borderRadius:'24px 24px 0 0',width:'100%',padding:'1.5rem',maxHeight:'85vh',overflowY:'auto'}}>
-              <div style={{width:40,height:4,background:'rgba(255,255,255,.15)',borderRadius:2,margin:'0 auto 1rem'}}/>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'.5rem'}}>
-                <Sword size={18} color="#e31b23" weight="fill"/> Criar Squad
-              </div>
-              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'block',marginBottom:4}}>Nome do Squad</label>
-              <input value={nomeInput} onChange={e=>{setNomeInput(e.target.value);setErro('');}}
-                placeholder="Ex: Dark Warriors" maxLength={24}
-                style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 13px',fontSize:'1.1rem',outline:'none',marginBottom:'.75rem'}}/>
-              <label style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.4rem',marginBottom:4}}>
-                <Lock size={11}/> Senha <span style={{color:'#484858',fontWeight:400,fontSize:'.58rem',textTransform:'none'}}>(opcional)</span>
-              </label>
-              <div style={{position:'relative',marginBottom:'1rem'}}>
-                <input value={senhaNovoInput} onChange={e=>setSenhaNovoInput(e.target.value)}
-                  type={mostrarSenha?'text':'password'} placeholder="Deixe em branco para squad aberto"
-                  maxLength={20}
-                  style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',padding:'12px 40px 12px 13px',fontSize:'1rem',outline:'none'}}/>
-                <button onClick={()=>setMostrarSenha(v=>!v)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'#484858',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
-                  {mostrarSenha?<EyeOff size={16}/>:<Eye size={16}/>}
-                </button>
-              </div>
-              <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:10,padding:'.65rem',marginBottom:'1rem',fontSize:'.7rem',color:'#7a7a8a',lineHeight:1.6,display:'flex',gap:'.4rem'}}>
-                <Link2 size={13} style={{flexShrink:0,marginTop:2}}/> Um código único será gerado para você convidar os membros.
-              </div>
-              {erro&&<div style={{display:'flex',alignItems:'center',gap:'.4rem',color:'#e31b23',fontSize:'.78rem',marginBottom:'.75rem'}}><AlertCircle size={14}/>{erro}</div>}
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.97}} onClick={()=>{setShowCriar(false);setErro('');setNomeInput('');setSenhaNovoInput('');}}
-                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-                  Cancelar
-                </motion.button>
-                <motion.button whileTap={{scale:.97}} onClick={criarSquad} disabled={!nomeInput.trim()||salvando}
-                  style={{flex:2,background:nomeInput.trim()?'linear-gradient(135deg,#e31b23,#b31217)':'rgba(227,27,35,.2)',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:nomeInput.trim()?'pointer':'not-allowed',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                  {salvando?<Loader2 size={16}/>:<><Sword size={16} weight="fill"/> Criar</>}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <Sheet onClose={()=>{setShowCriar(false);setErro('');}}>
+            <div className="font-display font-bold text-xl text-ink-1 mb-4 flex items-center gap-2">
+              <Swords size={18} className="text-accent"/> Criar Squad
+            </div>
+            <FieldLabel>Nome do Squad</FieldLabel>
+            <input
+              value={nomeInput}
+              onChange={e=>{setNomeInput(e.target.value);setErro('');}}
+              placeholder="Ex: Dark Warriors" maxLength={24}
+              className="field mb-3"
+            />
+            <FieldLabel>
+              <Lock size={11}/> Senha <span className="text-ink-3 font-normal normal-case tracking-normal">(opcional)</span>
+            </FieldLabel>
+            <div className="relative mb-4">
+              <input
+                value={senhaNovoInput}
+                onChange={e=>setSenhaNovoInput(e.target.value)}
+                type={mostrarSenha?'text':'password'}
+                placeholder="Deixe em branco para squad aberto"
+                maxLength={20}
+                className="field pr-11"
+              />
+              <button
+                onClick={()=>setMostrarSenha(v=>!v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 flex items-center"
+                aria-label={mostrarSenha?'Ocultar senha':'Mostrar senha'}
+              >
+                {mostrarSenha?<EyeOff size={16}/>:<Eye size={16}/>}
+              </button>
+            </div>
+            <div className="card-2 p-3 mb-4 text-[0.72rem] text-ink-2 leading-relaxed flex gap-2">
+              <Link2 size={13} className="shrink-0 mt-0.5"/> Um código único será gerado para você convidar os membros.
+            </div>
+            <ErroInline msg={erro}/>
+            <div className="flex gap-2.5">
+              <Button variant="ghost" className="flex-1" onClick={()=>{setShowCriar(false);setErro('');setNomeInput('');setSenhaNovoInput('');}}>
+                Cancelar
+              </Button>
+              <Button className="flex-[2]" onClick={criarSquad} disabled={!nomeInput.trim()||salvando}>
+                {salvando?<Loader2 size={16} className="animate-spin"/>:<><Swords size={16}/> Criar</>}
+              </Button>
+            </div>
+          </Sheet>
         )}
       </AnimatePresence>
 
       {/* Tela sem squad */}
-      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
-        style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'65vh',textAlign:'center',gap:'1.25rem',padding:'1rem'}}>
+      <motion.div
+        initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+        className="flex flex-col items-center justify-center min-h-[65vh] text-center gap-5 p-4"
+      >
         <motion.div animate={{scale:[1,1.08,1]}} transition={{duration:2,repeat:Infinity,ease:'easeInOut'}}>
-          <Sword size={64} color="#e31b23" weight="fill"/>
+          <Swords size={56} className="text-accent"/>
         </motion.div>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-            DARK<span style={{color:'#e31b23'}}>SQUAD</span>
+          <div className="font-display font-bold text-[2rem] leading-none tracking-tight text-ink-1">
+            Dark<span className="text-accent">Squad</span>
           </div>
-          <div style={{fontSize:'.88rem',color:'#7a7a8a',maxWidth:280,lineHeight:1.6,marginTop:'.5rem'}}>
+          <p className="text-[0.88rem] text-ink-2 max-w-[280px] leading-relaxed mt-2 mx-auto">
             Treine em grupo, compita no ranking e motive uns aos outros
-          </div>
+          </p>
         </div>
-        <div style={{display:'grid',gap:'.6rem',width:'100%',maxWidth:300}}>
-          <motion.button whileTap={{scale:.97}} onClick={()=>setShowCriar(true)}
-            style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'14px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',outline:'none',boxShadow:'0 4px 20px rgba(227,27,35,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
-            <Sword size={18} weight="fill"/> Criar Squad
-          </motion.button>
-          <motion.button whileTap={{scale:.97}} onClick={()=>setShowEntrar(true)}
-            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:14,padding:'14px',color:'#f0f0f2',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+        <div className="grid gap-2.5 w-full max-w-[300px]">
+          <Button full size="lg" onClick={()=>setShowCriar(true)}>
+            <Swords size={18}/> Criar Squad
+          </Button>
+          <Button full size="lg" variant="ghost" onClick={()=>setShowEntrar(true)}>
             <Link2 size={18}/> Entrar com código
-          </motion.button>
+          </Button>
         </div>
       </motion.div>
     </PageShell>
@@ -568,44 +625,38 @@ export default function DarkSquadPage() {
   // ── Com squad ──────────────────────────────────────────────
   return (
     <PageShell>
-      {/* Toast */}
-      <AnimatePresence>
-        {toast&&(
-          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0}}
-            style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:300,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',gap:'.4rem',pointerEvents:'none'}}>
-            <CheckCircle2 size={14}/>{toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastViewport toast={toast}/>
 
       {/* Modal código */}
       <AnimatePresence>
         {showCodigo&&(
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.9)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}}
-            onClick={e=>{if(e.target===e.currentTarget)setShowCodigo(false);}}>
-            <motion.div initial={{scale:.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.9,opacity:0}}
-              style={{background:'#0f0f13',border:'1px solid #2e2e38',borderRadius:20,padding:'1.5rem',width:'100%',maxWidth:340,textAlign:'center'}}>
-              <Link2 size={32} color="#e31b23" style={{margin:'0 auto .75rem'}}/>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',marginBottom:'.25rem'}}>Código do Squad</div>
-              <div style={{fontSize:'.78rem',color:'#7a7a8a',marginBottom:'1.25rem'}}>Compartilhe com seus amigos</div>
-              <div style={{fontFamily:'monospace',fontWeight:900,fontSize:'2rem',letterSpacing:'.2em',color:'#e31b23',background:'rgba(227,27,35,.08)',border:'1px solid rgba(227,27,35,.2)',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
+          <motion.div
+            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-bg/85 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={e=>{if(e.target===e.currentTarget)setShowCodigo(false);}}
+          >
+            <motion.div
+              initial={{scale:.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.9,opacity:0}}
+              className="card p-6 w-full max-w-[340px] text-center shadow-float"
+            >
+              <Link2 size={32} className="text-accent mx-auto mb-3"/>
+              <div className="font-display font-bold text-xl text-ink-1 mb-1">Código do Squad</div>
+              <div className="text-[0.78rem] text-ink-2 mb-5">Compartilhe com seus amigos</div>
+              <div className="font-mono font-bold text-[2rem] tracking-[0.2em] text-accent bg-accent-soft border border-accent/30 rounded-xl p-4 mb-4 tnum">
                 {squad?.codigo||'...'}
               </div>
               {squad?.temSenha&&(
-                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem',fontSize:'.72rem',color:'#facc15',background:'rgba(250,204,21,.08)',border:'1px solid rgba(250,204,21,.2)',borderRadius:8,padding:'.4rem .75rem',marginBottom:'1rem'}}>
+                <div className="flex items-center justify-center gap-1.5 text-[0.72rem] text-warn bg-warn-soft border border-warn/30 rounded-lg px-3 py-1.5 mb-4">
                   <Lock size={13}/> Squad com senha
                 </div>
               )}
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.95}} onClick={copiarCodigo}
-                  style={{flex:1,background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:10,padding:'11px',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
+              <div className="flex gap-2.5">
+                <Button variant="soft" className="flex-1" size="sm" onClick={copiarCodigo}>
                   {copiado?<><Check size={15}/> Copiado!</>:<><Copy size={15}/> Copiar</>}
-                </motion.button>
-                <motion.button whileTap={{scale:.95}} onClick={()=>setShowCodigo(false)}
-                  style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:10,padding:'11px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
+                </Button>
+                <Button variant="ghost" className="flex-1" size="sm" onClick={()=>setShowCodigo(false)}>
                   Fechar
-                </motion.button>
+                </Button>
               </div>
             </motion.div>
           </motion.div>
@@ -613,86 +664,94 @@ export default function DarkSquadPage() {
       </AnimatePresence>
 
       {/* Header squad */}
-      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>
-        <Card style={{background:'linear-gradient(135deg,rgba(227,27,35,.12),rgba(227,27,35,.04))',border:'1px solid rgba(227,27,35,.2)',borderRadius:16,marginBottom:'.75rem',overflow:'hidden',position:'relative'}}>
-          <div style={{position:'absolute',top:-20,right:-20,opacity:.05,pointerEvents:'none'}}>
-            <Sword size={120} color="#e31b23" weight="fill"/>
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}>
+        <div className="card relative overflow-hidden mb-3 border-accent/30">
+          <div className="absolute -top-5 -right-5 opacity-[0.05] pointer-events-none text-accent">
+            <Swords size={120}/>
           </div>
-          <CardContent style={{padding:'1rem 1.1rem',position:'relative'}}>
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.5rem'}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.5rem',textTransform:'uppercase',color:'#fff',lineHeight:1}}>
+          <div className="relative p-4">
+            <div className="flex items-start justify-between mb-2">
+              <div className="min-w-0">
+                <div className="font-display font-bold text-2xl leading-none tracking-tight text-ink-1 truncate">
                   {squad?.nome||'Carregando...'}
                 </div>
-                <div style={{fontSize:'.65rem',color:'rgba(227,27,35,.7)',fontWeight:700,marginTop:'2px',letterSpacing:'.06em'}}>
+                <div className="text-[0.68rem] text-accent font-bold tracking-wide mt-1 flex items-center gap-1.5">
                   {squad?.tag}
-                  {squad?.temSenha&&<span style={{marginLeft:'.5rem',color:'#facc15'}}><Lock size={10}/></span>}
+                  {squad?.temSenha&&<Lock size={10} className="text-warn"/>}
                 </div>
               </div>
-              <motion.button whileTap={{scale:.95}} onClick={()=>setShowCodigo(true)}
-                style={{background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.1)',borderRadius:8,padding:'.35rem .7rem',color:'#9898a8',fontSize:'.72rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem'}}>
+              <Button size="sm" variant="ghost" className="shrink-0 ml-2" onClick={()=>setShowCodigo(true)}>
                 <Link2 size={13}/> Convidar
-              </motion.button>
+              </Button>
             </div>
-            <div style={{fontSize:'.75rem',color:'rgba(255,255,255,.4)',marginBottom:'.6rem'}}>{squad?.descricao}</div>
-            <Separator style={{background:'rgba(255,255,255,.08)',marginBottom:'.6rem'}}/>
-            <div style={{display:'flex',gap:'1rem'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'#9898a8'}}>
-                <Users size={13}/> {membros.length}/{squad?.maxMembros||20}
+            <div className="text-[0.75rem] text-ink-2 mb-2.5">{squad?.descricao}</div>
+            <div className="border-t border-line pt-2.5 flex gap-4">
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-ink-2">
+                <Users size={13}/> <span className="tnum">{membros.length}/{squad?.maxMembros||20}</span>
               </div>
-              <div style={{display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'#9898a8'}}>
-                <CheckCircle2 size={13}/> {checkinCount} check-ins hoje
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-ink-2">
+                <CheckCircle2 size={13}/> <span className="tnum">{checkinCount}</span> check-ins hoje
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Check-in */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}>
-        <motion.button whileTap={checkinFeito?{}:{scale:.98}} onClick={doCheckin} style={{
-          width:'100%',marginBottom:'.75rem',
-          background:checkinFeito?'rgba(34,197,94,.06)':'linear-gradient(135deg,#e31b23,#8b0000)',
-          border:checkinFeito?'1px solid rgba(34,197,94,.25)':'none',
-          borderRadius:14,padding:'1rem 1.2rem',cursor:checkinFeito?'default':'pointer',
-          display:'flex',alignItems:'center',justifyContent:'space-between',
-          boxShadow:checkinFeito?'none':'0 0 30px rgba(227,27,35,.2)',outline:'none',
-        }}>
-          <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
-            <div style={{width:40,height:40,borderRadius:10,background:checkinFeito?'rgba(34,197,94,.15)':'rgba(255,255,255,.12)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              {checkinFeito?<CheckCircle2 size={22} color="#4ade80"/>:<Dumbbell size={22} color="#fff"/>}
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.08}}>
+        <motion.button
+          whileTap={checkinFeito?undefined:{scale:.98}}
+          onClick={doCheckin}
+          className={`w-full mb-3 rounded-2xl p-4 flex items-center justify-between transition-colors ${
+            checkinFeito
+              ? 'bg-ok-soft border border-ok/30 cursor-default'
+              : 'bg-accent text-accent-ink shadow-volt'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              checkinFeito ? 'bg-ok-soft text-ok' : 'bg-accent-ink/10'
+            }`}>
+              {checkinFeito?<CheckCircle2 size={22}/>:<Dumbbell size={22}/>}
             </div>
-            <div style={{textAlign:'left'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:checkinFeito?'#4ade80':'#fff',letterSpacing:'.04em'}}>
+            <div className="text-left">
+              <div className={`font-display font-bold text-[1.05rem] leading-tight ${checkinFeito?'text-ok':''}`}>
                 {checkinFeito?'Presença marcada':'Marcar presença'}
               </div>
-              <div style={{fontSize:'.68rem',color:checkinFeito?'rgba(74,222,128,.5)':'rgba(255,255,255,.5)',marginTop:'2px'}}>
+              <div className={`text-[0.68rem] mt-0.5 ${checkinFeito?'text-ok/70':'text-accent-ink/70'}`}>
                 {checkinFeito?'Você apareceu hoje!':'Mostre pro squad que você foi'}
               </div>
             </div>
           </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:checkinFeito?'#4ade80':'#fff',lineHeight:1}}>{checkinCount}</div>
+          <div className={`font-display font-bold text-[2rem] leading-none tnum ${checkinFeito?'text-ok':''}`}>
+            {checkinCount}
+          </div>
         </motion.button>
       </motion.div>
 
       {/* Tabs */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.12}}
-        style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:12,padding:'3px',gap:'3px',marginBottom:'1rem'}}>
+      <motion.div
+        initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.12}}
+        className="flex card-2 p-[3px] gap-[3px] mb-4"
+      >
         {TABS.map(t=>{
           const TIcon=t.Icon;
+          const active = tab===t.id;
           return (
-            <motion.button key={t.id} whileTap={{scale:.95}} onClick={()=>setTab(t.id)} style={{
-              flex:1,padding:'.44rem .2rem',borderRadius:9,border:'none',cursor:'pointer',
-              background:tab===t.id?'rgba(227,27,35,.15)':'transparent',
-              color:tab===t.id?'#e31b23':'#484858',
-              fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,
-              fontSize:'.62rem',letterSpacing:'.03em',position:'relative',
-              boxShadow:tab===t.id?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',
-              outline:'none',display:'flex',flexDirection:'column',alignItems:'center',gap:'.12rem',
-            }}>
-              <TIcon size={15} weight={tab===t.id?'fill':'regular'} color={tab===t.id?'#e31b23':'#484858'}/>
+            <motion.button
+              key={t.id} whileTap={{scale:.95}} onClick={()=>setTab(t.id)}
+              className={`flex-1 py-1.5 px-0.5 rounded-lg relative flex flex-col items-center gap-0.5
+                font-display font-bold text-[0.62rem] tracking-wide transition-colors ${
+                active ? 'bg-accent-soft text-accent border border-accent/30' : 'text-ink-3'
+              }`}
+            >
+              <TIcon size={15}/>
               {t.label}
-              {t.badge&&<span style={{position:'absolute',top:2,right:4,background:'#e31b23',color:'#fff',borderRadius:'999px',fontSize:'.45rem',fontWeight:900,padding:'1px 4px',minWidth:13,textAlign:'center'}}>{t.badge}</span>}
+              {t.badge&&(
+                <span className="absolute top-0.5 right-1 bg-accent text-accent-ink rounded-full text-[0.45rem] font-bold px-1 min-w-[13px] text-center tnum">
+                  {t.badge}
+                </span>
+              )}
             </motion.button>
           );
         })}
@@ -704,30 +763,26 @@ export default function DarkSquadPage() {
 
           {/* FEED */}
           {tab==='feed'&&(
-            <div style={{display:'grid',gap:'.5rem'}}>
+            <div className="grid gap-2">
               {chatMsgs.length===0&&(
-                <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-                  <CardContent style={{padding:'2rem',textAlign:'center'}}>
-                    <RocketLaunch size={36} color="#484858" style={{margin:'0 auto .5rem'}}/>
-                    <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhuma atividade ainda</div>
-                    <div style={{fontSize:'.72rem',color:'#484858',marginTop:'.25rem'}}>Faça check-in para começar!</div>
-                  </CardContent>
-                </Card>
+                <EmptyState
+                  icon={<Rocket size={36}/>}
+                  title="Nenhuma atividade ainda"
+                  subtitle="Faça check-in para começar!"
+                />
               )}
               {[...chatMsgs].reverse().slice(0,20).reverse().map((f,i)=>(
-                <motion.div key={f.id} initial={{opacity:0,x:-12}} animate={{opacity:1,x:0}} transition={{delay:i*.03}}>
-                  <Card style={{background:'rgba(255,255,255,.02)',border:'1px solid #1a1a20',borderRadius:12}}>
-                    <CardContent style={{padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                      <Avatar initials={f.initials==='DS'?'DS':f.initials} size={38} cor={f.uid==='system'?'#484858':'#e31b23'}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',color:'#f0f0f2'}}>{f.nome}</div>
-                        <div style={{fontSize:'.75rem',color:'#9898a8',marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.msg}</div>
-                      </div>
-                      <div style={{fontSize:'.62rem',color:'#2e2e38',flexShrink:0,display:'flex',alignItems:'center',gap:'.2rem'}}>
-                        <Clock size={10}/>{f.tempo}
-                      </div>
-                    </CardContent>
-                  </Card>
+                <motion.div key={f.id} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.04,.4)}}>
+                  <div className="card p-3 flex items-center gap-3">
+                    <Avatar initials={f.initials} size={38} tone={f.uid==='system'?'muted':'accent'}/>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-semibold text-[0.92rem] text-ink-1">{f.nome}</div>
+                      <div className="text-[0.75rem] text-ink-2 mt-px truncate">{f.msg}</div>
+                    </div>
+                    <div className="text-[0.62rem] text-ink-3 shrink-0 flex items-center gap-1 tnum">
+                      <Clock size={10}/>{f.tempo}
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -735,82 +790,97 @@ export default function DarkSquadPage() {
 
           {/* RANKING */}
           {tab==='ranking'&&(
-            <div style={{display:'grid',gap:'.5rem'}}>
-              <Card style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:12,marginBottom:'.25rem'}}>
-                <CardContent style={{padding:'.75rem 1rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',color:'#fff'}}>
-                      {new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}
-                    </div>
-                    <div style={{fontSize:'.62rem',color:'#7a7a8a',marginTop:'1px',display:'flex',alignItems:'center',gap:'.3rem'}}><Dumbbell size={11}/> Treinos no mês</div>
+            <div className="grid gap-2">
+              <div className="card border-accent/30 p-3.5 flex justify-between items-center mb-1">
+                <div>
+                  <div className="font-display font-bold text-[0.95rem] text-ink-1 uppercase">
+                    {new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}
                   </div>
-                  <Badge style={{background:'rgba(250,204,21,.1)',color:'#facc15',border:'1px solid rgba(250,204,21,.2)',fontSize:'.65rem'}}>AO VIVO</Badge>
-                </CardContent>
-              </Card>
+                  <div className="text-[0.65rem] text-ink-2 mt-0.5 flex items-center gap-1.5">
+                    <Dumbbell size={11}/> Treinos no mês
+                  </div>
+                </div>
+                <span className="chip bg-warn-soft border-warn/30 text-warn text-[0.62rem]">AO VIVO</span>
+              </div>
               {(ranking.length>0?ranking:membros.map(m=>({...m,isMe:m.uid===uid}))).map((m,i)=>{
                 const max=ranking[0]?.treinos||1;
                 const barW=Math.max(4,Math.round((m.treinos/max)*100));
                 return (
-                  <motion.div key={m.uid} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:i*.05}}>
-                    <Card style={{background:m.isMe?'rgba(227,27,35,.06)':i===0?'rgba(250,204,21,.04)':'rgba(255,255,255,.015)',border:m.isMe?'1px solid rgba(227,27,35,.25)':i===0?'1px solid rgba(250,204,21,.15)':'1px solid #1a1a20',borderRadius:14,overflow:'hidden',position:'relative'}}>
-                      <div style={{position:'absolute',left:0,top:0,bottom:0,width:barW+'%',background:i===0?'rgba(250,204,21,.05)':m.isMe?'rgba(227,27,35,.06)':'rgba(255,255,255,.02)',pointerEvents:'none'}}/>
-                      <CardContent style={{padding:'.85rem 1rem',position:'relative',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                        <div style={{width:26,textAlign:'center',flexShrink:0}}>
-                          {i===0?<Crown size={20} color="#facc15" style={{margin:'0 auto'}}/>:
-                           i===1?<Medal size={18} color="#c0c0c0" style={{margin:'0 auto'}}/>:
-                           i===2?<Medal size={18} color="#cd7f32" style={{margin:'0 auto'}}/>:
-                           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#484858'}}>{i+1}</span>}
+                  <motion.div key={m.uid} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.04,.4)}}>
+                    <div className={`card relative overflow-hidden ${
+                      m.isMe ? 'border-accent/30' : i===0 ? 'border-warn/30' : ''
+                    }`}>
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 pointer-events-none ${
+                          i===0 ? 'bg-warn-soft/50' : m.isMe ? 'bg-accent-soft/50' : 'bg-surface-2/60'
+                        }`}
+                        style={{width:barW+'%'}}
+                      />
+                      <div className="relative p-3.5 flex items-center gap-3">
+                        <div className="w-[26px] text-center shrink-0 flex justify-center">
+                          {i===0?<Crown size={20} className="text-warn"/>:
+                           i===1?<Medal size={18} className="text-ink-2"/>:
+                           i===2?<Medal size={18} className="text-ink-3"/>:
+                           <span className="font-display font-bold text-base text-ink-3 tnum">{i+1}</span>}
                         </div>
-                        <Avatar initials={m.initials} size={36} cor={m.isMe?'#e31b23':i===0?'#facc15':'#e31b23'}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:m.isMe?'#e31b23':i===0?'#facc15':'#f0f0f2',display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
+                        <Avatar initials={m.initials} size={36} tone={i===0&&!m.isMe?'gold':'accent'}/>
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-display font-semibold text-[0.95rem] flex items-center gap-2 flex-wrap ${
+                            m.isMe ? 'text-accent' : i===0 ? 'text-warn' : 'text-ink-1'
+                          }`}>
                             {m.nome}
-                            {m.isMe&&<Badge variant="outline" style={{borderColor:'rgba(227,27,35,.3)',color:'#e31b23',fontSize:'.48rem',padding:'0 4px'}}>você</Badge>}
+                            {m.isMe&&<span className="chip chip-active text-[0.55rem] px-1.5 py-0">você</span>}
                           </div>
                         </div>
-                        <div style={{textAlign:'right',flexShrink:0}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.4rem',color:m.isMe?'#e31b23':i===0?'#facc15':'#f0f0f2',lineHeight:1}}>{m.treinos}</div>
-                          <div style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>treinos</div>
+                        <div className="text-right shrink-0">
+                          <div className={`font-display font-bold text-[1.35rem] leading-none tnum ${
+                            m.isMe ? 'text-accent' : i===0 ? 'text-warn' : 'text-ink-1'
+                          }`}>{m.treinos}</div>
+                          <div className="eyebrow mt-0.5">treinos</div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 );
               })}
               {ranking.length===0&&(
-                <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-                  <CardContent style={{padding:'2rem',textAlign:'center'}}>
-                    <Trophy size={36} color="#484858" style={{margin:'0 auto .5rem'}}/>
-                    <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhum treino registrado este mês</div>
-                  </CardContent>
-                </Card>
+                <EmptyState
+                  icon={<Trophy size={36}/>}
+                  title="Nenhum treino registrado"
+                  subtitle="Nenhum treino registrado este mês."
+                />
               )}
             </div>
           )}
 
           {/* CHAT */}
           {tab==='chat'&&(
-            <div style={{display:'flex',flexDirection:'column',gap:'.75rem'}}>
-              <div ref={chatRef} style={{display:'grid',gap:'.5rem',maxHeight:'52vh',overflowY:'auto',paddingBottom:'.25rem'}}>
+            <div className="flex flex-col gap-3">
+              <div ref={chatRef} className="grid gap-2 max-h-[52vh] overflow-y-auto pb-1">
                 {chatMsgs.length===0&&(
-                  <div style={{textAlign:'center',padding:'2rem',color:'#484858',fontSize:'.82rem'}}>
+                  <div className="text-center p-8 text-ink-3 text-[0.82rem]">
                     Nenhuma mensagem ainda. Seja o primeiro!
                   </div>
                 )}
                 {chatMsgs.map((c,i)=>(
-                  <motion.div key={c.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.02,.3)}}
-                    style={{display:'flex',alignItems:'flex-end',gap:'.5rem',flexDirection:c.meu?'row-reverse':'row'}}>
-                    {!c.meu&&<Avatar initials={c.initials} size={30} cor={c.uid==='system'?'#484858':'#e31b23'}/>}
-                    <div style={{maxWidth:'75%'}}>
-                      {!c.meu&&<div style={{fontSize:'.58rem',color:'#7a7a8a',marginBottom:'2px',marginLeft:'4px'}}>{c.nome}</div>}
-                      <div style={{
-                        background:c.uid==='system'?'rgba(255,255,255,.04)':c.meu?'rgba(227,27,35,.15)':'rgba(255,255,255,.06)',
-                        border:`1px solid ${c.uid==='system'?'#2e2e38':c.meu?'rgba(227,27,35,.25)':'#2e2e38'}`,
-                        borderRadius:c.meu?'14px 14px 4px 14px':c.uid==='system'?'10px':'14px 14px 14px 4px',
-                        padding:'.6rem .85rem',
-                      }}>
-                        <div style={{fontSize:'.85rem',color:c.uid==='system'?'#7a7a8a':'#f0f0f2',lineHeight:1.4,fontStyle:c.uid==='system'?'italic':'normal'}}>{c.msg}</div>
-                        <div style={{fontSize:'.52rem',color:'#484858',marginTop:'3px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',gap:'.2rem'}}>
+                  <motion.div
+                    key={c.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.02,.3)}}
+                    className={`flex items-end gap-2 ${c.meu?'flex-row-reverse':'flex-row'}`}
+                  >
+                    {!c.meu&&<Avatar initials={c.initials} size={30} tone={c.uid==='system'?'muted':'accent'}/>}
+                    <div className="max-w-[75%]">
+                      {!c.meu&&<div className="text-[0.6rem] text-ink-3 mb-0.5 ml-1">{c.nome}</div>}
+                      <div className={`px-3.5 py-2.5 ${
+                        c.uid==='system'
+                          ? 'card-2 rounded-xl'
+                          : c.meu
+                            ? 'bg-accent-soft border border-accent/30 rounded-2xl rounded-br-md'
+                            : 'card-2 rounded-2xl rounded-bl-md'
+                      }`}>
+                        <div className={`text-[0.85rem] leading-snug ${
+                          c.uid==='system' ? 'text-ink-2 italic' : 'text-ink-1'
+                        }`}>{c.msg}</div>
+                        <div className="text-[0.55rem] text-ink-3 mt-1 flex items-center justify-end gap-1 tnum">
                           <Clock size={9}/>{c.tempo}
                         </div>
                       </div>
@@ -818,111 +888,109 @@ export default function DarkSquadPage() {
                   </motion.div>
                 ))}
               </div>
-              <div style={{display:'flex',gap:'.5rem',position:'sticky',bottom:0,background:'#0f0f13',paddingTop:'.5rem'}}>
-                <input value={msg} onChange={e=>setMsg(e.target.value)}
+              <div className="flex gap-2 sticky bottom-0 bg-bg pt-2">
+                <input
+                  value={msg} onChange={e=>setMsg(e.target.value)}
                   onKeyDown={e=>e.key==='Enter'&&enviarMsg()}
                   placeholder="Mensagem..."
-                  style={{flex:1,background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:12,color:'#f0f0f2',padding:'10px 13px',fontSize:'.9rem',outline:'none'}}/>
-                <motion.button whileTap={{scale:.9}} onClick={enviarMsg}
-                  style={{background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'10px 14px',color:'#fff',cursor:'pointer',outline:'none',display:'flex',alignItems:'center'}}>
+                  className="field flex-1"
+                />
+                <Button className="px-4 shrink-0" onClick={enviarMsg} aria-label="Enviar mensagem">
                   <Send size={18}/>
-                </motion.button>
+                </Button>
               </div>
             </div>
           )}
 
           {/* DESAFIOS */}
           {tab==='desafios'&&(
-            <div style={{display:'grid',gap:'.65rem'}}>
-              <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'.25rem'}}>
-                <Flag size={11} color="#7a7a8a" weight="fill"/> Desafios desta semana — renovam automaticamente
+            <div className="grid gap-2.5">
+              <div className="eyebrow flex items-center gap-1.5 mb-1">
+                <Flag size={11}/> Desafios desta semana — renovam automaticamente
               </div>
               {desafios.map((d,i)=>(
-                <motion.div key={d.id} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*.06}}>
-                  <Card style={{background:'#1e1e24',border:'1px solid rgba(227,27,35,.2)',borderRadius:14}}>
-                    <CardContent style={{padding:'1rem 1.1rem'}}>
-                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'.65rem'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'.65rem'}}>
-                          <div style={{width:44,height:44,borderRadius:11,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                            <DesafioIcon tipo={d.tipo}/>
-                          </div>
-                          <div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.05rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{d.nome}</div>
-                            <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'2px'}}>{d.desc}</div>
-                          </div>
+                <motion.div key={d.id} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.04,.4)}}>
+                  <div className="card border-accent/30 p-4">
+                    <div className="flex items-start justify-between mb-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-xl card-2 flex items-center justify-center shrink-0">
+                          <DesafioIcon tipo={d.tipo}/>
                         </div>
-                        <Badge style={{background:'rgba(34,197,94,.1)',color:'#4ade80',border:'1px solid rgba(34,197,94,.3)',fontSize:'.52rem',flexShrink:0,marginLeft:'.5rem'}}>ATIVO</Badge>
-                      </div>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.5rem .65rem',background:'rgba(0,0,0,.25)',borderRadius:9}}>
-                        <div style={{fontSize:'.7rem',color:'#9898a8',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                          <Crown size={12} color="#facc15"/> <span style={{color:'#facc15',fontWeight:700}}>{d.lider}</span>
-                        </div>
-                        <div style={{fontSize:'.65rem',color:'#484858',display:'flex',alignItems:'center',gap:'.2rem'}}>
-                          <Clock size={11}/> Até {d.fim}
+                        <div>
+                          <div className="font-display font-bold text-[1rem] leading-tight text-ink-1">{d.nome}</div>
+                          <div className="text-[0.68rem] text-ink-2 mt-0.5">{d.desc}</div>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <span className="chip bg-ok-soft border-ok/30 text-ok text-[0.55rem] shrink-0 ml-2">ATIVO</span>
+                    </div>
+                    <div className="flex justify-between items-center px-2.5 py-2 bg-surface-2 rounded-lg">
+                      <div className="text-[0.7rem] text-ink-2 flex items-center gap-1.5">
+                        <Crown size={12} className="text-warn"/>
+                        <span className="text-warn font-semibold">{d.lider}</span>
+                      </div>
+                      <div className="text-[0.65rem] text-ink-3 flex items-center gap-1">
+                        <Clock size={11}/> Até {d.fim}
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
-              <div style={{background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:12,padding:'.75rem',fontSize:'.72rem',color:'#484858',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:'.4rem'}}>
-                <Flag size={13} weight="fill"/> Os desafios mudam todo domingo automaticamente
+              <div className="card-2 p-3 text-[0.72rem] text-ink-3 text-center flex items-center justify-center gap-1.5">
+                <Flag size={13}/> Os desafios mudam todo domingo automaticamente
               </div>
             </div>
           )}
 
           {/* MEMBROS */}
           {tab==='membros'&&(
-            <div style={{display:'grid',gap:'.5rem'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.25rem'}}>
-                <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <Users size={11}/> {membros.length}/{squad?.maxMembros||20} membros
+            <div className="grid gap-2">
+              <div className="flex justify-between items-center mb-1">
+                <div className="eyebrow flex items-center gap-1.5">
+                  <Users size={11}/> <span className="tnum">{membros.length}/{squad?.maxMembros||20}</span> membros
                 </div>
-                <motion.button whileTap={{scale:.95}} onClick={()=>setShowCodigo(true)}
-                  style={{background:'rgba(227,27,35,.1)',border:'1px solid rgba(227,27,35,.25)',borderRadius:8,padding:'.3rem .7rem',color:'#e31b23',fontSize:'.72rem',fontWeight:700,cursor:'pointer',outline:'none',display:'flex',alignItems:'center',gap:'.3rem'}}>
+                <Button size="sm" variant="soft" onClick={()=>setShowCodigo(true)}>
                   <UserPlus size={13}/> Convidar
-                </motion.button>
+                </Button>
               </div>
               {membros.length===0&&(
-                <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-                  <CardContent style={{padding:'2rem',textAlign:'center'}}>
-                    <UsersThree size={36} color="#484858" style={{margin:'0 auto .5rem'}}/>
-                    <div style={{fontSize:'.82rem',color:'#484858'}}>Nenhum membro ainda</div>
-                    <div style={{fontSize:'.72rem',color:'#484858',marginTop:'.25rem'}}>Convide seus amigos com o código!</div>
-                  </CardContent>
-                </Card>
+                <EmptyState
+                  icon={<Users size={36}/>}
+                  title="Nenhum membro ainda"
+                  subtitle="Convide seus amigos com o código!"
+                />
               )}
               {membros.map((m,i)=>(
-                <motion.div key={m.uid} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*.04}}>
-                  <Card style={{background:'rgba(255,255,255,.02)',border:'1px solid #1a1a20',borderRadius:12}}>
-                    <CardContent style={{padding:'.75rem 1rem',display:'flex',alignItems:'center',gap:'.75rem'}}>
-                      <Avatar initials={m.initials} size={38}/>
-                      <div style={{flex:1}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexWrap:'wrap'}}>
-                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',color:'#f0f0f2'}}>{m.nome}</span>
-                          {m.dono&&<Badge style={{background:'rgba(250,204,21,.1)',color:'#facc15',border:'1px solid rgba(250,204,21,.2)',fontSize:'.5rem',display:'flex',alignItems:'center',gap:'.2rem'}}><Crown size={9}/> Dono</Badge>}
-                          {m.uid===uid&&<Badge variant="outline" style={{borderColor:'rgba(227,27,35,.3)',color:'#e31b23',fontSize:'.5rem'}}>você</Badge>}
-                        </div>
-                        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'1px',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                          <Clock size={10}/> {m.ultimo}
-                        </div>
+                <motion.div key={m.uid} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.04,.4)}}>
+                  <div className="card p-3 flex items-center gap-3">
+                    <Avatar initials={m.initials} size={38}/>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-display font-semibold text-[0.95rem] text-ink-1">{m.nome}</span>
+                        {m.dono&&(
+                          <span className="chip bg-warn-soft border-warn/30 text-warn text-[0.55rem] px-1.5 py-0 gap-1">
+                            <Crown size={9}/> Dono
+                          </span>
+                        )}
+                        {m.uid===uid&&<span className="chip chip-active text-[0.55rem] px-1.5 py-0">você</span>}
                       </div>
-                      <div style={{textAlign:'right',flexShrink:0}}>
-                        {m.checkinHoje
-                          ?<div style={{fontSize:'.7rem',color:'#4ade80',fontWeight:700,display:'flex',alignItems:'center',gap:'.2rem',justifyContent:'flex-end'}}><CheckCircle2 size={12}/> Hoje</div>
-                          :<div style={{fontSize:'.7rem',color:'#484858',display:'flex',alignItems:'center',gap:'.2rem',justifyContent:'flex-end'}}><Clock size={12}/> Ausente</div>
-                        }
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.85rem',color:'#7a7a8a',marginTop:'1px'}}>{m.treinos} treinos</div>
+                      <div className="text-[0.65rem] text-ink-3 mt-0.5 flex items-center gap-1.5">
+                        <Clock size={10}/> {m.ultimo}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {m.checkinHoje
+                        ?<div className="text-[0.7rem] text-ok font-semibold flex items-center gap-1 justify-end"><CheckCircle2 size={12}/> Hoje</div>
+                        :<div className="text-[0.7rem] text-ink-3 flex items-center gap-1 justify-end"><Clock size={12}/> Ausente</div>
+                      }
+                      <div className="font-display font-semibold text-[0.82rem] text-ink-2 mt-0.5 tnum">{m.treinos} treinos</div>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
-              <Separator style={{background:'rgba(255,255,255,.05)',margin:'.25rem 0'}}/>
-              <motion.button whileTap={{scale:.97}} onClick={sairDoSquad}
-                style={{width:'100%',background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.15)',borderRadius:12,padding:'.75rem',color:'#e31b23',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',letterSpacing:'.04em',cursor:'pointer',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.5rem'}}>
+              <div className="border-t border-line my-1"/>
+              <Button full variant="danger" onClick={sairDoSquad}>
                 <LogOut size={15}/> Sair do Squad
-              </motion.button>
+              </Button>
             </div>
           )}
 

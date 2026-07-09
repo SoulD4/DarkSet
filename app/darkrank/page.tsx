@@ -1,24 +1,33 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import PageShell from '@/components/layout/PageShell';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import EmptyState from '@/components/core/EmptyState';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, getDocs, collection, query, orderBy, limit } from 'firebase/firestore';
 import { getLiga, fmtPontos, LIGAS, type RankScore } from '@/lib/rankSystem';
 import { useRankSync } from '@/lib/useRankSync';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Trophy, Crown, Medal, Dumbbell, Flame, Globe, Zap } from 'lucide-react';
+import { Crown, Medal, Dumbbell, Flame, Globe, Zap } from 'lucide-react';
+
+/** Ícone de pódio (top 3) ou número da posição. */
+function Posicao({ i }: { i: number }) {
+  if (i === 0) return <Crown size={18} className="text-warn" />;
+  if (i === 1) return <Medal size={16} className="text-ink-2" />;
+  if (i === 2) return <Medal size={16} className="text-warn opacity-60" />;
+  return <span className="font-display font-bold text-[0.85rem] text-ink-3 tnum">#{i + 1}</span>;
+}
 
 export default function DarkRankPage() {
-  const [uid,           setUid]           = useState<string|null>(null);
-  const [userName,      setUserName]      = useState('');
-  const [userInitials,  setUserInitials]  = useState('');
-  const [meuRank,       setMeuRank]       = useState<RankScore|null>(null);
-  const [globalRank,    setGlobalRank]    = useState<(RankScore&{posicao:number})[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [loadingRanking,setLoadingRanking]= useState(false);
+  const [uid,            setUid]            = useState<string|null>(null);
+  const [userName,       setUserName]       = useState('');
+  const [userInitials,   setUserInitials]   = useState('');
+  const [meuRank,        setMeuRank]        = useState<RankScore|null>(null);
+  const [globalRank,     setGlobalRank]     = useState<(RankScore&{posicao:number})[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [loadingRanking, setLoadingRanking] = useState(false);
 
   useRankSync(uid, userName, userInitials);
 
@@ -52,153 +61,199 @@ export default function DarkRankPage() {
   },[]);
 
   const liga     = getLiga(meuRank?.pontos||0);
-  const proxLiga = LIGAS.find((l:any)=>l.min>(meuRank?.pontos||0));
+  const proxLiga = LIGAS.find(l=>l.min>(meuRank?.pontos||0));
   const ligaPct  = proxLiga
     ? Math.min(100,Math.round(((meuRank?.pontos||0)-liga.min)/(proxLiga.min-liga.min)*100))
     : 100;
 
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full />
     </PageShell>
   );
 
   return (
     <PageShell>
-      {/* Header */}
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{marginBottom:'1.25rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',lineHeight:1}}>
-          DARK<span style={{color:'#e31b23'}}>RANK</span>
-        </div>
-        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px',display:'flex',alignItems:'center',gap:'.4rem'}}>
-          <Globe size={11}/> Ranking global de atletas DarkSet
-        </div>
-      </motion.div>
+      <PageHeader
+        title="DarkRank"
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            <Globe size={12} /> Ranking global de atletas DarkSet
+          </span>
+        }
+      />
 
-      {/* Card do seu rank */}
-      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.06}} style={{marginBottom:'.75rem'}}>
-        <Card style={{background:liga.corBg,border:`1px solid ${liga.corBorder}`,borderRadius:16,overflow:'hidden',position:'relative'}}>
-          <div style={{position:'absolute',top:-20,right:-20,opacity:.06,pointerEvents:'none'}}>
-            <Globe size={110} color={liga.cor}/>
+      {/* Card do seu rank — cores da liga são dinâmicas (exceção permitida) */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
+        className="relative overflow-hidden rounded-2xl border p-4 mb-4 shadow-card"
+        style={{ background: liga.corBg, borderColor: liga.corBorder }}
+      >
+        <div className="absolute -top-5 -right-5 opacity-[0.06] pointer-events-none">
+          <Globe size={110} color={liga.cor} />
+        </div>
+
+        <div className="relative flex items-start justify-between gap-3 mb-3.5">
+          <div className="min-w-0">
+            <div className="eyebrow flex items-center gap-1.5 mb-1" style={{ color: liga.cor }}>
+              <Globe size={10} /> Seu rank global
+            </div>
+            <div className="font-display font-bold text-[1.8rem] leading-none tracking-tight" style={{ color: liga.cor }}>
+              {liga.nome}
+            </div>
           </div>
-          <CardContent style={{padding:'1rem',position:'relative'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-              <div>
-                <div style={{fontSize:'.55rem',color:liga.cor,textTransform:'uppercase',letterSpacing:'.1em',fontWeight:700,marginBottom:'.25rem',display:'flex',alignItems:'center',gap:'.3rem'}}>
-                  <Globe size={10}/> Seu Rank Global
-                </div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',color:liga.cor,textTransform:'uppercase',lineHeight:1}}>
-                  {liga.nome}
-                </div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:liga.cor,lineHeight:1}}>
-                  {fmtPontos(meuRank?.pontos||0)}
-                </div>
-                <div style={{fontSize:'.55rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.06em'}}>pontos</div>
-                {meuRank?.posicao&&(
-                  <div style={{fontSize:'.7rem',color:liga.cor,fontWeight:700,marginTop:'.2rem'}}>#{meuRank.posicao} no ranking</div>
-                )}
-              </div>
+          <div className="text-right shrink-0">
+            <div className="font-display font-bold text-[1.6rem] leading-none tnum" style={{ color: liga.cor }}>
+              {fmtPontos(meuRank?.pontos||0)}
             </div>
-            <div style={{background:'rgba(255,255,255,.06)',borderRadius:4,height:5,overflow:'hidden',marginBottom:'.3rem'}}>
-              <motion.div animate={{width:`${ligaPct}%`}} transition={{duration:.8,ease:'easeOut'}}
-                style={{height:'100%',borderRadius:4,background:liga.cor,boxShadow:`0 0 10px ${liga.cor}88`}}/>
-            </div>
-            <div style={{display:'flex',justifyContent:'space-between',fontSize:'.55rem',color:'#484858'}}>
-              <span style={{color:liga.cor,fontWeight:700}}>{liga.nome}</span>
-              <span>{proxLiga?`${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}`:'Liga máxima atingida!'}</span>
-            </div>
-            {/* Stats do usuário */}
-            {meuRank&&(
-              <div style={{display:'flex',gap:'1rem',marginTop:'.85rem',paddingTop:'.85rem',borderTop:'1px solid rgba(255,255,255,.06)'}}>
-                {[
-                  {val:meuRank.treinos, lbl:'Treinos',  Icon:Dumbbell},
-                  {val:meuRank.streak+'d', lbl:'Streak', Icon:Flame  },
-                  {val:fmtPontos(meuRank.volumeKg||0), lbl:'Volume', Icon:Zap},
-                ].map((s,i)=>(
-                  <div key={i} style={{flex:1,textAlign:'center'}}>
-                    <s.Icon size={14} color={liga.cor} style={{margin:'0 auto .2rem'}}/>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:liga.cor,lineHeight:1}}>{s.val}</div>
-                    <div style={{fontSize:'.5rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>{s.lbl}</div>
-                  </div>
-                ))}
+            <div className="eyebrow mt-1">pontos</div>
+            {meuRank?.posicao && (
+              <div className="text-[0.7rem] font-bold mt-0.5 tnum" style={{ color: liga.cor }}>
+                #{meuRank.posicao} no ranking
               </div>
             )}
-          </CardContent>
-        </Card>
-      </motion.div>
+          </div>
+        </div>
+
+        {/* Progresso para a próxima liga */}
+        <div className="relative h-1.5 rounded-full bg-surface-3 overflow-hidden mb-1.5">
+          <motion.div
+            animate={{ width: `${ligaPct}%` }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="h-full rounded-full"
+            style={{ background: liga.cor, boxShadow: `0 0 10px ${liga.cor}88` }}
+          />
+        </div>
+        <div className="relative flex justify-between text-[0.62rem] text-ink-3">
+          <span className="font-bold" style={{ color: liga.cor }}>{liga.nome}</span>
+          <span className="tnum">
+            {proxLiga ? `${proxLiga.min-(meuRank?.pontos||0)} pts para ${proxLiga.nome}` : 'Liga máxima atingida!'}
+          </span>
+        </div>
+
+        {/* Stats do usuário */}
+        {meuRank && (
+          <div className="relative flex gap-4 mt-3.5 pt-3.5 border-t border-line">
+            {[
+              { val: meuRank.treinos,                  lbl: 'Treinos', Icon: Dumbbell },
+              { val: meuRank.streak+'d',               lbl: 'Streak',  Icon: Flame    },
+              { val: fmtPontos(meuRank.volumeKg||0),   lbl: 'Volume',  Icon: Zap      },
+            ].map((s,i)=>(
+              <div key={i} className="flex-1 text-center">
+                <s.Icon size={14} className="mx-auto mb-1" color={liga.cor} />
+                <div className="font-display font-bold text-[1.1rem] leading-none tnum" style={{ color: liga.cor }}>
+                  {s.val}
+                </div>
+                <div className="eyebrow mt-1">{s.lbl}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.section>
 
       {/* Legenda de ligas */}
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}}
-        style={{display:'flex',gap:'.3rem',flexWrap:'wrap',marginBottom:'.75rem'}}>
-        {LIGAS.map((l:any)=>(
-          <div key={l.nome} style={{background:l.corBg,border:`1px solid ${l.corBorder}`,borderRadius:6,padding:'.2rem .55rem',fontSize:'.58rem',color:l.cor,fontWeight:700,textTransform:'uppercase'}}>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+        className="flex flex-wrap gap-1.5 mb-6"
+      >
+        {LIGAS.map(l=>(
+          <span
+            key={l.nome}
+            className="rounded-md border px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-wide"
+            style={{ background: l.corBg, borderColor: l.corBorder, color: l.cor }}
+          >
             {l.nome}
-          </div>
+          </span>
         ))}
       </motion.div>
 
-      {/* Ranking */}
-      <div style={{display:'grid',gap:'.45rem'}}>
-        {loadingRanking&&(
-          <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}>
-            <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-              style={{width:28,height:28,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
+      {/* Ranking top 50 */}
+      <p className="eyebrow mb-2.5">Top 50 atletas</p>
+      <div className="grid gap-2">
+        {loadingRanking && (
+          <div className="flex justify-center py-8">
+            <Spinner />
           </div>
         )}
 
-        {!loadingRanking&&globalRank.length===0&&(
-          <Card style={{background:'#1e1e24',border:'1px dashed #2e2e38',borderRadius:12}}>
-            <CardContent style={{padding:'2.5rem 1rem',textAlign:'center'}}>
-              <Globe size={40} color="#484858" style={{margin:'0 auto .75rem'}}/>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',color:'#484858',textTransform:'uppercase'}}>Nenhum atleta ainda</div>
-              <div style={{fontSize:'.75rem',color:'#484858',marginTop:'.3rem'}}>Complete treinos para aparecer no ranking!</div>
-            </CardContent>
-          </Card>
+        {!loadingRanking && globalRank.length===0 && (
+          <EmptyState
+            icon={<Globe size={36} strokeWidth={1.5} />}
+            title="Nenhum atleta ainda"
+            subtitle="Complete treinos para aparecer no ranking!"
+          />
         )}
 
         {globalRank.map((r,i)=>{
           const rLiga = getLiga(r.pontos);
           const isMe  = r.uid===uid;
+          const podio = i<3;
           return (
-            <motion.div key={r.uid} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:Math.min(i*.03,.4)}}>
-              <Card style={{background:isMe?rLiga.corBg:'rgba(255,255,255,.02)',border:`1px solid ${isMe?rLiga.corBorder:'#1a1a20'}`,borderRadius:13,overflow:'hidden',position:'relative'}}>
-                <div style={{position:'absolute',left:0,top:0,bottom:0,width:3,background:rLiga.cor}}/>
-                <CardContent style={{padding:'.75rem 1rem .75rem 1.25rem',display:'flex',alignItems:'center',gap:'.65rem'}}>
-                  {/* Posição */}
-                  <div style={{width:24,textAlign:'center',flexShrink:0}}>
-                    {i===0?<Crown size={18} color="#d97706"/>:
-                     i===1?<Medal size={16} color="#9ca3af"/>:
-                     i===2?<Medal size={16} color="#b45309"/>:
-                     <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.88rem',color:'#484858'}}>#{i+1}</span>}
+            <motion.div
+              key={r.uid}
+              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: Math.min(i*0.04, 0.4) }}
+              className={`relative overflow-hidden rounded-xl border border-line ${podio ? 'bg-surface-2 shadow-card' : 'bg-surface-1'}`}
+              style={isMe ? { background: rLiga.corBg, borderColor: rLiga.corBorder } : undefined}
+            >
+              {/* Faixa lateral na cor da liga */}
+              <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: rLiga.cor }} />
+              <div className="flex items-center gap-2.5 py-3 pr-3.5 pl-4">
+                {/* Posição */}
+                <div className="w-6 flex justify-center shrink-0">
+                  <Posicao i={i} />
+                </div>
+                {/* Avatar */}
+                <div
+                  className="w-[34px] h-[34px] rounded-full border flex items-center justify-center shrink-0 font-display font-bold text-[0.8rem]"
+                  style={{ background: `${rLiga.cor}22`, borderColor: `${rLiga.cor}44`, color: rLiga.cor }}
+                >
+                  {r.initials}
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`font-display font-semibold text-[0.9rem] truncate ${isMe ? '' : 'text-ink-1'}`}
+                      style={isMe ? { color: rLiga.cor } : undefined}
+                    >
+                      {r.nome}
+                    </span>
+                    {isMe && (
+                      <span
+                        className="shrink-0 rounded border px-1 text-[0.5rem] font-bold uppercase"
+                        style={{ borderColor: rLiga.corBorder, color: rLiga.cor }}
+                      >
+                        você
+                      </span>
+                    )}
                   </div>
-                  {/* Avatar */}
-                  <div style={{width:34,height:34,borderRadius:'50%',background:`${rLiga.cor}22`,border:`1px solid ${rLiga.cor}44`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'.82rem',color:rLiga.cor}}>
-                    {r.initials}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span
+                      className="rounded border px-1 py-px text-[0.52rem] font-bold uppercase"
+                      style={{ background: rLiga.corBg, borderColor: rLiga.corBorder, color: rLiga.cor }}
+                    >
+                      {rLiga.nome}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-[0.58rem] text-ink-3 tnum">
+                      <Dumbbell size={9} />{r.treinos}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-[0.58rem] text-ink-3 tnum">
+                      <Flame size={9} />{r.streak}d
+                    </span>
                   </div>
-                  {/* Info */}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:'.4rem'}}>
-                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.92rem',color:isMe?rLiga.cor:'#f0f0f2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.nome}</span>
-                      {isMe&&<Badge variant="outline" style={{borderColor:rLiga.corBorder,color:rLiga.cor,fontSize:'.45rem',padding:'0 4px',flexShrink:0}}>você</Badge>}
-                    </div>
-                    <div style={{display:'flex',alignItems:'center',gap:'.4rem',marginTop:'2px'}}>
-                      <span style={{fontSize:'.55rem',color:rLiga.cor,fontWeight:700,background:rLiga.corBg,border:`1px solid ${rLiga.corBorder}`,borderRadius:4,padding:'1px 5px',textTransform:'uppercase'}}>{rLiga.nome}</span>
-                      <span style={{fontSize:'.55rem',color:'#484858',display:'flex',alignItems:'center',gap:'.15rem'}}><Dumbbell size={9}/>{r.treinos}</span>
-                      <span style={{fontSize:'.55rem',color:'#484858',display:'flex',alignItems:'center',gap:'.15rem'}}><Flame size={9}/>{r.streak}d</span>
-                    </div>
+                </div>
+                {/* Pontos */}
+                <div className="text-right shrink-0">
+                  <div
+                    className={`font-display font-bold text-[1.15rem] leading-none tnum ${isMe ? '' : 'text-ink-1'}`}
+                    style={isMe ? { color: rLiga.cor } : undefined}
+                  >
+                    {fmtPontos(r.pontos)}
                   </div>
-                  {/* Pontos */}
-                  <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.2rem',color:isMe?rLiga.cor:'#f0f0f2',lineHeight:1}}>{fmtPontos(r.pontos)}</div>
-                    <div style={{fontSize:'.48rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>pts</div>
-                  </div>
-                </CardContent>
-              </Card>
+                  <div className="eyebrow mt-0.5">pts</div>
+                </div>
+              </div>
             </motion.div>
           );
         })}

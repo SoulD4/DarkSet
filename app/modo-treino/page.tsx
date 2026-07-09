@@ -2,7 +2,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Dumbbell, X, Check, Plus, Minus, ChevronLeft, ChevronRight,
+  Search, Timer, ClipboardList, Play, Share2, History, CheckCheck, BarChart3,
+} from 'lucide-react';
 import PageShell from '@/components/layout/PageShell';
+import Button from '@/components/core/Button';
+import Spinner from '@/components/core/Spinner';
+import PageHeader from '@/components/core/PageHeader';
+import EmptyState from '@/components/core/EmptyState';
+import { useToast, ToastViewport } from '@/components/core/Toast';
 import ShareWorkoutModal from '@/components/ShareWorkoutModal';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -137,10 +146,18 @@ function ExGif({name, size=64}:{name:string;size?:number}) {
     return ()=>clearInterval(t);
   },[name]);
   if(!urls) return (
-    <div style={{width:size,height:size,borderRadius:10,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:size>50?'1.5rem':'1rem'}}>🏋️</div>
+    <div
+      className="rounded-[10px] bg-surface-2 border border-line flex items-center justify-center shrink-0 text-ink-3"
+      style={{width:size,height:size}}>
+      <Dumbbell size={size>50?24:16}/>
+    </div>
   );
   const src = frame===0 ? urls.url0 : (img1Ok ? urls.url1 : urls.url0);
-  return <img src={src} alt={name} onError={()=>{if(frame===1)setImg1Ok(false);}} style={{width:size,height:size,borderRadius:10,objectFit:'cover',border:'1px solid #2e2e38',flexShrink:0}}/>;
+  return (
+    <img src={src} alt={name} onError={()=>{if(frame===1)setImg1Ok(false);}}
+      className="rounded-[10px] object-cover border border-line shrink-0"
+      style={{width:size,height:size}}/>
+  );
 }
 
 // ── RestTimer ─────────────────────────────────────────────────────
@@ -201,60 +218,59 @@ function RestTimer({seconds: initialSeconds, onDone}:{seconds:number;onDone:()=>
     vibrate(20);
   };
 
-  const pct   = Math.max(0, (left / total) * 100);
-  const color = left <= 5 ? '#e31b23' : left <= 10 ? '#facc15' : '#22c55e';
+  const pct  = Math.max(0, (left / total) * 100);
+  // Urgência via tokens semânticos: ok → warn → danger
+  const tone = left <= 5 ? 'var(--danger)' : left <= 10 ? 'var(--warn)' : 'var(--ok)';
 
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-      style={{position:'fixed',inset:0,zIndex:150,background:'rgba(0,0,0,.96)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.25rem',padding:'2rem'}}>
+      className="fixed inset-0 z-[150] bg-bg flex flex-col items-center justify-center gap-5 p-8">
 
       <motion.div initial={{scale:.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{type:'spring',stiffness:200}}>
-        <span style={{display:'inline-block',fontSize:'.65rem',color:'#7a7a8a',fontWeight:700,letterSpacing:'.15em',border:'1px solid rgba(255,255,255,.1)',borderRadius:999,padding:'3px 12px'}}>DESCANSO</span>
+        <span className="eyebrow inline-block border border-line rounded-full px-3 py-1">Descanso</span>
       </motion.div>
 
       {/* Círculo SVG */}
-      <div style={{position:'relative',width:200,height:200}}>
-        <svg width="200" height="200" style={{transform:'rotate(-90deg)'}}>
-          <circle cx="100" cy="100" r="88" fill="none" stroke="#1e1e24" strokeWidth="10"/>
-          <motion.circle cx="100" cy="100" r="88" fill="none" stroke={color} strokeWidth="10"
+      <div className="relative w-[200px] h-[200px]">
+        <svg width="200" height="200" className="-rotate-90">
+          <circle cx="100" cy="100" r="88" fill="none" stroke="var(--surface-3)" strokeWidth="10"/>
+          <motion.circle cx="100" cy="100" r="88" fill="none" strokeWidth="10"
             strokeLinecap="round"
             strokeDasharray={`${2*Math.PI*88}`}
-            animate={{strokeDashoffset: 2*Math.PI*88*(1-pct/100), stroke: color}}
+            style={{stroke: tone, transition:'stroke .3s'}}
+            animate={{strokeDashoffset: 2*Math.PI*88*(1-pct/100)}}
             transition={{duration:.9, ease:'linear'}}/>
         </svg>
-        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
           <motion.div key={left} initial={{scale:1.15,opacity:.7}} animate={{scale:1,opacity:1}} transition={{duration:.2}}
-            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3.8rem',color:'#fff',lineHeight:1}}>
+            className="font-display font-bold tnum text-ink-1 leading-none text-[3.4rem]">
             {fmtTime(left)}
           </motion.div>
-          <div style={{fontSize:'.6rem',color:'#7a7a8a',marginTop:'4px',textTransform:'uppercase',letterSpacing:'.1em'}}>restante</div>
+          <div className="eyebrow mt-1">restante</div>
         </div>
       </div>
 
       {/* Controles +/- 30s */}
-      <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
-        <motion.button whileTap={{scale:.9}}
-          onClick={()=>adjust(-30)}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:12,width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',color:'#f0f0f2',fontSize:'1.1rem',fontWeight:700,cursor:'pointer',outline:'none',flexDirection:'column',gap:0}}>
-          <span style={{fontSize:'1rem',lineHeight:1}}>−</span>
-          <span style={{fontSize:'.5rem',color:'#7a7a8a',lineHeight:1.2}}>30s</span>
+      <div className="flex items-center gap-4">
+        <motion.button whileTap={{scale:.9}} onClick={()=>adjust(-30)}
+          className="w-14 h-14 rounded-xl bg-surface-2 border border-line flex flex-col items-center justify-center text-ink-1">
+          <Minus size={18}/>
+          <span className="text-[0.5rem] text-ink-3 leading-tight">30s</span>
         </motion.button>
 
-        <motion.button whileTap={{scale:.95}} onClick={()=>{vibrate(20);onDone();}}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:'999px',padding:'.55rem 2rem',color:'#7a7a8a',fontSize:'.85rem',fontWeight:700,cursor:'pointer',outline:'none'}}>
+        <Button variant="ghost" size="md" className="rounded-full px-8" onClick={()=>{vibrate(20);onDone();}}>
           Pular
-        </motion.button>
+        </Button>
 
-        <motion.button whileTap={{scale:.9}}
-          onClick={()=>adjust(30)}
-          style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:12,width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',color:'#f0f0f2',fontSize:'1.1rem',fontWeight:700,cursor:'pointer',outline:'none',flexDirection:'column',gap:0}}>
-          <span style={{fontSize:'1rem',lineHeight:1}}>+</span>
-          <span style={{fontSize:'.5rem',color:'#7a7a8a',lineHeight:1.2}}>30s</span>
+        <motion.button whileTap={{scale:.9}} onClick={()=>adjust(30)}
+          className="w-14 h-14 rounded-xl bg-surface-2 border border-line flex flex-col items-center justify-center text-ink-1">
+          <Plus size={18}/>
+          <span className="text-[0.5rem] text-ink-3 leading-tight">30s</span>
         </motion.button>
       </div>
 
       {/* Total configurado */}
-      <div style={{fontSize:'.65rem',color:'#484858',letterSpacing:'.06em'}}>
+      <div className="text-[0.68rem] text-ink-3 tracking-wide tnum">
         Total: {fmtTime(total)}
       </div>
     </motion.div>
@@ -266,33 +282,37 @@ function FinishScreen({elapsed,exerciseCount,setCount,onShare,onClose}:{elapsed:
   useEffect(()=>{ vibrate([80,40,80,40,120]); },[]);
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}}
-      style={{position:'fixed',inset:0,zIndex:160,background:'#0a0a0e',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1.25rem',padding:'2rem'}}>
+      className="fixed inset-0 z-[160] bg-bg flex flex-col items-center justify-center gap-5 p-8">
       <motion.div initial={{scale:0,rotate:-20}} animate={{scale:1,rotate:0}}
-        transition={{type:'spring',stiffness:200,damping:12,delay:.1}} style={{fontSize:'5rem'}}>💪</motion.div>
+        transition={{type:'spring',stiffness:200,damping:12,delay:.1}} className="text-[5rem] leading-none">💪</motion.div>
       <motion.div initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:.25}}
-        style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'3rem',textTransform:'uppercase',color:'#fff',textAlign:'center',lineHeight:1}}>
-        Treino<br/><span style={{color:'#e31b23'}}>Concluído!</span>
+        className="font-display font-bold text-[2.6rem] leading-[1.05] tracking-tight text-ink-1 text-center">
+        Treino<br/><span className="text-accent">Concluído!</span>
       </motion.div>
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:.4}}
-        style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:18,padding:'1.25rem 1.5rem',display:'flex',gap:'2rem',width:'100%',maxWidth:340,justifyContent:'space-around'}}>
-        {[['⏱',fmtTime(elapsed),'Duração'],['🏋️',String(exerciseCount),'Exercícios'],['📊',String(setCount),'Séries']].map(([icon,val,lbl],idx)=>(
-          <motion.div key={lbl} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.5+idx*.1}} style={{textAlign:'center'}}>
-            <div style={{fontSize:'1.5rem'}}>{icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2.2rem',color:'#f0f0f2',lineHeight:1}}>{val}</div>
-            <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginTop:'2px'}}>{lbl}</div>
+        className="card px-6 py-5 flex gap-8 w-full max-w-[340px] justify-around">
+        {([
+          [<Timer key="i" size={20}/>, fmtTime(elapsed), 'Duração'],
+          [<Dumbbell key="i" size={20}/>, String(exerciseCount), 'Exercícios'],
+          [<BarChart3 key="i" size={20}/>, String(setCount), 'Séries'],
+        ] as [React.ReactNode,string,string][]).map(([icon,val,lbl],idx)=>(
+          <motion.div key={lbl} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.5+idx*.1}} className="text-center">
+            <div className="flex justify-center text-accent mb-1">{icon}</div>
+            <div className="font-display font-bold text-[1.8rem] leading-none text-ink-1 tnum">{val}</div>
+            <div className="eyebrow mt-1">{lbl}</div>
           </motion.div>
         ))}
       </motion.div>
-      <motion.button initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:.65}}
-        whileTap={{scale:.97}} onClick={onShare}
-        style={{width:'100%',maxWidth:340,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:14,padding:'16px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 6px 24px rgba(227,27,35,.4)',outline:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:'.6rem'}}>
-        📸 Compartilhar Treino
-      </motion.button>
-      <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.8}}
-        whileTap={{scale:.97}} onClick={onClose}
-        style={{width:'100%',maxWidth:340,background:'rgba(255,255,255,.05)',border:'1px solid #2e2e38',borderRadius:14,padding:'12px',color:'#7a7a8a',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-        Ver Histórico →
-      </motion.button>
+      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:.65}} className="w-full max-w-[340px]">
+        <Button variant="primary" size="lg" full onClick={onShare}>
+          <Share2 size={18}/> Compartilhar Treino
+        </Button>
+      </motion.div>
+      <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.8}} className="w-full max-w-[340px]">
+        <Button variant="ghost" size="md" full onClick={onClose}>
+          <History size={16}/> Ver Histórico
+        </Button>
+      </motion.div>
     </motion.div>
   );
 }
@@ -324,7 +344,7 @@ export default function ModoTreino() {
   const [showShare, setShowShare] = useState(false);
   const [shareSession, setShareSession] = useState<ShareSession|null>(null);
   const [finishData, setFinishData] = useState({elapsed:0,exerciseCount:0,setCount:0});
-  const [toast, setToast]       = useState('');
+  const { toast, show } = useToast();
   const [checkedSets, setCheckedSets] = useState<Record<string,boolean>>({});
 
   // Solicitar permissão de notificação ao montar
@@ -350,7 +370,7 @@ export default function ModoTreino() {
     });
   },[]);
 
-  const showToast = (msg:string) => {setToast(msg);setTimeout(()=>setToast(''),2500);};
+  const showToast = (msg:string, tone:'ok'|'warn'|'danger'='ok') => show(msg, tone);
 
   const startTsRef = useRef<number>(0);
 
@@ -408,7 +428,7 @@ export default function ModoTreino() {
       totalSetCount+=sets.length;
       entries.push({name:ex.name,exId:ex.exId,sets:sets.map(s=>({w:s.w,r:s.r}))});
     });
-    if(!entries.length){showToast('Nenhuma série registrada');return;}
+    if(!entries.length){showToast('Nenhuma série registrada','warn');return;}
     const sessData:ShareSession = {planName:resolvedPlan?.name,day,entries,duration:elapsed};
     if(uid){
       try {
@@ -418,7 +438,7 @@ export default function ModoTreino() {
         try { hist = histSnap.exists() ? JSON.parse(histSnap.data().payload||'{}') : {}; } catch { /* payload corrompido, reseta */ }
         hist[todayKey()]={...sessData,planId:resolvedPlan?.id,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
-      } catch(e){ console.error(e); showToast('Erro ao salvar treino'); return; }
+      } catch(e){ console.error(e); showToast('Erro ao salvar treino','danger'); return; }
     }
     setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
     setShareSession(sessData);
@@ -427,7 +447,7 @@ export default function ModoTreino() {
 
   const saveLivre = async () => {
     const valid = livreExs.filter(ex=>ex.sets.some(s=>s.r.trim()));
-    if(!valid.length){showToast('Adicione ao menos uma série');return;}
+    if(!valid.length){showToast('Adicione ao menos uma série','warn');return;}
     const entries = valid.map(ex=>({name:ex.name,sets:ex.sets.filter(s=>s.r.trim()).map(s=>({w:s.w,r:s.r}))}));
     const sessData:ShareSession = {planName:'Treino Livre',day,entries,duration:elapsed};
     if(uid){
@@ -438,7 +458,7 @@ export default function ModoTreino() {
         try { hist = histSnap.exists() ? JSON.parse(histSnap.data().payload||'{}') : {}; } catch { /* payload corrompido, reseta */ }
         hist[todayKey()]={...sessData,savedAt:Date.now()};
         await setDoc(histRef,{payload:JSON.stringify(hist),updatedAt:Date.now()});
-      } catch(e){ console.error(e); showToast('Erro ao salvar treino'); return; }
+      } catch(e){ console.error(e); showToast('Erro ao salvar treino','danger'); return; }
     }
     const totalSetCount=entries.reduce((a,ex)=>a+ex.sets.length,0);
     setFinishData({elapsed,exerciseCount:entries.length,setCount:totalSetCount});
@@ -448,24 +468,21 @@ export default function ModoTreino() {
 
   if(loading) return (
     <PageShell>
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',minHeight:'60vh'}}>
-        <motion.div animate={{rotate:360}} transition={{duration:.65,repeat:Infinity,ease:'linear'}}
-          style={{width:32,height:32,border:'3px solid rgba(255,255,255,.08)',borderTopColor:'#e31b23',borderRadius:'50%'}}/>
-      </div>
+      <Spinner full/>
     </PageShell>
   );
 
   if(showGif) return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} onClick={()=>setShowGif(null)}
-      style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.97)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'1.25rem',padding:'2rem'}}>
+      className="fixed inset-0 z-[200] bg-bg flex flex-col items-center justify-center gap-5 p-8">
       <motion.div initial={{scale:.85}} animate={{scale:1}} transition={{type:'spring',stiffness:200}}>
         <ExGif name={showGif} size={270}/>
       </motion.div>
       <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.15}}
-        style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.3rem',textTransform:'uppercase',color:'#f0f0f2',textAlign:'center'}}>
+        className="font-display font-bold text-xl text-ink-1 text-center">
         {showGif}
       </motion.div>
-      <div style={{fontSize:'.72rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.1em'}}>Toque para fechar</div>
+      <div className="eyebrow">Toque para fechar</div>
     </motion.div>
   );
 
@@ -478,7 +495,7 @@ export default function ModoTreino() {
   );
 
   if(showShare && shareSession) return (
-    <div style={{position:'fixed',inset:0,background:'#0a0a0e',zIndex:250}}>
+    <div className="fixed inset-0 z-[250] bg-bg">
       <AnimatePresence>
         <ShareWorkoutModal session={shareSession} onClose={()=>{setShowShare(false);router.push('/historico');}}/>
       </AnimatePresence>
@@ -488,25 +505,17 @@ export default function ModoTreino() {
   // ── PRÉ-INÍCIO ────────────────────────────────────────────────────
   if(!started) return (
     <PageShell>
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}
-            style={{position:'fixed',top:76,left:'50%',transform:'translateX(-50%)',zIndex:200,background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.3)',borderRadius:'999px',padding:'.45rem 1.1rem',fontSize:'.82rem',color:'#4ade80',fontWeight:600,whiteSpace:'nowrap',backdropFilter:'blur(8px)'}}>
-            ✓ {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastViewport toast={toast}/>
 
-      <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} style={{marginBottom:'1.25rem'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>Modo Treino</div>
-        <div style={{fontSize:'.65rem',color:'#7a7a8a',marginTop:'3px'}}>Registre suas séries em tempo real</div>
-      </motion.div>
+      <PageHeader title="Modo Treino" subtitle="Registre suas séries em tempo real"/>
 
       <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.08}}
-        style={{display:'flex',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:'10px',padding:'3px',gap:'3px',marginBottom:'.75rem'}}>
+        className="flex bg-surface-2 border border-line rounded-xl p-1 gap-1 mb-4">
         {(['plan','livre'] as const).map(m=>(
           <motion.button key={m} whileTap={{scale:.97}} onClick={()=>setMode(m)}
-            style={{flex:1,padding:'.44rem',borderRadius:'8px',border:'none',cursor:'pointer',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:'.82rem',textTransform:'uppercase',background:mode===m?'rgba(227,27,35,.15)':'transparent',color:mode===m?'#e31b23':'#7a7a8a',boxShadow:mode===m?'inset 0 0 0 1px rgba(227,27,35,.3)':'none',transition:'all .15s',outline:'none'}}>
+            className={`flex-1 py-2 rounded-lg text-[0.82rem] font-semibold transition-colors ${
+              mode===m ? 'bg-accent-soft text-accent border border-accent/30' : 'text-ink-3 border border-transparent'
+            }`}>
             {m==='plan'?'Com Ficha':'Treino Livre'}
           </motion.button>
         ))}
@@ -515,98 +524,99 @@ export default function ModoTreino() {
       <AnimatePresence mode="wait">
         {mode==='plan' && (
           <motion.div key="plan" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} transition={{duration:.2}}>
-            <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,padding:'1rem',display:'grid',gap:'.85rem'}}>
-              {plans.length===0 ? (
-                <div style={{textAlign:'center',padding:'1.5rem 0'}}>
-                  <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>📋</div>
-                  <div style={{fontSize:'.85rem',color:'#7a7a8a',marginBottom:'1rem'}}>Nenhuma ficha criada ainda.</div>
-                  <motion.button whileTap={{scale:.97}} onClick={()=>router.push('/treino')}
-                    style={{background:'#e31b23',border:'none',borderRadius:10,padding:'.65rem 1.5rem',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',textTransform:'uppercase',cursor:'pointer',outline:'none'}}>
-                    Criar Ficha
-                  </motion.button>
-                </div>
-              ) : (
-                <>
-                  {plans.length>1 && (
-                    <div>
-                      <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Ficha</div>
-                      <Select value={selectedPlanId||activeId||''} onValueChange={v=>setSelectedPlanId(v)}>
-                        <SelectTrigger style={{background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:44,outline:'none',boxShadow:'none'}}>
-                          <SelectValue>{plans.find(p=>p.id===(selectedPlanId||activeId))?.name||'Selecione uma ficha'}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent style={{background:'#1e1e24',border:'1px solid #2e2e38',outline:'none'}}>
-                          {plans.map(p=><SelectItem key={p.id} value={p.id} style={{color:'#f0f0f2',outline:'none'}}>{p.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+            {plans.length===0 ? (
+              <EmptyState
+                icon={<ClipboardList size={36}/>}
+                title="Nenhuma ficha criada ainda"
+                subtitle="Monte sua primeira ficha de treino para começar."
+                action={<Button onClick={()=>router.push('/treino')}>Criar Ficha</Button>}/>
+            ) : (
+              <div className="card p-4 grid gap-3.5">
+                {plans.length>1 && (
                   <div>
-                    <div style={{fontSize:'.62rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.35rem'}}>Dia da semana</div>
-                    <Select value={day} onValueChange={v=>setDay(v)}>
-                      <SelectTrigger style={{background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:44,outline:'none',boxShadow:'none'}}>
-                        <SelectValue>{day}</SelectValue>
+                    <div className="eyebrow mb-1.5">Ficha</div>
+                    <Select value={selectedPlanId||activeId||''} onValueChange={v=>setSelectedPlanId(v)}>
+                      <SelectTrigger className="w-full h-11 bg-surface-2 border-line rounded-xl px-3.5 text-ink-1">
+                        <SelectValue>{plans.find(p=>p.id===(selectedPlanId||activeId))?.name||'Selecione uma ficha'}</SelectValue>
                       </SelectTrigger>
-                      <SelectContent style={{background:'#1e1e24',border:'1px solid #2e2e38',outline:'none'}}>
-                        {DAYS.map(d=><SelectItem key={d} value={d} style={{color:'#f0f0f2',outline:'none'}}>{d}</SelectItem>)}
+                      <SelectContent className="bg-surface-1 border-line">
+                        {plans.map(p=><SelectItem key={p.id} value={p.id} className="text-ink-1">{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  {planItems.length>0 && (
-                    <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}}
-                      style={{background:'rgba(0,0,0,.2)',borderRadius:12,padding:'.75rem',display:'grid',gap:'.45rem'}}>
-                      <div style={{fontSize:'.6rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:'.1rem'}}>{planItems.length} exercício(s) hoje</div>
-                      {planItems.slice(0,4).map((ex,i)=>(
-                        <motion.div key={i} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.05*i}}
-                          style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-                          <ExGif name={ex.name} size={34}/>
-                          <span style={{fontSize:'.85rem',color:'#b0b0be',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</span>
-                          <span style={{fontSize:'.65rem',color:'#484858',fontWeight:700,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:6,padding:'2px 7px',flexShrink:0}}>{ex.setsPlanned}x</span>
-                        </motion.div>
-                      ))}
-                      {planItems.length>4 && <div style={{fontSize:'.7rem',color:'#484858',textAlign:'center',paddingTop:'.2rem'}}>+{planItems.length-4} exercícios</div>}
-                    </motion.div>
-                  )}
-                  {planItems.length===0 && <div style={{textAlign:'center',padding:'.75rem',color:'#484858',fontSize:'.82rem'}}>Nenhum exercício para {day}. Selecione outro dia.</div>}
+                )}
+                <div>
+                  <div className="eyebrow mb-1.5">Dia da semana</div>
+                  <Select value={day} onValueChange={v=>setDay(v)}>
+                    <SelectTrigger className="w-full h-11 bg-surface-2 border-line rounded-xl px-3.5 text-ink-1">
+                      <SelectValue>{day}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-surface-1 border-line">
+                      {DAYS.map(d=><SelectItem key={d} value={d} className="text-ink-1">{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {planItems.length>0 && (
+                  <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}}
+                    className="card-2 p-3 grid gap-2">
+                    <div className="eyebrow">{planItems.length} exercício(s) hoje</div>
+                    {planItems.slice(0,4).map((ex,i)=>(
+                      <motion.div key={i} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.04*i}}
+                        className="flex items-center gap-2.5">
+                        <ExGif name={ex.name} size={34}/>
+                        <span className="text-sm text-ink-2 flex-1 truncate">{ex.name}</span>
+                        <span className="text-[0.65rem] text-ink-3 font-bold bg-surface-2 border border-line rounded-md px-1.5 py-0.5 shrink-0 tnum">{ex.setsPlanned}x</span>
+                      </motion.div>
+                    ))}
+                    {planItems.length>4 && <div className="text-xs text-ink-3 text-center pt-0.5">+{planItems.length-4} exercícios</div>}
+                  </motion.div>
+                )}
+                {planItems.length===0 && (
+                  <div className="text-center py-3 text-ink-3 text-[0.82rem]">Nenhum exercício para {day}. Selecione outro dia.</div>
+                )}
 
-                  {/* Timer descanso */}
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.6rem .75rem',background:'rgba(0,0,0,.2)',borderRadius:10}}>
-                    <div style={{fontSize:'.75rem',color:'#7a7a8a'}}>⏱ Descanso padrão</div>
-                    <div style={{display:'flex',gap:'.35rem'}}>
-                      {[30,60,90,120].map(s=>(
-                        <motion.button key={s} whileTap={{scale:.9}} onClick={()=>setRestPreset(s)}
-                          style={{padding:'.28rem .55rem',borderRadius:7,border:'1px solid '+(restPreset===s?'#e31b23':'#2e2e38'),background:restPreset===s?'rgba(227,27,35,.15)':'transparent',color:restPreset===s?'#e31b23':'#7a7a8a',fontSize:'.72rem',fontWeight:700,cursor:'pointer',transition:'all .15s',outline:'none'}}>
-                          {s}s
-                        </motion.button>
-                      ))}
-                    </div>
+                {/* Timer descanso */}
+                <div className="flex items-center justify-between card-2 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-[0.75rem] text-ink-2">
+                    <Timer size={14} className="text-ink-3"/> Descanso padrão
                   </div>
+                  <div className="flex gap-1.5">
+                    {[30,60,90,120].map(s=>(
+                      <motion.button key={s} whileTap={{scale:.9}} onClick={()=>setRestPreset(s)}
+                        className={`px-2 py-1 rounded-lg text-[0.72rem] font-bold border transition-colors tnum ${
+                          restPreset===s ? 'bg-accent-soft border-accent/40 text-accent' : 'border-line text-ink-3'
+                        }`}>
+                        {s}s
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
 
-                  <motion.button whileTap={{scale:.98}}
-                    onClick={()=>{unlockAudio();vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}
-                    disabled={planItems.length===0}
-                    style={{width:'100%',background:planItems.length===0?'rgba(227,27,35,.3)':'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:planItems.length===0?'not-allowed':'pointer',boxShadow:planItems.length===0?'none':'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
-                    Iniciar Treino →
-                  </motion.button>
-                </>
-              )}
-            </div>
+                <Button size="lg" full disabled={planItems.length===0}
+                  onClick={()=>{unlockAudio();vibrate(30);setCursor(0);setAllSets({});setStarted(true);}}>
+                  <Play size={18}/> Iniciar Treino
+                </Button>
+              </div>
+            )}
           </motion.div>
         )}
 
         {mode==='livre' && (
           <motion.div key="livre" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} transition={{duration:.2}}>
-            <div style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,padding:'1.75rem',textAlign:'center',display:'grid',gap:'1rem'}}>
-              <motion.div initial={{scale:.8}} animate={{scale:1}} transition={{type:'spring',stiffness:200}} style={{fontSize:'3.5rem'}}>🏋️</motion.div>
+            <div className="card p-7 text-center grid gap-4">
+              <motion.div initial={{scale:.8}} animate={{scale:1}} transition={{type:'spring',stiffness:200}}
+                className="flex justify-center text-accent">
+                <Dumbbell size={48}/>
+              </motion.div>
               <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'2rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>
-                  Treino <span style={{color:'#e31b23'}}>Livre</span>
+                <div className="font-display font-bold text-[1.7rem] leading-tight tracking-tight text-ink-1">
+                  Treino <span className="text-accent">Livre</span>
                 </div>
-                <div style={{fontSize:'.82rem',color:'#7a7a8a',marginTop:'.5rem',lineHeight:1.6}}>Sem ficha? Sem problema.</div>
+                <div className="text-[0.82rem] text-ink-2 mt-2 leading-relaxed">Sem ficha? Sem problema.</div>
               </div>
-              <motion.button whileTap={{scale:.97}} onClick={()=>{unlockAudio();vibrate(30);setStarted(true);}}
-                style={{width:'100%',background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:12,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 4px 20px rgba(227,27,35,.35)',outline:'none'}}>
-                Começar →
-              </motion.button>
+              <Button size="lg" full onClick={()=>{unlockAudio();vibrate(30);setStarted(true);}}>
+                <Play size={18}/> Começar
+              </Button>
             </div>
           </motion.div>
         )}
@@ -616,45 +626,52 @@ export default function ModoTreino() {
 
   // ── SESSÃO ATIVA — COM FICHA ──────────────────────────────────────
   if(mode==='plan') return (
-    <PageShell>
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-        <div>
-          <div style={{fontSize:'.58rem',color:'#7a7a8a',textTransform:'uppercase',letterSpacing:'.1em'}}>Em andamento</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.1rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1}}>{resolvedPlan?.name}</div>
+    <PageShell hideBottomNav>
+      <ToastViewport toast={toast}/>
+
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} className="flex items-center justify-between mb-4">
+        <div className="min-w-0">
+          <div className="eyebrow">Em andamento</div>
+          <div className="font-display font-bold text-lg leading-tight text-ink-1 truncate">{resolvedPlan?.name}</div>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:'.65rem'}}>
-          <div style={{textAlign:'right'}}>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="text-right">
             <motion.div key={Math.floor(elapsed/60)} initial={{scale:1.05}} animate={{scale:1}}
-              style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.6rem',color:'#e31b23',lineHeight:1}}>
+              className="font-display font-bold text-[1.6rem] leading-none text-accent tnum">
               {fmtTime(elapsed)}
             </motion.div>
-            <div style={{fontSize:'.55rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.06em'}}>duração</div>
+            <div className="eyebrow">duração</div>
           </div>
-          <motion.button whileTap={{scale:.95}}
-            onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}
-            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'0 .65rem',height:34,fontSize:'.75rem',fontWeight:700,color:'#7a7a8a',cursor:'pointer',outline:'none'}}>✕</motion.button>
+          <Button variant="ghost" size="sm" aria-label="Encerrar treino"
+            onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}>
+            <X size={16}/>
+          </Button>
         </div>
       </motion.div>
 
-      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}} style={{marginBottom:'.75rem'}}>
-        <div style={{height:4,background:'#2e2e38',borderRadius:2,overflow:'hidden'}}>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.1}} className="mb-3">
+        <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
           <motion.div animate={{width:`${((cursor+1)/planItems.length)*100}%`}} transition={{duration:.4,ease:'easeOut'}}
-            style={{height:'100%',background:'#e31b23',borderRadius:2}}/>
+            className="h-full bg-accent rounded-full"/>
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px'}}>
-          <div style={{fontSize:'.6rem',color:'#484858'}}>{cursor+1} de {planItems.length} exercícios</div>
-          <div style={{fontSize:'.6rem',color:'#484858'}}>{Object.values(allSets).flat().filter(s=>s.r).length} séries registradas</div>
+        <div className="flex justify-between mt-1">
+          <div className="text-[0.62rem] text-ink-3 tnum">{cursor+1} de {planItems.length} exercícios</div>
+          <div className="text-[0.62rem] text-ink-3 tnum">{Object.values(allSets).flat().filter(s=>s.r).length} séries registradas</div>
         </div>
       </motion.div>
 
-      <div style={{display:'flex',gap:'.3rem',overflowX:'auto',marginBottom:'.75rem',paddingBottom:'.25rem',scrollbarWidth:'none'}}>
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-3 pb-1">
         {planItems.map((ex,i)=>{
           const done=(allSets[i]||[]).some(s=>s.r.trim());
           const active=cursor===i;
           return (
             <motion.button key={i} whileTap={{scale:.9}} onClick={()=>{setPrevCursor(cursor);setCursor(i);}}
-              style={{flexShrink:0,width:36,height:36,borderRadius:8,border:'1px solid '+(active?'#e31b23':done?'rgba(34,197,94,.3)':'#2e2e38'),background:active?'rgba(227,27,35,.15)':done?'rgba(34,197,94,.08)':'rgba(255,255,255,.03)',color:active?'#e31b23':done?'#4ade80':'#484858',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.8rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>
-              {done?'✓':i+1}
+              className={`shrink-0 w-9 h-9 rounded-lg border font-display font-bold text-[0.8rem] flex items-center justify-center transition-colors tnum ${
+                active ? 'border-accent/50 bg-accent-soft text-accent'
+                : done ? 'border-ok/30 bg-ok-soft text-ok'
+                : 'border-line bg-surface-2 text-ink-3'
+              }`}>
+              {done ? <Check size={14}/> : i+1}
             </motion.button>
           );
         })}
@@ -667,55 +684,65 @@ export default function ModoTreino() {
             animate={{opacity:1,x:0}}
             exit={{opacity:0,x:cursor>=prevCursor?-30:30}}
             transition={{duration:.22,ease:'easeOut'}}
-            style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:16,marginBottom:'.75rem',overflow:'hidden'}}>
-            <div style={{padding:'1rem'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
+            className="card mb-3 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center gap-3 mb-4">
                 <motion.button whileTap={{scale:.93}} onClick={()=>setShowGif(currentEx.name)}
-                  style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:10,overflow:'hidden',flexShrink:0,outline:'none'}}>
+                  className="rounded-[10px] overflow-hidden shrink-0" aria-label={`Ver demonstração de ${currentEx.name}`}>
                   <ExGif name={currentEx.name} size={72}/>
                 </motion.button>
-                <div style={{flex:1,minWidth:0}}>
-                  <span style={{display:'inline-block',fontSize:'.58rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:4,padding:'1px 6px',marginBottom:4}}>{cursor+1}/{planItems.length}</span>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1.15rem',textTransform:'uppercase',color:'#f0f0f2',lineHeight:1.1,wordBreak:'break-word',whiteSpace:'normal'}}>{currentEx.name}</div>
-                  <div style={{fontSize:'.62rem',color:'#484858',marginTop:'3px'}}>{currentEx.setsPlanned} séries · {currentEx.repsTarget} reps</div>
+                <div className="flex-1 min-w-0">
+                  <span className="inline-block text-[0.6rem] font-bold text-accent bg-accent-soft rounded px-1.5 py-px mb-1 tnum">{cursor+1}/{planItems.length}</span>
+                  <div className="font-display font-bold text-[1.05rem] leading-tight text-ink-1 break-words">{currentEx.name}</div>
+                  <div className="text-[0.68rem] text-ink-3 mt-0.5 tnum">{currentEx.setsPlanned} séries · {currentEx.repsTarget} reps</div>
                 </div>
               </div>
 
-              <div style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',padding:'0 .25rem .3rem'}}>
+              <div className="grid grid-cols-[1.5rem_1fr_1fr_2.2rem] gap-2 px-1 pb-1.5">
                 {['#','Kg','Reps',''].map((h,i)=>(
-                  <div key={i} style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',textAlign:i>0?'center':'left'}}>{h}</div>
+                  <div key={i} className={`eyebrow ${i>0?'text-center':'text-left'}`}>{h}</div>
                 ))}
               </div>
 
-              <div style={{display:'grid',gap:'.4rem',marginBottom:'.75rem'}}>
+              <div className="grid gap-1.5 mb-3">
                 <AnimatePresence>
                   {currentSets.map((s,si)=>{
                     const key=`${cursor}-${si}`;
                     const isDone=checkedSets[key]||s.done;
                     return (
                       <motion.div key={si} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-20}} transition={{delay:si*.04}}
-                        style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.25)':s.r?'rgba(255,255,255,.08)':'#2e2e38'),borderRadius:10,padding:'.5rem .35rem',transition:'all .2s'}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.9rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
+                        className={`grid grid-cols-[1.5rem_1fr_1fr_2.2rem] gap-2 items-center rounded-xl px-1.5 py-2 border transition-colors ${
+                          isDone ? 'bg-ok-soft border-ok/25' : 'bg-surface-2 border-line'
+                        }`}>
+                        <div className={`font-display font-bold text-[0.9rem] text-center tnum ${isDone?'text-ok':'text-ink-3'}`}>{si+1}</div>
                         <input type="number" min="0" step="0.5" placeholder="0" value={s.w} onChange={e=>updateSet(si,'w',e.target.value)}
-                          style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.9rem',color:'#fff',height:36,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                          className="text-center bg-bg/50 border border-line rounded-lg text-[0.9rem] text-ink-1 h-9 w-full px-1 focus:border-accent/40 transition-colors tnum"/>
                         <input type="number" min="0" placeholder="0" value={s.r} onChange={e=>updateSet(si,'r',e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSetDone(si)}
-                          style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.9rem',color:'#fff',height:36,padding:'0 .2rem',outline:'none',width:'100%'}}/>
-                        <motion.button whileTap={{scale:.85}} onClick={()=>handleSetDone(si)}
-                          style={{width:32,height:32,borderRadius:'50%',border:'1px solid '+(isDone?'rgba(34,197,94,.6)':s.r?'rgba(34,197,94,.3)':'#2e2e38'),background:isDone?'rgba(34,197,94,.2)':s.r?'rgba(34,197,94,.08)':'transparent',color:isDone?'#4ade80':s.r?'#4ade80':'#484858',fontSize:'.9rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>✓</motion.button>
+                          className="text-center bg-bg/50 border border-line rounded-lg text-[0.9rem] text-ink-1 h-9 w-full px-1 focus:border-accent/40 transition-colors tnum"/>
+                        <motion.button whileTap={{scale:.85}} onClick={()=>handleSetDone(si)} aria-label={`Concluir série ${si+1}`}
+                          className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${
+                            isDone ? 'border-ok/60 bg-ok-soft text-ok'
+                            : s.r ? 'border-ok/30 text-ok'
+                            : 'border-line text-ink-3'
+                          }`}>
+                          <Check size={15}/>
+                        </motion.button>
                       </motion.div>
                     );
                   })}
                 </AnimatePresence>
               </div>
 
-              <div style={{display:'flex',gap:'.5rem'}}>
-                <motion.button whileTap={{scale:.97}}
-                  onClick={()=>setAllSets(prev=>{const cur=[...(prev[cursor]||[])];cur.push({w:'',r:'',done:false});return{...prev,[cursor]:cur};})}
-                  style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:8,color:'#7a7a8a',fontSize:'.8rem',fontWeight:700,height:36,cursor:'pointer',outline:'none'}}>+ Série</motion.button>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" className="flex-1"
+                  onClick={()=>setAllSets(prev=>{const cur=[...(prev[cursor]||[])];cur.push({w:'',r:'',done:false});return{...prev,[cursor]:cur};})}>
+                  <Plus size={14}/> Série
+                </Button>
                 {currentSets.length>1 && (
-                  <motion.button whileTap={{scale:.97}}
-                    onClick={()=>setAllSets(prev=>{const cur=(prev[cursor]||[]).slice(0,-1);return{...prev,[cursor]:cur};})}
-                    style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:8,color:'#e31b23',fontSize:'.8rem',fontWeight:700,height:36,padding:'0 .75rem',cursor:'pointer',outline:'none'}}>− Série</motion.button>
+                  <Button variant="danger" size="sm"
+                    onClick={()=>setAllSets(prev=>{const cur=(prev[cursor]||[]).slice(0,-1);return{...prev,[cursor]:cur};})}>
+                    <Minus size={14}/> Série
+                  </Button>
                 )}
               </div>
             </div>
@@ -723,15 +750,19 @@ export default function ModoTreino() {
         )}
       </AnimatePresence>
 
-      <div style={{display:'flex',gap:'.5rem'}}>
-        <motion.button whileTap={{scale:.97}} onClick={()=>{setPrevCursor(cursor);setCursor(c=>Math.max(0,c-1));}} disabled={cursor===0}
-          style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:10,color:cursor===0?'#2e2e38':'#7a7a8a',height:46,fontSize:'.85rem',fontWeight:700,cursor:cursor===0?'not-allowed':'pointer',outline:'none'}}>← Anterior</motion.button>
+      <div className="flex gap-2">
+        <Button variant="ghost" className="flex-1" disabled={cursor===0}
+          onClick={()=>{setPrevCursor(cursor);setCursor(c=>Math.max(0,c-1));}}>
+          <ChevronLeft size={16}/> Anterior
+        </Button>
         {cursor<planItems.length-1 ? (
-          <motion.button whileTap={{scale:.97}} onClick={()=>{vibrate(20);setPrevCursor(cursor);setCursor(c=>c+1);}}
-            style={{flex:2,background:'linear-gradient(135deg,#e31b23,#b31217)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(227,27,35,.3)',cursor:'pointer',outline:'none'}}>Próximo →</motion.button>
+          <Button className="flex-[2]" onClick={()=>{vibrate(20);setPrevCursor(cursor);setCursor(c=>c+1);}}>
+            Próximo <ChevronRight size={16}/>
+          </Button>
         ) : (
-          <motion.button whileTap={{scale:.97}} onClick={saveSession}
-            style={{flex:2,background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:10,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.95rem',textTransform:'uppercase',height:46,boxShadow:'0 2px 12px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}>Finalizar 💪</motion.button>
+          <Button className="flex-[2]" onClick={saveSession}>
+            <CheckCheck size={16}/> Finalizar
+          </Button>
         )}
       </div>
     </PageShell>
@@ -739,38 +770,46 @@ export default function ModoTreino() {
 
   // ── SESSÃO ATIVA — TREINO LIVRE ───────────────────────────────────
   return (
-    <PageShell>
-      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+    <PageShell hideBottomNav>
+      <ToastViewport toast={toast}/>
+
+      <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} className="flex items-center justify-between mb-4">
         <div>
-          <span style={{display:'inline-block',fontSize:'.6rem',color:'#e31b23',fontWeight:700,background:'rgba(227,27,35,.1)',borderRadius:4,padding:'1px 6px',letterSpacing:'.06em',marginBottom:3}}>TREINO LIVRE</span>
+          <span className="inline-block eyebrow text-accent bg-accent-soft rounded px-1.5 py-px mb-1">Treino Livre</span>
           <motion.div key={Math.floor(elapsed/60)} initial={{scale:1.05}} animate={{scale:1}}
-            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1.8rem',color:'#e31b23',lineHeight:1}}>
+            className="font-display font-bold text-[1.8rem] leading-none text-accent tnum">
             {fmtTime(elapsed)}
           </motion.div>
         </div>
-        <div style={{display:'flex',gap:'.5rem'}}>
-          <motion.button whileTap={{scale:.95}} onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}
-            style={{background:'rgba(255,255,255,.06)',border:'1px solid #2e2e38',borderRadius:8,padding:'0 .65rem',height:36,fontSize:'.75rem',fontWeight:700,color:'#7a7a8a',cursor:'pointer',outline:'none'}}>✕</motion.button>
-          <motion.button whileTap={{scale:.97}} onClick={saveLivre}
-            style={{background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:8,color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.78rem',textTransform:'uppercase',height:36,padding:'0 .9rem',boxShadow:'0 2px 10px rgba(34,197,94,.25)',cursor:'pointer',outline:'none'}}>Salvar 💪</motion.button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" aria-label="Encerrar treino"
+            onClick={()=>{if(confirm('Encerrar sem salvar?')){vibrate(30);setStarted(false);}}}>
+            <X size={16}/>
+          </Button>
+          <Button size="sm" onClick={saveLivre}>
+            <CheckCheck size={14}/> Salvar
+          </Button>
         </div>
       </motion.div>
 
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:.08}}
-        style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14,marginBottom:'.75rem',padding:'.75rem'}}>
-        <input value={livreBusca} onChange={e=>setLivreBusca(e.target.value)} placeholder="🔍 Adicionar exercício…"
-          style={{width:'100%',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:10,color:'#f0f0f2',height:42,fontSize:'.9rem',padding:'0 13px',outline:'none'}}/>
+        className="card p-3 mb-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none"/>
+          <input value={livreBusca} onChange={e=>setLivreBusca(e.target.value)} placeholder="Adicionar exercício…"
+            className="field pl-10 h-11"/>
+        </div>
         <AnimatePresence>
           {livreBusca.length>=1 && (
             <motion.div initial={{opacity:0,y:-6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
-              style={{marginTop:'.5rem',maxHeight:220,overflowY:'auto',display:'grid',gap:'.3rem'}}>
+              className="mt-2 max-h-[220px] overflow-y-auto grid gap-1.5">
               {ALL_EXS.filter(n=>n.toLowerCase().includes(livreBusca.toLowerCase())).slice(0,8).map(n=>(
                 <motion.button key={n} whileTap={{scale:.98}}
                   onClick={()=>{vibrate(20);setLivreExs(prev=>[{name:n,sets:[{w:'',r:'',done:false}]},...prev]);setLivreBusca('');}}
-                  style={{display:'flex',alignItems:'center',gap:'.6rem',background:'rgba(255,255,255,.03)',border:'1px solid #2e2e38',borderRadius:8,padding:'.45rem .65rem',textAlign:'left',cursor:'pointer',outline:'none'}}>
+                  className="flex items-center gap-2.5 card-2 px-2.5 py-2 text-left">
                   <ExGif name={n} size={40}/>
-                  <span style={{fontSize:'.85rem',color:'#f0f0f2',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n}</span>
-                  <span style={{color:'#e31b23',fontWeight:700,fontSize:'1.1rem',flexShrink:0}}>+</span>
+                  <span className="text-sm text-ink-1 flex-1 truncate">{n}</span>
+                  <Plus size={18} className="text-accent shrink-0"/>
                 </motion.button>
               ))}
             </motion.div>
@@ -780,51 +819,56 @@ export default function ModoTreino() {
 
       {livreExs.length===0 && (
         <motion.div initial={{opacity:0}} animate={{opacity:1}}
-          style={{textAlign:'center',padding:'2rem 1rem',border:'1px dashed #2e2e38',borderRadius:12,color:'#484858',fontSize:'.85rem'}}>
+          className="text-center py-8 px-4 border border-dashed border-line rounded-2xl text-ink-3 text-[0.85rem]">
           Use a busca acima para adicionar exercícios
         </motion.div>
       )}
 
-      <div style={{display:'grid',gap:'.65rem'}}>
+      <div className="grid gap-2.5">
         <AnimatePresence>
           {livreExs.map((ex,ei)=>(
             <motion.div key={ei} initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-30,height:0}} transition={{duration:.2}}
-              style={{background:'#1e1e24',border:'1px solid #2e2e38',borderRadius:14,overflow:'hidden'}}>
-              <div style={{padding:'.85rem'}}>
-                <div style={{display:'flex',alignItems:'center',gap:'.65rem',marginBottom:'.75rem'}}>
+              className="card overflow-hidden">
+              <div className="p-3.5">
+                <div className="flex items-center gap-2.5 mb-3">
                   <motion.button whileTap={{scale:.93}} onClick={()=>setShowGif(ex.name)}
-                    style={{background:'none',border:'none',cursor:'pointer',padding:0,borderRadius:8,overflow:'hidden',flexShrink:0,outline:'none'}}>
+                    className="rounded-lg overflow-hidden shrink-0" aria-label={`Ver demonstração de ${ex.name}`}>
                     <ExGif name={ex.name} size={52}/>
                   </motion.button>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'1rem',textTransform:'uppercase',color:'#f0f0f2',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.2}}>{ex.name}</div>
-                    <div style={{fontSize:'.62rem',color:'#484858',marginTop:'1px'}}>{ex.sets.length} série(s)</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-bold text-[0.95rem] leading-tight text-ink-1 break-words">{ex.name}</div>
+                    <div className="text-[0.68rem] text-ink-3 mt-px tnum">{ex.sets.length} série(s)</div>
                   </div>
                   <motion.button whileTap={{scale:.9}} onClick={()=>{vibrate(20);setLivreExs(prev=>prev.filter((_,i)=>i!==ei));}}
-                    style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:6,padding:'0 .4rem',height:30,fontSize:'.75rem',fontWeight:700,color:'#e31b23',cursor:'pointer',flexShrink:0,outline:'none'}}>✕</motion.button>
+                    aria-label={`Remover ${ex.name}`}
+                    className="bg-danger-soft border border-danger/30 rounded-lg w-8 h-8 flex items-center justify-center text-danger shrink-0">
+                    <X size={14}/>
+                  </motion.button>
                 </div>
 
-                <div style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',padding:'0 .25rem .2rem'}}>
+                <div className="grid grid-cols-[1.5rem_1fr_1fr_2.2rem] gap-2 px-1 pb-1">
                   {['#','Kg','Reps',''].map((h,i)=>(
-                    <div key={i} style={{fontSize:'.52rem',color:'#484858',textTransform:'uppercase',letterSpacing:'.07em',textAlign:i>0?'center':'left'}}>{h}</div>
+                    <div key={i} className={`eyebrow ${i>0?'text-center':'text-left'}`}>{h}</div>
                   ))}
                 </div>
 
-                <div style={{display:'grid',gap:'.3rem',marginBottom:'.5rem'}}>
+                <div className="grid gap-1.5 mb-2.5">
                   <AnimatePresence>
                     {ex.sets.map((s,si)=>{
                       const isDone=s.done;
                       return (
                         <motion.div key={si} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{delay:si*.03}}
-                          style={{display:'grid',gridTemplateColumns:'1.5rem 1fr 1fr 2.2rem',gap:'.5rem',alignItems:'center',background:isDone?'rgba(34,197,94,.05)':'rgba(0,0,0,.25)',border:'1px solid '+(isDone?'rgba(34,197,94,.2)':'#2e2e38'),borderRadius:8,padding:'.4rem .3rem',transition:'all .2s'}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:'.85rem',color:isDone?'#4ade80':'#484858',textAlign:'center'}}>{si+1}</div>
+                          className={`grid grid-cols-[1.5rem_1fr_1fr_2.2rem] gap-2 items-center rounded-xl px-1.5 py-1.5 border transition-colors ${
+                            isDone ? 'bg-ok-soft border-ok/20' : 'bg-surface-2 border-line'
+                          }`}>
+                          <div className={`font-display font-bold text-[0.85rem] text-center tnum ${isDone?'text-ok':'text-ink-3'}`}>{si+1}</div>
                           <input type="number" min="0" step="0.5" placeholder="0" value={s.w}
                             onChange={e=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.map((s2,j)=>j!==si?s2:{...s2,w:e.target.value})}))}
-                            style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.88rem',color:'#fff',height:34,padding:'0 .2rem',outline:'none',width:'100%'}}/>
+                            className="text-center bg-bg/50 border border-line rounded-lg text-[0.88rem] text-ink-1 h-[34px] w-full px-1 focus:border-accent/40 transition-colors tnum"/>
                           <input type="number" min="0" placeholder="0" value={s.r}
                             onChange={e=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.map((s2,j)=>j!==si?s2:{...s2,r:e.target.value})}))}
-                            style={{textAlign:'center',background:'rgba(0,0,0,.4)',border:'1px solid #2e2e38',borderRadius:6,fontSize:'.88rem',color:'#fff',height:34,padding:'0 .2rem',outline:'none',width:'100%'}}/>
-                          <motion.button whileTap={{scale:.85}}
+                            className="text-center bg-bg/50 border border-line rounded-lg text-[0.88rem] text-ink-1 h-[34px] w-full px-1 focus:border-accent/40 transition-colors tnum"/>
+                          <motion.button whileTap={{scale:.85}} aria-label={`Concluir série ${si+1}`}
                             onClick={()=>{
                               if(s.r){
                                 playBeep('tick');
@@ -833,21 +877,29 @@ export default function ModoTreino() {
                                 setRestSecs(restPreset);setShowRest(true);
                               }
                             }}
-                            style={{width:32,height:32,borderRadius:'50%',border:'1px solid '+(isDone?'rgba(34,197,94,.6)':s.r?'rgba(34,197,94,.3)':'#2e2e38'),background:isDone?'rgba(34,197,94,.2)':s.r?'rgba(34,197,94,.08)':'transparent',color:isDone?'#4ade80':s.r?'#4ade80':'#484858',fontSize:'.85rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',outline:'none'}}>✓</motion.button>
+                            className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${
+                              isDone ? 'border-ok/60 bg-ok-soft text-ok'
+                              : s.r ? 'border-ok/30 text-ok'
+                              : 'border-line text-ink-3'
+                            }`}>
+                            <Check size={14}/>
+                          </motion.button>
                         </motion.div>
                       );
                     })}
                   </AnimatePresence>
                 </div>
 
-                <div style={{display:'flex',gap:'.4rem'}}>
-                  <motion.button whileTap={{scale:.97}}
-                    onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:[...ex2.sets,{w:'',r:'',done:false}]}))}
-                    style={{flex:1,background:'rgba(255,255,255,.04)',border:'1px solid #2e2e38',borderRadius:7,color:'#7a7a8a',fontSize:'.78rem',fontWeight:700,height:32,cursor:'pointer',outline:'none'}}>+ Série</motion.button>
+                <div className="flex gap-1.5">
+                  <Button variant="ghost" size="sm" className="flex-1"
+                    onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:[...ex2.sets,{w:'',r:'',done:false}]}))}>
+                    <Plus size={14}/> Série
+                  </Button>
                   {ex.sets.length>1 && (
-                    <motion.button whileTap={{scale:.97}}
-                      onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.slice(0,-1)}))}
-                      style={{background:'rgba(227,27,35,.06)',border:'1px solid rgba(227,27,35,.2)',borderRadius:7,color:'#e31b23',fontSize:'.78rem',fontWeight:700,height:32,padding:'0 .65rem',cursor:'pointer',outline:'none'}}>− Série</motion.button>
+                    <Button variant="danger" size="sm"
+                      onClick={()=>setLivreExs(prev=>prev.map((ex2,i)=>i!==ei?ex2:{...ex2,sets:ex2.sets.slice(0,-1)}))}>
+                      <Minus size={14}/> Série
+                    </Button>
                   )}
                 </div>
               </div>
@@ -857,10 +909,11 @@ export default function ModoTreino() {
       </div>
 
       {livreExs.length>0 && (
-        <motion.button initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} whileTap={{scale:.98}} onClick={saveLivre}
-          style={{width:'100%',marginTop:'.85rem',background:'linear-gradient(135deg,#22c55e,#15803d)',border:'none',borderRadius:14,padding:'15px',color:'#fff',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:'1rem',textTransform:'uppercase',letterSpacing:'.05em',boxShadow:'0 4px 20px rgba(34,197,94,.3)',cursor:'pointer',outline:'none'}}>
-          Finalizar Treino 💪
-        </motion.button>
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="mt-3.5">
+          <Button size="lg" full onClick={saveLivre}>
+            <CheckCheck size={18}/> Finalizar Treino
+          </Button>
+        </motion.div>
       )}
     </PageShell>
   );

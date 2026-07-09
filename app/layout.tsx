@@ -1,18 +1,25 @@
 import type { Metadata, Viewport } from 'next';
-import { Barlow_Condensed, Inter } from 'next/font/google';
+import { Space_Grotesk, Barlow_Condensed } from 'next/font/google';
+import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 
-const inter = Inter({
+/**
+ * Tipografia DarkSet 2026:
+ * - Space Grotesk → display: títulos, números grandes, stats
+ * - Geist → corpo de texto e UI
+ * - Barlow Condensed 900 → EXCLUSIVAMENTE o logotipo (identidade preservada)
+ */
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
+  variable: '--font-display',
   display: 'swap',
 });
 
-const barlowCondensed = Barlow_Condensed({
+const barlowLogo = Barlow_Condensed({
   subsets: ['latin'],
-  weight: ['400', '600', '700', '800', '900'],
-  variable: '--font-barlow',
+  weight: ['800', '900'],
+  variable: '--font-logo',
   display: 'swap',
 });
 
@@ -21,7 +28,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0f0f13',
+  themeColor: '#0C0E11',
 };
 
 export const metadata: Metadata = {
@@ -59,10 +66,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${barlowCondensed.variable}`}>
-      <body style={{ fontFamily: 'var(--font-inter, Inter, sans-serif)', background: '#0f0f13', color: '#f0f0f2', margin: 0 }}>
-        {children}
-      </body>
+    <html
+      lang="pt-BR"
+      className={`${GeistSans.variable} ${spaceGrotesk.variable} ${barlowLogo.variable}`}
+      style={{ ['--font-body' as string]: 'var(--font-geist-sans)' }}
+    >
+      <body>{children}</body>
     </html>
   );
 }
